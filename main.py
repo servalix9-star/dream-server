@@ -1,3 +1,5 @@
+import subprocess
+subprocess.run(["pip", "install", "requests"], capture_output=True)
 from flask import Flask, request, jsonify
 from datetime import datetime
 import json, os, requests, threading, time
