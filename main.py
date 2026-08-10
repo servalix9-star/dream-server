@@ -180,6 +180,29 @@ def run_once():
     return msg
 
 
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """直接问 Gemini 这个 key 当前支持哪些模型，不用再猜名字。"""
+    if not GEMINI_API_KEY:
+        return jsonify({"ok": False, "error": "GEMINI_API_KEY not set"}), 500
+    try:
+        resp = requests.get(
+            f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}",
+            timeout=15
+        )
+        data = resp.json()
+        # 只挑出支持 generateContent 的模型名，这才是能用来聊天的
+        usable = []
+        for m in data.get("models", []):
+            methods = m.get("supportedGenerationMethods", [])
+            if "generateContent" in methods:
+                usable.append(m.get("name"))
+        return jsonify({"ok": True, "usable_models": usable, "raw": data})
+    except Exception as e:
+        log_error("list_models", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/test-trigger", methods=["GET"])
 def test_trigger():
     """手动触发一次，不用等55分钟。浏览器直接访问这个路径就行。"""
