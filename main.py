@@ -13,8 +13,9 @@ ERROR_LOG = "error.log"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 
-# Gemini 2.0 Flash：gemini-pro 已下线，用旧名字会直接 404
-GEMINI_MODEL = "gemini-2.0-flash"
+# gemini-pro 和 gemini-2.0-flash 都已下线（2.0 Flash 于 2026-03-03 正式退役）
+# 目前 free tier 可用的是 2.5 系列，flash-lite 配额更宽松，适合低频后台任务
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 
 def log_error(context, e):
