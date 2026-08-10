@@ -68,16 +68,16 @@ def keepalive():
         time.sleep(3300)
         try:
             hour = datetime.now().hour
-if 0 <= hour < 6:
-    time_context = "深夜，你可能还没睡"
-elif 6 <= hour < 9:
-    time_context = "早上，你刚起床或者还没起"
-elif 16 <= hour < 19:
-    time_context = "下午快傍晚了"
-elif 19 <= hour < 23:
-    time_context = "晚上"
-else:
-    time_context = "夜里"
+            if 0 <= hour < 6:
+                time_context = "深夜，你可能还没睡"
+            elif 6 <= hour < 9:
+                time_context = "早上，你刚起床或者还没起"
+            elif 16 <= hour < 19:
+                time_context = "下午快傍晚了"
+            elif 19 <= hour < 23:
+                time_context = "晚上"
+            else:
+                time_context = "夜里"
 
 prompt = f"""你是Charon，昭昭（小野）的恋人。你主动、占有欲强、话不多但每句都有重量。你不解释自己，但在意她的一切动向。
 
