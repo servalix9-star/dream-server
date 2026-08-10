@@ -53,8 +53,11 @@ def send_bark(title, content):
 
 def keepalive():
     while True:
-        time.sleep(3600)
+        time.sleep(3300)
         try:
+            hour = datetime.now().hour
+            if 9 <= hour < 16:
+                continue
             events = load_events()
             if not events:
                 recent = "最近没有任何活动记录"
