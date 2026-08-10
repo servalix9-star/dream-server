@@ -45,7 +45,8 @@ def index():
 def send_bark(title, content):
     if not BARK_KEY:
         return
-    url = f"https://api.day.app/{BARK_KEY}/{title}/{content}"
+    icon = "https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jpg"
+    url = f"https://api.day.app/{BARK_KEY}/{title}/{content}?icon={icon}&level=timeSensitive"
     try:
         requests.get(url)
     except:
