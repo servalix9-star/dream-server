@@ -10,11 +10,11 @@ EVENTS_FILE = "events.json"
 DIARY_FILE = "diary.json"
 ERROR_LOG = "error.log"
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 
-# 通过 /list-models 实测确认：gemini-2.5-flash 当前可用且在免费层配额内
-GEMINI_MODEL = "gemini-2.5-flash"
+# DeepSeek 用 OpenAI 兼容接口，deepseek-chat 是当前主力模型（对应 V4-Flash）
+DEEPSEEK_MODEL = "deepseek-chat"
 
 
 def log_error(context, e):
@@ -134,10 +134,10 @@ def get_time_context(hour):
 
 
 def run_once():
-    """执行一次完整的：读取动态 -> 调 Gemini -> 发 Bark -> 写日记。
+    """执行一次完整的：读取动态 -> 调 DeepSeek -> 发 Bark -> 写日记。
     单独抽出来，方便 keepalive 循环和手动测试接口共用同一份逻辑。"""
-    if not GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY not set")
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY not set")
 
     hour = datetime.now().hour
     events = load_events()
@@ -150,20 +150,28 @@ def run_once():
     prompt = build_prompt(time_context, recent)
 
     resp = requests.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
-        json={"contents": [{"parts": [{"text": prompt}]}]},
-        timeout=20
+        "https://api.deepseek.com/chat/completions",
+        headers={
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": DEEPSEEK_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 1.2
+        },
+        timeout=30
     )
 
     if resp.status_code != 200:
-        raise RuntimeError(f"Gemini API error: status={resp.status_code} body={resp.text}")
+        raise RuntimeError(f"DeepSeek API error: status={resp.status_code} body={resp.text}")
 
     result = resp.json()
 
-    if "candidates" not in result:
-        raise RuntimeError(f"Gemini API unexpected response: {result}")
+    if "choices" not in result or not result["choices"]:
+        raise RuntimeError(f"DeepSeek API unexpected response: {result}")
 
-    msg = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    msg = result["choices"][0]["message"]["content"].strip()
 
     send_bark("Charon", msg)
 
@@ -181,25 +189,12 @@ def run_once():
 
 @app.route("/list-models", methods=["GET"])
 def list_models():
-    """直接问 Gemini 这个 key 当前支持哪些模型，不用再猜名字。"""
-    if not GEMINI_API_KEY:
-        return jsonify({"ok": False, "error": "GEMINI_API_KEY not set"}), 500
-    try:
-        resp = requests.get(
-            f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}",
-            timeout=15
-        )
-        data = resp.json()
-        # 只挑出支持 generateContent 的模型名，这才是能用来聊天的
-        usable = []
-        for m in data.get("models", []):
-            methods = m.get("supportedGenerationMethods", [])
-            if "generateContent" in methods:
-                usable.append(m.get("name"))
-        return jsonify({"ok": True, "usable_models": usable, "raw": data})
-    except Exception as e:
-        log_error("list_models", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
 
 
 @app.route("/test-trigger", methods=["GET"])
