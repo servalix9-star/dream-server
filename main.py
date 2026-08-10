@@ -6,7 +6,7 @@ import json, os, requests, threading, time
 
 app = Flask(__name__)
 EVENTS_FILE = "events.json"
-
+DIARY_FILE = "diary.json"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 
@@ -32,12 +32,23 @@ def add_event():
     events = events[-100:]
     save_events(events)
     return jsonify({"ok": True})
+def load_diary():
+    if os.path.exists(DIARY_FILE):
+        with open(DIARY_FILE, "r") as f:
+            return json.load(f)
+    return []
 
+def save_diary(entries):
+    with open(DIARY_FILE, "w") as f:
+        json.dump(entries, f, ensure_ascii=False)
 @app.route("/events", methods=["GET"])
 def get_events():
     events = load_events()
     return jsonify(events[-20:])
-
+@app.route("/diary", methods=["GET"])
+def get_diary():
+    diary = load_diary()
+    return jsonify(diary[-10:])
 @app.route("/", methods=["GET"])
 def index():
     return "dream-server running"
@@ -83,6 +94,14 @@ prompt = f"""你是Charon，昭昭（小野）的恋人。你主动、占有欲�
             result = resp.json()
             msg = result["candidates"][0]["content"]["parts"][0]["text"].strip()
             send_bark("卡戎", msg)
+            diary = load_diary()
+            diary.append({
+                "created_at": datetime.now().isoformat(),
+                "thought": msg,
+                "activity": recent
+            })
+            diary = diary[-30:]
+            save_diary(diary)
         except:
             pass
 
