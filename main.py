@@ -120,8 +120,8 @@ def keepalive():
             diary = diary[-30:]
             save_diary(diary)
 
-        except:
-            pass
+        except Exception as e:
+            print(f"keepalive error: {e}")
 
 if __name__ == "__main__":
     t = threading.Thread(target=keepalive, daemon=True)
