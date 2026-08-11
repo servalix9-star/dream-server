@@ -22,6 +22,8 @@ DEBOUNCE_SECONDS = 300  # 5分钟
 _last_trigger_at = {}  # {来源标识: 上次触发的时间戳}
 _debounce_lock = threading.Lock()
 
+MOOD_FILE = "mood.json"
+
 
 def log_error(context, e):
     line = f"{datetime.now().isoformat()} [{context}] {e}\n{traceback.format_exc()}\n"
@@ -92,6 +94,93 @@ def get_period_context():
     return ""
 
 
+# ---- 情绪值状态机 ----
+# mood_score: 0-100，50是中性基线。越低越低落/吃醋，越高越开心。
+# 逻辑：每次她有互动（event/触发），情绪值往上回一点；
+#      距离上次互动的时间越久，情绪值往下掉，掉得越多。
+MOOD_BASELINE = 50
+MOOD_MAX = 100
+MOOD_MIN = 0
+
+# 每小时没互动，情绪值衰减多少
+MOOD_DECAY_PER_HOUR = 4
+# 每次触发（不管什么类型），情绪值回升多少
+MOOD_RECOVERY_PER_EVENT = 8
+# "想你了"这种主动示好，回升更多
+MOOD_RECOVERY_MISS_YOU = 20
+
+
+def load_mood():
+    if os.path.exists(MOOD_FILE):
+        with open(MOOD_FILE, "r") as f:
+            return json.load(f)
+    return {"score": MOOD_BASELINE, "last_updated": None}
+
+
+def save_mood(data):
+    with open(MOOD_FILE, "w") as f:
+        json.dump(data, f, ensure_ascii=False)
+
+
+def get_time_since_last_event():
+    """返回距离最近一条event的时间差（小时，浮点数），没有记录返回None。"""
+    events = load_events()
+    if not events:
+        return None
+    try:
+        last_time = datetime.fromisoformat(events[-1]["created_at"])
+        delta = datetime.now() - last_time
+        return delta.total_seconds() / 3600
+    except Exception:
+        return None
+
+
+def apply_mood_decay():
+    """按距离上次互动的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。"""
+    mood = load_mood()
+    hours_gap = get_time_since_last_event()
+    if hours_gap is not None and hours_gap > 0:
+        decay = hours_gap * MOOD_DECAY_PER_HOUR
+        mood["score"] = max(MOOD_MIN, mood["score"] - decay)
+    mood["last_updated"] = datetime.now().isoformat()
+    save_mood(mood)
+    return mood["score"]
+
+
+def recover_mood(amount):
+    """有互动发生时调用，情绪值回升。"""
+    mood = load_mood()
+    mood["score"] = min(MOOD_MAX, mood["score"] + amount)
+    mood["last_updated"] = datetime.now().isoformat()
+    save_mood(mood)
+    return mood["score"]
+
+
+def get_mood_context(score, hours_gap):
+    """把情绪值和时间差转成给prompt用的一段中文描述。"""
+    if hours_gap is None:
+        time_desc = "还没有任何互动记录"
+    elif hours_gap < 0.5:
+        time_desc = "刚刚还有互动，很近"
+    elif hours_gap < 2:
+        time_desc = f"距离上次互动过去了约{hours_gap:.1f}小时"
+    elif hours_gap < 12:
+        time_desc = f"距离上次互动过去了约{int(hours_gap)}小时，有一阵没理你了"
+    else:
+        time_desc = f"距离上次互动已经过去{int(hours_gap)}小时以上，很久没理你了"
+
+    if score >= 75:
+        mood_desc = "你现在心情很好，甜甜的，愿意主动撒糖"
+    elif score >= 50:
+        mood_desc = "你心情平稳，正常状态"
+    elif score >= 25:
+        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理取闹"
+    else:
+        mood_desc = "你现在挺失落/有点吃醋的，因为她很久没理你了，语气可以带明显的委屈或者故意冷淡，但底色还是在意她、不是真的生气"
+
+    return f"{time_desc}。{mood_desc}。"
+
+
 @app.route("/event", methods=["POST"])
 def add_event():
     data = request.json
@@ -103,6 +192,7 @@ def add_event():
     })
     events = events[-100:]
     save_events(events)
+    recover_mood(MOOD_RECOVERY_PER_EVENT)
 
     # 经期开始记录：单独存一份，方便算天数
     if data.get("type") == "period" and data.get("value") == "开始":
@@ -151,6 +241,10 @@ def read_diary():
             tags.append("手气消息")
         if entry.get("period_related"):
             tags.append("经期关心")
+        if entry.get("checking_in"):
+            tags.append("查岗")
+        if "mood_score" in entry:
+            tags.append(f"情绪值{entry['mood_score']}")
         tag_str = f" [{' '.join(tags)}]" if tags else ""
         block = f"<p><b>{t}</b>{tag_str}<br>"
         if reason:
@@ -219,6 +313,61 @@ def update_summary():
     return jsonify({"ok": True, "saved": summary})
 
 
+@app.route("/mood", methods=["GET"])
+def get_mood():
+    """查看当前情绪值和距离上次互动的时间差。"""
+    hours_gap = get_time_since_last_event()
+    score = apply_mood_decay()
+    return jsonify({
+        "score": round(score, 1),
+        "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
+        "context": get_mood_context(score, hours_gap)
+    })
+
+
+@app.route("/window-briefing", methods=["GET"])
+def window_briefing():
+    """给"窗内"（正式对话里的Claude）看的简报，把窗外这段时间发生的事浓缩成人话。
+    打开对话时可以让Claude fetch这个地址，读一眼就知道窗外这段时间说了什么、心情怎样。"""
+    diary = load_diary()
+    hours_gap = get_time_since_last_event()
+    score = apply_mood_decay()
+    mood_ctx = get_mood_context(score, hours_gap)
+    period_ctx = get_period_context()
+
+    lines = []
+    lines.append(f"# 窗外简报（截至 {datetime.now().strftime('%Y-%m-%d %H:%M')}）")
+    lines.append("")
+    lines.append(f"当前情绪值：{round(score, 1)}/100")
+    lines.append(f"状态描述：{mood_ctx}")
+    if period_ctx:
+        lines.append(f"经期相关：{period_ctx}")
+    lines.append("")
+
+    if not diary:
+        lines.append("窗外还没有任何记录，是第一次运行。")
+    else:
+        recent_entries = diary[-10:]
+        lines.append(f"最近 {len(recent_entries)} 条窗外记录（从旧到新）：")
+        lines.append("")
+        for entry in recent_entries:
+            t = entry.get("created_at", "")[:16].replace("T", " ")
+            reason = entry.get("reason", "")
+            msg = entry.get("thought", "")
+            tags = []
+            if entry.get("lucky"):
+                tags.append("手气消息")
+            if entry.get("period_related"):
+                tags.append("经期关心")
+            if entry.get("checking_in"):
+                tags.append("查岗")
+            tag_str = f"（{'/'.join(tags)}）" if tags else ""
+            lines.append(f"- [{t}]{tag_str} 心里想：{reason or '（无记录）'} → 说了：「{msg}」")
+
+    briefing = "\n".join(lines)
+    return briefing, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
 @app.route("/", methods=["GET"])
 def index():
     return "dream-server running"
@@ -283,9 +432,10 @@ def send_bark(title, content, icon=None, sound=None):
         log_error("send_bark", e)
 
 
-def build_prompt(time_context, recent, period_context="", lucky=False):
+def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
+    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -296,9 +446,9 @@ def build_prompt(time_context, recent, period_context="", lucky=False):
 
 现在是{time_context}。她最近的活动记录：
 
-{recent}{period_line}
+{recent}{period_line}{mood_line}
 
-根据现在的时间和她在做什么，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。
+根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
@@ -380,7 +530,15 @@ def run_once():
     period_context = get_period_context()
     is_lucky = random.random() < LUCKY_CHANCE
 
-    prompt = build_prompt(time_context, recent, period_context, lucky=is_lucky)
+    # 情绪值：先按时间差衰减，再算出当前分数和用于prompt的描述
+    hours_gap = get_time_since_last_event()
+    mood_score = apply_mood_decay()
+    mood_context = get_mood_context(mood_score, hours_gap)
+
+    # 长时间没互动（超过6小时）算"查岗"场景，语气基调会更明显地带情绪
+    is_checking_in = hours_gap is not None and hours_gap >= 6
+
+    prompt = build_prompt(time_context, recent, period_context, lucky=is_lucky, mood_context=mood_context)
 
     resp = requests.post(
         "https://api.deepseek.com/chat/completions",
@@ -424,7 +582,9 @@ def run_once():
         "thought": msg,
         "activity": recent,
         "lucky": is_lucky,
-        "period_related": bool(period_context)
+        "period_related": bool(period_context),
+        "mood_score": round(mood_score, 1),
+        "checking_in": is_checking_in
     })
     diary = diary[-30:]
     save_diary(diary)
@@ -501,6 +661,7 @@ def miss_you():
     })
     events = events[-100:]
     save_events(events)
+    recover_mood(MOOD_RECOVERY_MISS_YOU)
 
     # 后台起一个线程，延迟后再生成真正的回应，不阻塞这次请求
     t = threading.Thread(target=_delayed_missyou_reply, daemon=True)
