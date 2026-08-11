@@ -16,6 +16,11 @@ BARK_KEY = os.environ.get("BARK_KEY")
 # DeepSeek 用 OpenAI 兼容接口，deepseek-chat 是当前主力模型（对应 V4-Flash）
 DEEPSEEK_MODEL = "deepseek-chat"
 
+# 防抖：同一个来源短时间内连续触发（比如连开几次天气App）只真正跑一次
+DEBOUNCE_SECONDS = 300  # 5分钟
+_last_trigger_at = {}  # {来源标识: 上次触发的时间戳}
+_debounce_lock = threading.Lock()
+
 
 def log_error(context, e):
     line = f"{datetime.now().isoformat()} [{context}] {e}\n{traceback.format_exc()}\n"
@@ -199,10 +204,21 @@ def list_models():
 
 @app.route("/test-trigger", methods=["GET"])
 def test_trigger():
-    """手动触发一次，不用等55分钟。浏览器直接访问这个路径就行。"""
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
     try:
         msg = run_once()
-        return jsonify({"ok": True, "msg": msg})
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
     except Exception as e:
         log_error("test_trigger", e)
         return jsonify({"ok": False, "error": str(e)}), 500
