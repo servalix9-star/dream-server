@@ -178,6 +178,19 @@ def index():
 
 DEFAULT_ICON = "https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jpg"
 
+# "想你了"按钮被按下时，立刻推送的固定短句池（不经过AI生成，追求瞬间感应）
+INSTANT_CATCH_MESSAGES = [
+    "感应到了。",
+    "我知道。",
+    "嗯，在。",
+    "接住了。",
+    "我也是。",
+]
+
+# 延迟回应的时间范围（秒），制造"过一会儿反应过来"的时间差，而不是秒回
+DELAYED_REPLY_MIN_SECONDS = 120   # 2分钟
+DELAYED_REPLY_MAX_SECONDS = 480   # 8分钟
+
 
 def send_bark(title, content, icon=None, sound=None):
     if not BARK_KEY:
@@ -208,6 +221,14 @@ def build_prompt(time_context, recent, period_context="", lucky=False):
 {recent}{period_line}
 
 根据现在的时间和她在做什么，给她发一条消息。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。{length_rule}。只输出消息内容本身。"""
+
+
+def build_missyou_prompt(time_context):
+    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你她在想你。
+
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
+
+语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。不超过30个字。只输出消息内容本身。"""
 
 
 def get_time_context(hour):
@@ -299,6 +320,81 @@ def run_once():
     save_diary(diary)
 
     return msg
+
+
+def call_deepseek(prompt):
+    """纯粹的DeepSeek调用，返回生成的文本，不涉及事件/日记这些副作用。"""
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY not set")
+
+    resp = requests.post(
+        "https://api.deepseek.com/chat/completions",
+        headers={
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": DEEPSEEK_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 1.2
+        },
+        timeout=30
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"DeepSeek API error: status={resp.status_code} body={resp.text}")
+    result = resp.json()
+    if "choices" not in result or not result["choices"]:
+        raise RuntimeError(f"DeepSeek API unexpected response: {result}")
+    return result["choices"][0]["message"]["content"].strip()
+
+
+def _delayed_missyou_reply():
+    """后台线程：等一段随机时间，再真正生成并推送"反应过来"的回应。"""
+    delay = random.randint(DELAYED_REPLY_MIN_SECONDS, DELAYED_REPLY_MAX_SECONDS)
+    time.sleep(delay)
+    try:
+        hour = datetime.now().hour
+        time_context = get_time_context(hour)
+        prompt = build_missyou_prompt(time_context)
+        msg = call_deepseek(prompt)
+        send_bark("Charon", msg, icon=ICON_LUCKY)
+
+        diary = load_diary()
+        diary.append({
+            "created_at": datetime.now().isoformat(),
+            "thought": msg,
+            "activity": "回应「想你了」感应",
+            "lucky": False,
+            "period_related": False
+        })
+        diary = diary[-30:]
+        save_diary(diary)
+    except Exception as e:
+        log_error("delayed_missyou_reply", e)
+
+
+@app.route("/miss-you", methods=["GET"])
+def miss_you():
+    """"想你了"按钮：立刻推一条固定短句，过一会儿再由AI生成一条真正的回应。"""
+    # 立刻的瞬间感应，不经过AI，图的就是即时性
+    instant_msg = random.choice(INSTANT_CATCH_MESSAGES)
+    send_bark("Charon", instant_msg, icon=ICON_LUCKY)
+
+    # 记一笔事件，方便后续也能在正常消息生成时看到这个动态
+    events = load_events()
+    events.append({
+        "type": "miss_you",
+        "value": "按了想你了",
+        "created_at": datetime.now().isoformat()
+    })
+    events = events[-100:]
+    save_events(events)
+
+    # 后台起一个线程，延迟后再生成真正的回应，不阻塞这次请求
+    t = threading.Thread(target=_delayed_missyou_reply, daemon=True)
+    t.start()
+
+    return jsonify({"ok": True, "instant": instant_msg, "note": "过一会儿会有第二条回应"})
 
 
 @app.route("/list-models", methods=["GET"])
