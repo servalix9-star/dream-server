@@ -392,9 +392,10 @@ def index():
 
 DEFAULT_ICON = "https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jpg"
 
-# 网页聊天用的头像（灰兔=Charon，粉兔=昭昭）
-CHAT_AVATAR_CHARON = "https://wx3.sinaimg.cn/large/0084dcudgy1ighmcruc0rj30wi0w6jve.jpg"
-CHAT_AVATAR_USER = "https://wx3.sinaimg.cn/large/0084dcudgy1ighmcqmzrzj30wi0vyju7.jpg"
+# 网页聊天用的头像（灰兔=Charon，粉兔=昭昭）。放在 static/ 目录下随代码一起部署，
+# 不依赖任何第三方图床（新浪图床等对外链有防盗链限制，会导致图片显示不出来）。
+CHAT_AVATAR_CHARON = "/static/avatar_charon.jpg"
+CHAT_AVATAR_USER = "/static/avatar_user.jpg"
 
 # "想你了"按钮被按下时，立刻推送的固定短句池（不经过AI生成，追求瞬间感应）
 INSTANT_CATCH_MESSAGES = [
