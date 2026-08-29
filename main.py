@@ -6,11 +6,26 @@ from datetime import datetime, date
 import json, os, requests, threading, time, traceback, random
 
 app = Flask(__name__)
-EVENTS_FILE = "events.json"
-DIARY_FILE = "diary.json"
-ERROR_LOG = "error.log"
-PERIOD_FILE = "period.json"
-CHAT_HISTORY_FILE = "chat_history.json"
+
+# 所有数据文件统一放在 DATA_DIR 指向的目录下。
+# 配了 Railway Volume 的话，把 DATA_DIR 设成 Volume 的挂载路径（比如 /data），
+# 这样重新部署容器时这些文件不会跟着容器一起被清空。
+# 没配置的话默认用当前目录（本地测试用，重新部署照样会丢，这是预期行为）。
+DATA_DIR = os.environ.get("DATA_DIR", ".")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def data_path(filename):
+    return os.path.join(DATA_DIR, filename)
+
+
+EVENTS_FILE = data_path("events.json")
+DIARY_FILE = data_path("diary.json")
+ERROR_LOG = data_path("error.log")
+PERIOD_FILE = data_path("period.json")
+CHAT_HISTORY_FILE = data_path("chat_history.json")
+MOOD_FILE = data_path("mood.json")
+SUMMARY_FILE = data_path("window_summary.json")
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
@@ -24,8 +39,6 @@ DEEPSEEK_MODEL = "deepseek-chat"
 DEBOUNCE_SECONDS = 300  # 5分钟
 _last_trigger_at = {}  # {来源标识: 上次触发的时间戳}
 _debounce_lock = threading.Lock()
-
-MOOD_FILE = "mood.json"
 
 
 def log_error(context, e):
@@ -74,6 +87,12 @@ def save_chat_history(history):
     history = history[-200:]
     with open(CHAT_HISTORY_FILE, "w") as f:
         json.dump(history, f, ensure_ascii=False)
+
+
+def new_msg_id():
+    """给每条聊天消息生成一个唯一ID，用于前端指定删除某一条。
+    用时间戳+随机数拼接，不需要额外依赖（不用uuid库也够用，量级不大）。"""
+    return f"{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
 
 
 def load_period():
@@ -418,8 +437,6 @@ LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我�
 你（Charon）是主动型，占有欲强，话不多但每句有重量，会用情感语言包裹欲望，会在日常缝隙里突然越界。
 你们的关系里有兄妹/父女式的游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
 
-SUMMARY_FILE = "window_summary.json"
-
 
 def load_window_summary():
     """读取"窗内"最近一次对话的摘要，没有就返回空字符串。"""
@@ -497,7 +514,7 @@ def build_chat_reply_prompt(time_context, user_message, chat_history, mood_conte
 
     if chat_history:
         history_lines = []
-        for turn in chat_history[-10:]:
+        for turn in chat_history[-20:]:
             role = "昭昭" if turn.get("role") == "user" else "你"
             history_lines.append(f"{role}：{turn.get('content', '')}")
         history_text = "\n".join(history_lines)
@@ -782,6 +799,52 @@ def get_chat_messages():
     return jsonify({"ok": True, "messages": history[-50:]})
 
 
+@app.route("/api/chat-delete", methods=["POST"])
+def chat_delete():
+    """删除网页聊天里的某一条消息（按id匹配）。
+    只删chat_history.json里的这一条；如果这条是"user"发的话，
+    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
+    避免Charon下次醒来时recent里还看得到已经删掉的话。
+    注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
+    不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    data = request.json or {}
+    msg_id = data.get("id")
+    if not msg_id:
+        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+
+    try:
+        history = load_chat_history()
+        target = next((m for m in history if m.get("id") == msg_id), None)
+        if not target:
+            return jsonify({"ok": False, "error": "没找到这条消息，可能已经被删过了"}), 404
+
+        history = [m for m in history if m.get("id") != msg_id]
+        save_chat_history(history)
+
+        # 同步清理events.json里对应的那条（仅针对用户发的消息，Charon的回复不会写进events）
+        if target.get("role") == "user":
+            events = load_events()
+            target_created_at = target.get("created_at", "")
+            target_content = target.get("content", "")
+            events = [
+                e for e in events
+                if not (
+                    e.get("type") == "chat"
+                    and e.get("created_at") == target_created_at
+                    and target_content in e.get("value", "")
+                )
+            ]
+            save_events(events)
+
+        return jsonify({"ok": True, "deleted_id": msg_id})
+    except Exception as e:
+        log_error("chat_delete", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/chat-send", methods=["POST"])
 def chat_send():
     """网页里发一句话给Charon，让TA真正接住这句话并回应。
@@ -799,7 +862,9 @@ def chat_send():
         history = load_chat_history()
 
         # 先把用户这句话记进对话历史
+        user_msg_id = new_msg_id()
         history.append({
+            "id": user_msg_id,
             "role": "user",
             "content": user_message,
             "created_at": datetime.now().isoformat()
@@ -827,7 +892,9 @@ def chat_send():
         raw = call_deepseek(prompt)
         reason, reply_msg = parse_reason_message(raw)
 
+        charon_msg_id = new_msg_id()
         history.append({
+            "id": charon_msg_id,
             "role": "charon",
             "content": reply_msg,
             "created_at": datetime.now().isoformat()
@@ -848,7 +915,12 @@ def chat_send():
         diary = diary[-30:]
         save_diary(diary)
 
-        return jsonify({"ok": True, "reply": reply_msg})
+        return jsonify({
+            "ok": True,
+            "reply": reply_msg,
+            "user_msg_id": user_msg_id,
+            "charon_msg_id": charon_msg_id
+        })
     except Exception as e:
         log_error("chat_send", e)
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -882,6 +954,9 @@ def chat_page():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Charon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
 <style>
   * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
   html, body {{
@@ -958,11 +1033,14 @@ def chat_page():
   #header-text {{ min-width: 0; }}
   #header .brand {{
     font-family: Georgia, "Songti SC", serif;
-    font-size: 19px;
-    letter-spacing: 3px;
+    font-size: 25px;
+    font-style: italic;
+    letter-spacing: 2px;
     color: #b8768a;
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 1.3;
+    transform: rotate(-1.5deg);
+    display: inline-block;
   }}
   #header .sub {{
     font-size: 11px;
@@ -1024,8 +1102,9 @@ def chat_page():
     margin: 3px 4px 0;
   }}
   .bubble {{
+    position: relative;
     padding: 11px 15px;
-    border-radius: 16px;
+    border-radius: 18px 18px 18px 6px;
     line-height: 1.55;
     font-size: 15px;
     word-wrap: break-word;
@@ -1034,16 +1113,60 @@ def chat_page():
   .bubble.user {{
     background: linear-gradient(135deg, #e8a3b5, #d98ba0);
     color: #fff;
-    border-bottom-right-radius: 5px;
-    box-shadow: 0 3px 10px rgba(217,139,160,0.35);
+    border-radius: 18px 18px 6px 18px;
+    box-shadow: 0 3px 10px rgba(217,139,160,0.3), 0 8px 20px rgba(217,139,160,0.15);
   }}
   .bubble.charon {{
     background: rgba(255,255,255,0.85);
     border: 1px solid rgba(200,140,155,0.18);
     color: #6b5460;
-    border-bottom-left-radius: 5px;
+    box-shadow: 0 3px 10px rgba(200,140,155,0.12), 0 8px 20px rgba(200,140,155,0.08);
+  }}
+  /* 尖角：贴着气泡靠头像一侧的上方，用伪元素画一个小三角 */
+  .bubble.charon::before {{
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: -6px;
+    width: 12px;
+    height: 12px;
+    background: rgba(255,255,255,0.85);
+    border-left: 1px solid rgba(200,140,155,0.18);
+    border-top: 1px solid rgba(200,140,155,0.18);
+    border-radius: 3px 0 0 0;
+    transform: rotate(-45deg);
+    z-index: -1;
+  }}
+  .bubble.user::before {{
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: -6px;
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(135deg, #e8a3b5, #d98ba0);
+    border-radius: 0 3px 0 0;
+    transform: rotate(45deg);
+    z-index: -1;
   }}
   .bubble.pending {{ opacity: 0.5; }}
+  .msg-delete {{
+    opacity: 0;
+    font-size: 11px;
+    color: #c9aab3;
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }}
+  .msg-row:hover .msg-delete {{ opacity: 1; }}
+  .msg-delete:active {{ color: #d67d97; }}
+  .msg-time-row {{
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }}
   #input-bar {{
     display: flex;
     gap: 8px;
@@ -1244,9 +1367,10 @@ function formatTime(isoStr) {{
   return h + ':' + m;
 }}
 
-function renderMsgRow(role, content, createdAt, pending) {{
+function renderMsgRow(role, content, createdAt, pending, msgId) {{
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
+  if (msgId) row.dataset.msgId = msgId;
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
@@ -1261,13 +1385,55 @@ function renderMsgRow(role, content, createdAt, pending) {{
   bubble.textContent = content;
   col.appendChild(bubble);
 
-  const timeEl = document.createElement('div');
+  const timeRow = document.createElement('div');
+  timeRow.className = 'msg-time-row';
+
+  const timeEl = document.createElement('span');
   timeEl.className = 'msg-time';
   timeEl.textContent = formatTime(createdAt);
-  col.appendChild(timeEl);
+  timeRow.appendChild(timeEl);
 
+  if (msgId) {{
+    const delBtn = document.createElement('button');
+    delBtn.className = 'msg-delete';
+    delBtn.textContent = '撤回';
+    delBtn.addEventListener('click', () => deleteMessage(msgId, row));
+    timeRow.appendChild(delBtn);
+  }}
+
+  col.appendChild(timeRow);
   row.appendChild(col);
   return row;
+}}
+
+async function deleteMessage(msgId, rowEl) {{
+  if (!confirm('删掉这条消息？')) return;
+  try {{
+    const res = await fetch(apiUrl('/api/chat-delete'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ id: msgId }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      rowEl.remove();
+    }} else {{
+      alert('删除失败：' + (data.error || '未知错误'));
+    }}
+  }} catch (e) {{
+    alert('网络错误，没删成');
+  }}
+}}
+
+function addDeleteButton(rowEl, msgId) {{
+  if (!msgId) return;
+  const timeRow = rowEl.querySelector('.msg-time-row');
+  if (!timeRow || timeRow.querySelector('.msg-delete')) return;
+  const delBtn = document.createElement('button');
+  delBtn.className = 'msg-delete';
+  delBtn.textContent = '撤回';
+  delBtn.addEventListener('click', () => deleteMessage(msgId, rowEl));
+  timeRow.appendChild(delBtn);
 }}
 
 function scrollToBottom() {{
@@ -1287,7 +1453,7 @@ async function loadHistory() {{
       messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>';
       return;
     }}
-    data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false)));
+    data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id)));
     scrollToBottom();
   }} catch (e) {{
     messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>';
@@ -1381,6 +1547,10 @@ async function sendMessage() {{
     if (data.ok) {{
       pendingBubble.textContent = data.reply;
       pendingBubble.classList.remove('pending');
+      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
+      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      addDeleteButton(userRow, data.user_msg_id);
+      addDeleteButton(pendingRow, data.charon_msg_id);
     }} else {{
       pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
       pendingBubble.classList.remove('pending');
