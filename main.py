@@ -948,6 +948,9 @@ def chat_page():
         return "<h3>需要访问口令</h3><p>在链接后加 ?code=你的口令</p>", 401
 
     code_param = request.args.get("code", "")
+    # 将日记 URL 提前在 Python 阶段组装好，避免 f-string 内部嵌套复杂的三元运算产生解析 Bug
+    diary_url = f"/diary/read?code={code_param}" if code_param else "/diary/read"
+
     return f"""<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -1234,7 +1237,7 @@ def chat_page():
   .stat-label {{
     font-size: 11px;
     color: #b08d98;
-    margin-bottom: 6px;
+    margin-bottom: 5px;
     display: flex;
     justify-content: space-between;
   }}
@@ -1321,7 +1324,7 @@ def chat_page():
 
   <div id="nav">
     <a class="nav-icon" href="/" title="首页">✦</a>
-    <a class="nav-icon" href="{'/diary/read?code=' + code_param if code_param else '/diary/read'}" title="日记">✎</a>
+    <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
   </div>
 
   <div id="main">
@@ -1584,3 +1587,51 @@ loadStatus();
 </script>
 </body>
 </html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
