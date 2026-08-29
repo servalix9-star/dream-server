@@ -487,14 +487,14 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
 {recent}{period_line}{mood_line}
 
-根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
+根据现在的时间、并在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
 
 
 def build_missyou_prompt(time_context):
-    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你并在想你。
+    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你她在想你。
 
 {LONG_TERM_MEMORY}
 
@@ -1070,7 +1070,7 @@ def chat_page():
   .msg-row {{
     display: flex;
     align-items: flex-start;
-    gap: 12px; /* 增加到 12px，留出足够空间给小三角，防止与头像重叠 */
+    gap: 10px; /* 微调间距，使头像和气泡的贴合更紧凑 */
     max-width: 88%;
   }}
   .msg-row.user {{
@@ -1112,42 +1112,17 @@ def chat_page():
   .bubble.user {{
     background: linear-gradient(135deg, #e8a3b5, #d98ba0);
     color: #fff;
-    border-radius: 18px 6px 18px 18px; /* 右上角设为尖角，对应尾巴位置 */
+    /* 不对称圆角：右上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
+    border-radius: 18px 4px 18px 18px; 
     box-shadow: 0 3px 10px rgba(217,139,160,0.3), 0 8px 20px rgba(217,139,160,0.15);
   }}
   .bubble.charon {{
     background: rgba(255,255,255,0.85);
     border: 1px solid rgba(200,140,155,0.18);
     color: #6b5460;
-    border-radius: 6px 18px 18px 18px; /* 左上角设为尖角，对应尾巴位置 */
+    /* 不对称圆角：左上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
+    border-radius: 4px 18px 18px 18px; 
     box-shadow: 0 3px 10px rgba(200,140,155,0.12), 0 8px 20px rgba(200,140,155,0.08);
-  }}
-  /* 尖角：贴着气泡靠头像一侧的上方，用伪元素画一个小三角 */
-  .bubble.charon::before {{
-    content: '';
-    position: absolute;
-    top: 10px;
-    left: -6px;
-    width: 10px;
-    height: 10px;
-    background: rgba(255,255,255,0.95); /* 稍微调实，完美遮挡底部的气泡圆角线 */
-    border-left: 1px solid rgba(200,140,155,0.18);
-    border-top: 1px solid rgba(200,140,155,0.18);
-    border-radius: 3px 0 0 0;
-    transform: rotate(-45deg);
-    z-index: 1; /* 提升至 1，挡住气泡自身的边框线，避免边框线穿透 */
-  }}
-  .bubble.user::before {{
-    content: '';
-    position: absolute;
-    top: 10px;
-    right: -6px;
-    width: 10px;
-    height: 10px;
-    background: #e8a3b5; /* 使用渐变起点的粉色，衔接更柔和 */
-    border-radius: 0 3px 0 0;
-    transform: rotate(45deg);
-    z-index: 1; /* 提升层级，避免被 bubble 或 avatar 的背景阴影遮挡 */
   }}
   .bubble.pending {{ opacity: 0.5; }}
   .msg-delete {{
