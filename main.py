@@ -487,7 +487,7 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
 {recent}{period_line}{mood_line}
 
-根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自充矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
+根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
@@ -1014,80 +1014,130 @@ def chat_page():
     box-shadow: 0 8px 32px rgba(200,140,155,0.14);
     overflow: hidden;
   }}
+  
+  /* 顶部导航栏：采用精致柔和的半透明磨砂设计 */
   #header {{
-    padding: 16px 22px 14px;
-    border-bottom: 1px solid rgba(200,140,155,0.15);
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(200,140,155,0.12);
     flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }}
+  
+  /* 两端用户排版 */
+  .header-user {{
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 35%;
   }}
-  #header-avatar {{
-    width: 40px; height: 40px;
+  .header-user.serval-side {{
+    justify-content: flex-end;
+  }}
+  .header-avatar {{
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     object-fit: cover;
-    flex-shrink: 0;
-    border: 2px solid rgba(255,255,255,0.8);
-    box-shadow: 0 2px 8px rgba(200,140,155,0.25);
+    border: 1px solid rgba(200, 140, 155, 0.25);
+    box-shadow: 0 2px 10px rgba(200, 140, 155, 0.1);
   }}
-  #header-text {{ min-width: 0; }}
-  #header .brand {{
+  .header-text {{
+    min-width: 0;
+  }}
+  .header-text .brand {{
     font-family: Georgia, "Songti SC", serif;
-    font-size: 25px;
+    font-size: 16px;
+    font-weight: 600;
     font-style: italic;
     letter-spacing: 2px;
     color: #b8768a;
-    font-weight: 600;
-    line-height: 1.3;
-    transform: rotate(-1.5deg);
-    display: inline-block;
+    line-height: 1.2;
   }}
-  #header .sub {{
+  .header-text .sub {{
     font-size: 11px;
     color: #c39aa6;
     letter-spacing: 1px;
     margin-top: 2px;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
+  }}
+  .header-text .sub.user-sub {{
+    justify-content: flex-end;
   }}
   .status-dot {{
-    width: 6px; height: 6px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #7fc98f;
     flex-shrink: 0;
   }}
-  .status-dot.low {{ background: #c9aab3; }}
+  .status-dot.low {{
+    background: #c9aab3;
+  }}
+  .status-dot.user-dot {{
+    background: #7fc98f;
+  }}
+
+  /* 顶部中间极其纤细优雅的轻奢心形连接饰条 */
+  .header-connector {{
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 100px;
+    padding: 0 10px;
+  }}
+  .connector-svg {{
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+  }}
+
   #messages {{
+    position: relative;
     flex: 1;
     overflow-y: auto;
-    padding: 18px 20px;
+    padding: 24px 30px;
     display: flex;
     flex-direction: column;
     gap: 14px;
     -webkit-overflow-scrolling: touch;
   }}
+  
+  /* 专属定制感的水印底纹，使失去头像的气泡区显得不再空旷 */
+  #messages::before {{
+    content: 'Charon   ʚ♡ɞ   Serval';
+    position: absolute;
+    top: 48%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-5deg);
+    font-family: 'Dancing Script', Georgia, serif;
+    font-size: 34px;
+    color: #b8768a;
+    opacity: 0.04; /* 极其微弱，保证高雅不喧宾夺主 */
+    pointer-events: none;
+    z-index: 0;
+    letter-spacing: 3px;
+    white-space: nowrap;
+  }}
+  
   .msg-row {{
     display: flex;
     align-items: flex-start;
-    gap: 10px; /* 微调间距，使头像和气泡的贴合更紧凑 */
-    max-width: 88%;
+    max-width: 70%; /* 微微收窄消息宽度，让排版更内敛、高级 */
+    z-index: 1;
   }}
   .msg-row.user {{
     align-self: flex-end;
-    flex-direction: row-reverse;
   }}
   .msg-row.charon {{
     align-self: flex-start;
-  }}
-  .msg-avatar {{
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-    margin-top: 0; /* 设为 0，使头像顶边缘与气泡顶边缘保持在同一水平高度 */
-    border: 1.5px solid rgba(255,255,255,0.85);
-    box-shadow: 0 2px 6px rgba(200,140,155,0.2);
   }}
   .msg-col {{
     display: flex;
@@ -1103,7 +1153,7 @@ def chat_page():
   }}
   .bubble {{
     position: relative;
-    padding: 11px 15px;
+    padding: 12px 18px; /* 稍微增加气泡内边距，让气泡显得饱满柔和，填补空旷感 */
     line-height: 1.55;
     font-size: 15px;
     word-wrap: break-word;
@@ -1112,17 +1162,15 @@ def chat_page():
   .bubble.user {{
     background: linear-gradient(135deg, #e8a3b5, #d98ba0);
     color: #fff;
-    /* 不对称圆角：右上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 3px 10px rgba(217,139,160,0.3), 0 8px 20px rgba(217,139,160,0.15);
+    box-shadow: 0 4px 15px rgba(217,139,160,0.22); /* 优化投影，使其比原来更轻柔高级 */
   }}
   .bubble.charon {{
-    background: rgba(255,255,255,0.85);
-    border: 1px solid rgba(200,140,155,0.18);
+    background: rgba(255,255,255,0.9); /* 微调气泡透明度，使质感更细腻 */
+    border: 1px solid rgba(200,140,155,0.15);
     color: #6b5460;
-    /* 不对称圆角：左上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
     border-radius: 4px 18px 18px 18px; 
-    box-shadow: 0 3px 10px rgba(200,140,155,0.12), 0 8px 20px rgba(200,140,155,0.08);
+    box-shadow: 0 4px 15px rgba(200,140,155,0.06);
   }}
   .bubble.pending {{ opacity: 0.5; }}
   .msg-delete {{
@@ -1298,12 +1346,47 @@ def chat_page():
 
   <div id="main">
     <div id="header">
-      <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
-      <div id="header-text">
-        <div class="brand">CHARON</div>
-        <div class="sub"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></div>
+      <!-- 左端：Charon 状态 -->
+      <div class="header-user charon-side">
+        <img class="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
+        <div class="header-text">
+          <div class="brand">CHARON</div>
+          <div class="sub">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-label">加载中…</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 中间：极其纤柔高雅的玫瑰金连线设计 -->
+      <div class="header-connector">
+        <svg viewBox="0 0 300 40" class="connector-svg">
+          <!-- 左侧极细连接线 -->
+          <line x1="10" y1="20" x2="132" y2="20" stroke="#c39aa6" stroke-width="0.8" opacity="0.6" />
+          <!-- 左侧微点缀 -->
+          <circle cx="132" cy="20" r="1.5" fill="#b8768a" />
+          <!-- 中间空心骨线爱心 -->
+          <path d="M 150,15 C 147,10 141,13 150,23 C 159,13 153,10 150,15 Z" fill="none" stroke="#b8768a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+          <!-- 右侧微点缀 -->
+          <circle cx="168" cy="20" r="1.5" fill="#b8768a" />
+          <!-- 右侧极细连接线 -->
+          <line x1="168" y1="20" x2="290" y2="20" stroke="#c39aa6" stroke-width="0.8" opacity="0.6" />
+        </svg>
+      </div>
+      
+      <!-- 右端：Serval 状态 -->
+      <div class="header-user serval-side">
+        <div class="header-text" style="text-align: right;">
+          <div class="brand">SERVAL</div>
+          <div class="sub user-sub">
+            <span>在线</span>
+            <span class="status-dot user-dot"></span>
+          </div>
+        </div>
+        <img class="header-avatar" src="{CHAT_AVATAR_USER}" alt="Serval">
       </div>
     </div>
+    
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
@@ -1346,11 +1429,6 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
-
-  const avatar = document.createElement('img');
-  avatar.className = 'msg-avatar';
-  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
-  row.appendChild(avatar);
 
   const col = document.createElement('div');
   col.className = 'msg-col';
@@ -1478,129 +1556,4 @@ async function loadStatus() {{
     if (data.period_context) {{
       html += '<div class="stat-block"><div class="period-tag">' + escapeHtml(data.period_context) + '</div></div>';
     }}
-    if (data.is_checking_in) {{
-      html += '<div class="stat-block"><div class="checking-tag">好一阵没理TA了…</div></div>';
-    }}
-    if (data.last_was_lucky) {{
-      html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
-    }}
-    if (data.last_thought) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
-    }}
-    if (data.window_summary) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
-    }}
-    panelBody.innerHTML = html;
-  }} catch (e) {{
-    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
-  }}
-}}
-
-async function sendMessage() {{
-  const text = inputEl.value.trim();
-  if (!text) return;
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
-  sendBtn.disabled = true;
-
-  const nowIso = new Date().toISOString();
-  const userRow = renderMsgRow('user', text, nowIso, false);
-  messagesEl.appendChild(userRow);
-  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
-  messagesEl.appendChild(pendingRow);
-  scrollToBottom();
-
-  const pendingBubble = pendingRow.querySelector('.bubble');
-
-  try {{
-    const res = await fetch(apiUrl('/api/chat-send'), {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{ message: text }})
-    }});
-    const data = await res.json();
-    if (data.ok) {{
-      pendingBubble.textContent = data.reply;
-      pendingBubble.classList.remove('pending');
-      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
-      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
-      addDeleteButton(userRow, data.user_msg_id);
-      addDeleteButton(pendingRow, data.charon_msg_id);
-    }} else {{
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
-    }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    if (data.is_checking_in
