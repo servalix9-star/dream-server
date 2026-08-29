@@ -487,7 +487,7 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
 {recent}{period_line}{mood_line}
 
-根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自充矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
+根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
@@ -961,116 +961,127 @@ def chat_page():
   * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
   html, body {{
     margin: 0; padding: 0; height: 100%;
-    background: linear-gradient(160deg, #fdf6f4 0%, #f7e9ec 45%, #f3dde4 100%);
+    /* 网格径向渐变，完美模拟 NOCTURNE 原生天幕暮粉至暗夜熏紫的色彩层次 */
+    background: radial-gradient(circle at 10% 20%, #fbeff2 0%, #edd3da 30%, #dfbfca 65%, #cbb1bd 100%);
+    background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550;
+    color: #4a3742;
   }}
   #app {{
     display: flex;
     height: 100vh; height: 100dvh;
-    padding: 10px;
-    gap: 10px;
+    padding: 14px;
+    gap: 14px;
   }}
 
-  /* ---- 左侧导航栏 ---- */
+  /* ---- 左侧玻璃舱导航栏 ---- */
   #nav {{
-    width: 56px;
+    width: 60px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    padding: 16px 0;
-    background: rgba(255,255,255,0.55);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 22px;
-    border: 1px solid rgba(255,255,255,0.6);
-    box-shadow: 0 4px 24px rgba(200,140,155,0.12);
+    gap: 16px;
+    padding: 24px 0;
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }}
   .nav-icon {{
-    width: 40px; height: 40px;
+    width: 42px; height: 42px;
     border-radius: 14px;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(255,255,255,0.7);
-    color: #b8768a;
-    font-size: 18px;
+    background: rgba(255, 255, 255, 0.35);
+    color: #a66275;
+    font-size: 19px;
     text-decoration: none;
-    transition: transform 0.15s ease, background 0.15s ease;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
   }}
-  .nav-icon:active {{ transform: scale(0.92); background: #f3c9d3; }}
+  .nav-icon:hover {{
+    background: rgba(255, 255, 255, 0.65);
+    transform: translateY(-2px);
+    color: #8c4b5d;
+  }}
+  .nav-icon:active {{ transform: translateY(0) scale(0.95); }}
 
-  /* ---- 中间对话区 ---- */
+  /* ---- 中间玻璃舱对话区 ---- */
   #main {{
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: rgba(255,255,255,0.5);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-radius: 24px;
-    border: 1px solid rgba(255,255,255,0.7);
-    box-shadow: 0 8px 32px rgba(200,140,155,0.14);
+    background: rgba(255, 255, 255, 0.32);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 12px 40px rgba(184, 118, 138, 0.1);
     overflow: hidden;
   }}
   #header {{
-    padding: 16px 22px 14px;
-    border-bottom: 1px solid rgba(200,140,155,0.15);
+    padding: 20px 24px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
   }}
   #header-avatar {{
-    width: 40px; height: 40px;
+    width: 44px; height: 44px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid rgba(255,255,255,0.8);
-    box-shadow: 0 2px 8px rgba(200,140,155,0.25);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 12px rgba(184, 118, 138, 0.15);
   }}
   #header-text {{ min-width: 0; }}
   #header .brand {{
-    font-family: Georgia, "Songti SC", serif;
-    font-size: 25px;
+    font-family: "Georgia", "Songti SC", serif;
+    font-size: 26px;
     font-style: italic;
-    letter-spacing: 2px;
-    color: #b8768a;
-    font-weight: 600;
-    line-height: 1.3;
-    transform: rotate(-1.5deg);
-    display: inline-block;
+    letter-spacing: 3px;
+    color: #a66275;
+    font-weight: 500;
+    line-height: 1.2;
+    text-transform: uppercase;
   }}
   #header .sub {{
     font-size: 11px;
-    color: #c39aa6;
+    color: #b08d98;
     letter-spacing: 1px;
-    margin-top: 2px;
+    margin-top: 3px;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
   }}
   .status-dot {{
     width: 6px; height: 6px;
     border-radius: 50%;
-    background: #7fc98f;
+    background: #84cc9a;
     flex-shrink: 0;
+    box-shadow: 0 0 8px #84cc9a;
   }}
-  .status-dot.low {{ background: #c9aab3; }}
+  .status-dot.low {{ 
+    background: #c3a1ad; 
+    box-shadow: 0 0 8px #c3a1ad;
+  }}
   #messages {{
     flex: 1;
     overflow-y: auto;
-    padding: 18px 20px;
+    padding: 22px 24px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
     -webkit-overflow-scrolling: touch;
   }}
   .msg-row {{
     display: flex;
     align-items: flex-start;
-    gap: 10px; /* 微调间距，使头像和气泡的贴合更紧凑 */
+    gap: 10px;
     max-width: 88%;
   }}
   .msg-row.user {{
@@ -1081,13 +1092,13 @@ def chat_page():
     align-self: flex-start;
   }}
   .msg-avatar {{
-    width: 34px; height: 34px;
+    width: 36px; height: 36px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    margin-top: 0; /* 设为 0，使头像顶边缘与气泡顶边缘保持在同一水平高度 */
-    border: 1.5px solid rgba(255,255,255,0.85);
-    box-shadow: 0 2px 6px rgba(200,140,155,0.2);
+    margin-top: 0;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
   }}
   .msg-col {{
     display: flex;
@@ -1098,37 +1109,35 @@ def chat_page():
   .msg-row.charon .msg-col {{ align-items: flex-start; }}
   .msg-time {{
     font-size: 10px;
-    color: #c9aab3;
-    margin: 3px 4px 0;
+    color: #b08d98;
+    margin: 4px 4px 0;
   }}
   .bubble {{
     position: relative;
-    padding: 11px 15px;
-    line-height: 1.55;
+    padding: 12px 18px;
+    line-height: 1.6;
     font-size: 15px;
     word-wrap: break-word;
     white-space: pre-wrap;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, #e8a3b5, #d98ba0);
-    color: #fff;
-    /* 不对称圆角：右上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
+    background: linear-gradient(135deg, #d38195, #b86076);
+    color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 3px 10px rgba(217,139,160,0.3), 0 8px 20px rgba(217,139,160,0.15);
+    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.25);
   }}
   .bubble.charon {{
-    background: rgba(255,255,255,0.85);
-    border: 1px solid rgba(200,140,155,0.18);
-    color: #6b5460;
-    /* 不对称圆角：左上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    color: #4a3742;
     border-radius: 4px 18px 18px 18px; 
-    box-shadow: 0 3px 10px rgba(200,140,155,0.12), 0 8px 20px rgba(200,140,155,0.08);
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }}
   .bubble.pending {{ opacity: 0.5; }}
   .msg-delete {{
     opacity: 0;
     font-size: 11px;
-    color: #c9aab3;
+    color: #b08d98;
     background: none;
     border: none;
     padding: 2px 4px;
@@ -1136,7 +1145,7 @@ def chat_page():
     transition: opacity 0.15s ease;
   }}
   .msg-row:hover .msg-delete {{ opacity: 1; }}
-  .msg-delete:active {{ color: #d67d97; }}
+  .msg-delete:hover {{ color: #b86076; }}
   .msg-time-row {{
     display: flex;
     align-items: center;
@@ -1144,147 +1153,166 @@ def chat_page():
   }}
   #input-bar {{
     display: flex;
-    gap: 8px;
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    border-top: 1px solid rgba(200,140,155,0.15);
+    gap: 10px;
+    padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
     flex-shrink: 0;
   }}
   #input-bar textarea {{
     flex: 1;
     resize: none;
-    border-radius: 14px;
-    border: 1px solid rgba(200,140,155,0.25);
-    background: rgba(255,255,255,0.75);
-    color: #5a4550;
-    padding: 10px 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.4);
+    color: #4a3742;
+    padding: 11px 16px;
     font-size: 15px;
     font-family: inherit;
     max-height: 100px;
+    outline: none;
+    transition: background 0.2s ease;
   }}
-  #input-bar textarea::placeholder {{ color: #c9aab3; }}
+  #input-bar textarea:focus {{
+    background: rgba(255, 255, 255, 0.6);
+  }}
+  #input-bar textarea::placeholder {{ color: #b08d98; }}
   #input-bar button {{
     border: none;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #e8a3b5, #d67d97);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #d38195, #b86076);
     color: #fff;
-    padding: 0 20px;
+    padding: 0 22px;
     font-size: 14px;
-    box-shadow: 0 3px 10px rgba(217,139,160,0.4);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.3);
+    transition: all 0.2s ease;
   }}
-  #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; }}
+  #input-bar button:hover {{
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.4);
+  }}
+  #input-bar button:active {{
+    transform: translateY(0);
+  }}
+  #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
   #empty-hint {{
-    color: #c9aab3;
+    color: #b08d98;
     font-size: 13px;
     text-align: center;
     margin-top: 40px;
   }}
 
-  /* ---- 右侧状态面板 ---- */
+  /* ---- 右侧玻璃舱状态面板 ---- */
   #panel {{
-    width: 190px;
+    width: 210px;
     flex-shrink: 0;
     display: none;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px 16px;
-    background: rgba(255,255,255,0.5);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 22px;
-    border: 1px solid rgba(255,255,255,0.7);
-    box-shadow: 0 6px 28px rgba(200,140,155,0.13);
+    gap: 16px;
+    padding: 22px 18px;
+    background: rgba(255, 255, 255, 0.32);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
     overflow-y: auto;
   }}
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
   .panel-title {{
-    font-family: Georgia, "Songti SC", serif;
-    font-size: 13px;
-    letter-spacing: 2px;
-    color: #b8768a;
-    margin-bottom: 4px;
+    font-family: "Georgia", "Songti SC", serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: #a66275;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    font-weight: bold;
   }}
-  .stat-block {{ margin-bottom: 4px; }}
+  .stat-block {{ margin-bottom: 6px; }}
   .stat-label {{
     font-size: 11px;
-    color: #b88994;
-    margin-bottom: 5px;
+    color: #b08d98;
+    margin-bottom: 6px;
     display: flex;
     justify-content: space-between;
   }}
   .stat-bar-track {{
     height: 6px;
     border-radius: 3px;
-    background: rgba(200,140,155,0.15);
+    background: rgba(255, 255, 255, 0.3);
     overflow: hidden;
   }}
   .stat-bar-fill {{
     height: 100%;
     border-radius: 3px;
-    background: linear-gradient(90deg, #f0b8c6, #d67d97);
+    background: linear-gradient(90deg, #f0b8c6, #b86076);
     transition: width 0.4s ease;
   }}
   .stat-value {{
     font-size: 12px;
-    color: #8a6570;
+    color: #6e505f;
   }}
   .period-tag {{
     font-size: 11px;
-    color: #b8768a;
-    background: rgba(232,163,181,0.18);
-    border-radius: 8px;
+    color: #a66275;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
   }}
   .checking-tag {{
     font-size: 11px;
-    color: #a06878;
-    background: rgba(200,140,155,0.14);
-    border-radius: 8px;
+    color: #7d5a68;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
   }}
   .lucky-tag {{
     font-size: 11px;
-    color: #b8768a;
-    background: linear-gradient(135deg, rgba(240,184,198,0.25), rgba(214,125,151,0.15));
-    border-radius: 8px;
+    color: #b86076;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.45));
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
   }}
   .thought-card {{
     font-size: 12px;
-    color: #7a5a65;
-    background: rgba(255,255,255,0.55);
-    border: 1px solid rgba(200,140,155,0.15);
-    border-radius: 10px;
-    padding: 10px 11px;
+    color: #5c4451;
+    background: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 12px;
+    padding: 10px 12px;
     line-height: 1.6;
-    font-style: italic;
   }}
   .summary-card {{
     font-size: 11px;
-    color: #8a6570;
-    background: rgba(255,255,255,0.4);
-    border-radius: 10px;
+    color: #6e505f;
+    background: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
     padding: 9px 11px;
     line-height: 1.6;
   }}
   .today-count {{
-    font-size: 22px;
-    color: #d67d97;
-    font-family: Georgia, serif;
+    font-size: 24px;
+    color: #b86076;
+    font-family: "Georgia", serif;
     font-weight: 600;
   }}
   .today-count-unit {{
     font-size: 11px;
-    color: #b88994;
+    color: #b08d98;
     margin-left: 3px;
   }}
   .panel-empty {{
     font-size: 11px;
-    color: #c9aab3;
+    color: #b08d98;
   }}
 </style>
 </head>
@@ -1292,7 +1320,7 @@ def chat_page():
 <div id="app">
 
   <div id="nav">
-    <a class="nav-icon" href="/" title="首页">⌂</a>
+    <a class="nav-icon" href="/" title="首页">✦</a>
     <a class="nav-icon" href="{'/diary/read?code=' + code_param if code_param else '/diary/read'}" title="日记">✎</a>
   </div>
 
@@ -1300,7 +1328,7 @@ def chat_page():
     <div id="header">
       <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
       <div id="header-text">
-        <div class="brand">CHARON</div>
+        <div class="brand">NOCTURNE</div>
         <div class="sub"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></div>
       </div>
     </div>
@@ -1485,10 +1513,10 @@ async function loadStatus() {{
       html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
     }}
     if (data.last_thought) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
     }}
     if (data.window_summary) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
     }}
     panelBody.innerHTML = html;
   }} catch (e) {{
@@ -1556,51 +1584,3 @@ loadStatus();
 </script>
 </body>
 </html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
