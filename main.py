@@ -968,7 +968,7 @@ def chat_page():
     background: radial-gradient(circle at 10% 20%, #fbeff2 0%, #edd3da 30%, #dfbfca 65%, #cbb1bd 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #4a3742;
+    color: #5a4550; /* 恢复至初始雅致深紫灰 */
   }}
   #app {{
     display: flex;
@@ -977,7 +977,7 @@ def chat_page():
     gap: 14px;
   }}
 
-  /* ---- 左侧玻璃舱导航栏 ---- */
+  /* ---- 左侧玻璃舱导航栏（移除高光白线边框，增强透明度） ---- */
   #nav {{
     width: 60px;
     flex-shrink: 0;
@@ -986,11 +986,11 @@ def chat_page():
     align-items: center;
     gap: 16px;
     padding: 24px 0;
-    background: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.16); /* 调低白度至0.16，增强底色透光感 */
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
     border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
+    border: none; /* 彻底去除边缘白色线框 */
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }}
   .nav-icon {{
@@ -1001,7 +1001,7 @@ def chat_page():
     color: #a66275;
     font-size: 19px;
     text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
   }}
   .nav-icon:hover {{
@@ -1011,23 +1011,23 @@ def chat_page():
   }}
   .nav-icon:active {{ transform: translateY(0) scale(0.95); }}
 
-  /* ---- 中间玻璃舱对话区 ---- */
+  /* ---- 中间玻璃舱对话区（移除高光边框） ---- */
   #main {{
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.32);
+    background: rgba(255, 255, 255, 0.16); /* 降低白度以增强通透感 */
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
     border-radius: 28px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 12px 40px rgba(184, 118, 138, 0.1);
+    border: none; /* 彻底去除边缘白色线框 */
+    box-shadow: 0 12px 40px rgba(184, 118, 138, 0.10);
     overflow: hidden;
   }}
   #header {{
     padding: 20px 24px 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -1107,6 +1107,7 @@ def chat_page():
     display: flex;
     flex-direction: column;
     min-width: 0;
+    width: 100%; /* 为宽度和定位打好基础 */
   }}
   .msg-row.user .msg-col {{ align-items: flex-end; }}
   .msg-row.charon .msg-col {{ align-items: flex-start; }}
@@ -1132,7 +1133,7 @@ def chat_page():
   .bubble.charon {{
     background: rgba(255, 255, 255, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.55);
-    color: #4a3742;
+    color: #6b5460; /* 恢复至原版优雅冷粉色 */
     border-radius: 4px 18px 18px 18px; 
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }}
@@ -1149,25 +1150,35 @@ def chat_page():
   }}
   .msg-row:hover .msg-delete {{ opacity: 1; }}
   .msg-delete:hover {{ color: #b86076; }}
+  
+  /* 时间戳控制行：实现左消息左靠，右消息右靠 */
   .msg-time-row {{
     display: flex;
     align-items: center;
     gap: 4px;
+    width: 100%;
   }}
+  .msg-row.user .msg-time-row {{
+    justify-content: flex-end; /* 右侧用户消息时间戳完美居右，紧靠头像 */
+  }}
+  .msg-row.charon .msg-time-row {{
+    justify-content: flex-start; /* 左侧 Charon 消息时间戳完美居左，紧靠头像 */
+  }}
+
   #input-bar {{
     display: flex;
     gap: 10px;
     padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
     flex-shrink: 0;
   }}
   #input-bar textarea {{
     flex: 1;
     resize: none;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
-    background: rgba(255, 255, 255, 0.4);
-    color: #4a3742;
+    border: none; /* 移除外边框 */
+    background: rgba(255, 255, 255, 0.25); /* 提升透明玻璃质感 */
+    color: #5a4550;
     padding: 11px 16px;
     font-size: 15px;
     font-family: inherit;
@@ -1176,7 +1187,7 @@ def chat_page():
     transition: background 0.2s ease;
   }}
   #input-bar textarea:focus {{
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.45);
   }}
   #input-bar textarea::placeholder {{ color: #b08d98; }}
   #input-bar button {{
@@ -1205,7 +1216,7 @@ def chat_page():
     margin-top: 40px;
   }}
 
-  /* ---- 右侧玻璃舱状态面板 ---- */
+  /* ---- 右侧玻璃舱状态面板（移除白线边框，增强透光度） ---- */
   #panel {{
     width: 210px;
     flex-shrink: 0;
@@ -1213,11 +1224,11 @@ def chat_page():
     flex-direction: column;
     gap: 16px;
     padding: 22px 18px;
-    background: rgba(255, 255, 255, 0.32);
+    background: rgba(255, 255, 255, 0.16); /* 调低白度以增强通透度 */
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
     border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
+    border: none; /* 彻底去除边缘白色线框 */
     box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
     overflow-y: auto;
   }}
@@ -1241,15 +1252,17 @@ def chat_page():
     display: flex;
     justify-content: space-between;
   }}
+  
+  /* 情绪值进度条：调整高度为 4px 细轨道质感，模拟 Nocturne 的极简风格 */
   .stat-bar-track {{
-    height: 6px;
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.3);
+    height: 4px; 
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.25);
     overflow: hidden;
   }}
   .stat-bar-fill {{
     height: 100%;
-    border-radius: 3px;
+    border-radius: 2px;
     background: linear-gradient(90deg, #f0b8c6, #b86076);
     transition: width 0.4s ease;
   }}
@@ -1260,8 +1273,8 @@ def chat_page():
   .period-tag {{
     font-size: 11px;
     color: #a66275;
-    background: rgba(255, 255, 255, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.4);
+    border: none;
     border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
@@ -1269,8 +1282,8 @@ def chat_page():
   .checking-tag {{
     font-size: 11px;
     color: #7d5a68;
-    background: rgba(255, 255, 255, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.4);
+    border: none;
     border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
@@ -1278,26 +1291,29 @@ def chat_page():
   .lucky-tag {{
     font-size: 11px;
     color: #b86076;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.45));
-    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.35));
+    border: none;
     border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
   }}
+  
+  /* “心里话”板块：重新定制圆润白卡片，增强磨砂玻璃感 */
   .thought-card {{
-    font-size: 12px;
+    font-size: 12.5px;
     color: #5c4451;
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 12px;
-    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.45); /* 提高透明度与融合度 */
+    border: none; /* 移除外边框 */
+    border-radius: 14px;
+    padding: 12px 14px;
     line-height: 1.6;
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05); /* 柔和阴影 */
   }}
   .summary-card {{
     font-size: 11px;
     color: #6e505f;
     background: rgba(255, 255, 255, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: none;
     border-radius: 12px;
     padding: 9px 11px;
     line-height: 1.6;
@@ -1331,7 +1347,7 @@ def chat_page():
     <div id="header">
       <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
       <div id="header-text">
-        <div class="brand">NOCTURNE</div>
+        <div class="brand">CHARON</div>
         <div class="sub"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></div>
       </div>
     </div>
