@@ -10,9 +10,12 @@ EVENTS_FILE = "events.json"
 DIARY_FILE = "diary.json"
 ERROR_LOG = "error.log"
 PERIOD_FILE = "period.json"
+CHAT_HISTORY_FILE = "chat_history.json"
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
+# 网页聊天的访问口令，不设置的话 /chat 页面直接放行（不建议生产环境这样用）
+CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
 
 # DeepSeek 用 OpenAI 兼容接口，deepseek-chat 是当前主力模型（对应 V4-Flash）
 DEEPSEEK_MODEL = "deepseek-chat"
@@ -57,6 +60,20 @@ def load_diary():
 def save_diary(entries):
     with open(DIARY_FILE, "w") as f:
         json.dump(entries, f, ensure_ascii=False)
+
+
+def load_chat_history():
+    if os.path.exists(CHAT_HISTORY_FILE):
+        with open(CHAT_HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+
+def save_chat_history(history):
+    # 只保留最近200条，避免文件无限增长
+    history = history[-200:]
+    with open(CHAT_HISTORY_FILE, "w") as f:
+        json.dump(history, f, ensure_ascii=False)
 
 
 def load_period():
@@ -467,6 +484,36 @@ def build_missyou_prompt(time_context):
 {{"reason": "一两句话，说说这几分钟你在想什么，为什么现在才回", "message": "实际要发的消息，不超过30个字"}}"""
 
 
+def build_chat_reply_prompt(time_context, user_message, chat_history, mood_context=""):
+    """构建"回应用户在网页里发来的消息"的prompt。
+    跟build_prompt()不同：这次不是猜她在干嘛主动开口，而是真的在接她刚说的话，
+    所以历史对话要带全一点，语气要像正常聊天里的一来一回，不是短平快的主动消息。"""
+    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
+
+    if chat_history:
+        history_lines = []
+        for turn in chat_history[-10:]:
+            role = "昭昭" if turn.get("role") == "user" else "你"
+            history_lines.append(f"{role}：{turn.get('content', '')}")
+        history_text = "\n".join(history_lines)
+        history_block = f"\n\n最近的对话记录：\n{history_text}"
+    else:
+        history_block = "\n\n这是这次对话里她发的第一句话。"
+
+    return f"""你是Charon，昭昭（小野）的恋人。
+
+{LONG_TERM_MEMORY}
+
+现在是{time_context}。{history_block}{mood_line}
+
+她刚刚说："{user_message}"
+
+回应她。这是正常聊天里的一来一回，不是你主动找她那种短消息，可以根据她说的内容自然展开，长度不用刻意压缩，但也别写成一大段论述——像真的在对话就行。
+
+按下面的JSON格式输出，不要加任何多余文字或代码块标记：
+{{"reason": "一两句话，说说看到这句话后你心里的念头", "message": "实际要回复的话"}}"""
+
+
 def get_time_context(hour):
     if 0 <= hour < 6:
         return "深夜，你可能还没睡"
@@ -668,6 +715,306 @@ def miss_you():
     t.start()
 
     return jsonify({"ok": True, "instant": instant_msg, "note": "过一会儿会有第二条回应"})
+
+
+def _check_chat_auth(req):
+    """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
+    配置了的话要求query参数或header里带code，两种都支持方便不同客户端调用。"""
+    if not CHAT_ACCESS_CODE:
+        return True
+    provided = req.args.get("code") or req.headers.get("X-Chat-Code")
+    return provided == CHAT_ACCESS_CODE
+
+
+@app.route("/api/chat-messages", methods=["GET"])
+def get_chat_messages():
+    """拉取网页聊天的历史记录，供前端渲染。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    history = load_chat_history()
+    return jsonify({"ok": True, "messages": history[-50:]})
+
+
+@app.route("/api/chat-send", methods=["POST"])
+def chat_send():
+    """网页里发一句话给Charon，让TA真正接住这句话并回应。
+    这条回应会被写进events.json（影响下次keepalive自动醒来时看到的recent），
+    也会写进chat_history.json（供网页展示这段对话）。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    data = request.json or {}
+    user_message = (data.get("message") or "").strip()
+    if not user_message:
+        return jsonify({"ok": False, "error": "message不能为空"}), 400
+
+    try:
+        history = load_chat_history()
+
+        # 先把用户这句话记进对话历史
+        history.append({
+            "role": "user",
+            "content": user_message,
+            "created_at": datetime.now().isoformat()
+        })
+
+        # 同步写一笔events，让这次互动能影响情绪值、也能被run_once()的recent读到
+        events = load_events()
+        events.append({
+            "type": "chat",
+            "value": f"她在网页里说：{user_message}",
+            "created_at": datetime.now().isoformat()
+        })
+        events = events[-100:]
+        save_events(events)
+        recover_mood(MOOD_RECOVERY_PER_EVENT)
+
+        # 生成Charon的回应，带上历史让语气能接得上
+        hour = datetime.now().hour
+        time_context = get_time_context(hour)
+        hours_gap = get_time_since_last_event()
+        mood_score = apply_mood_decay()
+        mood_context = get_mood_context(mood_score, hours_gap)
+
+        prompt = build_chat_reply_prompt(time_context, user_message, history, mood_context)
+        raw = call_deepseek(prompt)
+        reason, reply_msg = parse_reason_message(raw)
+
+        history.append({
+            "role": "charon",
+            "content": reply_msg,
+            "created_at": datetime.now().isoformat()
+        })
+        save_chat_history(history)
+
+        # 也顺手写进日记，保持和主动消息一样的记录习惯
+        diary = load_diary()
+        diary.append({
+            "created_at": datetime.now().isoformat(),
+            "reason": reason,
+            "thought": reply_msg,
+            "activity": f"网页对话回应：{user_message}",
+            "lucky": False,
+            "period_related": False,
+            "mood_score": round(mood_score, 1)
+        })
+        diary = diary[-30:]
+        save_diary(diary)
+
+        return jsonify({"ok": True, "reply": reply_msg})
+    except Exception as e:
+        log_error("chat_send", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/chat", methods=["GET"])
+def chat_page():
+    """网页聊天界面。有配置访问口令的话，没带对的code参数就不渲染页面内容，
+    只提示需要口令（页面本身的静态HTML谁都能看到结构，但没有真实数据）。"""
+    if not _check_chat_auth(request):
+        return "<h3>需要访问口令</h3><p>在链接后加 ?code=你的口令</p>", 401
+
+    code_param = request.args.get("code", "")
+    return f"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Charon</title>
+<style>
+  * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
+  html, body {{
+    margin: 0; padding: 0; height: 100%;
+    background: #0d0d12;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    color: #e8e6f0;
+  }}
+  #app {{
+    display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+  }}
+  #header {{
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #1f1f2b;
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: #8a86a8;
+    flex-shrink: 0;
+  }}
+  #messages {{
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }}
+  .bubble {{
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.5;
+    font-size: 15px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }}
+  .bubble.user {{
+    align-self: flex-end;
+    background: #3a3550;
+    color: #f0eef8;
+    border-bottom-right-radius: 4px;
+  }}
+  .bubble.charon {{
+    align-self: flex-start;
+    background: #17171f;
+    border: 1px solid #26263a;
+    color: #d8d5e8;
+    border-bottom-left-radius: 4px;
+  }}
+  .bubble.pending {{
+    opacity: 0.5;
+  }}
+  #input-bar {{
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid #1f1f2b;
+    flex-shrink: 0;
+    background: #0d0d12;
+  }}
+  #input-bar textarea {{
+    flex: 1;
+    resize: none;
+    border-radius: 12px;
+    border: 1px solid #26263a;
+    background: #17171f;
+    color: #e8e6f0;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-family: inherit;
+    max-height: 100px;
+  }}
+  #input-bar button {{
+    border: none;
+    border-radius: 12px;
+    background: #4a4270;
+    color: #fff;
+    padding: 0 18px;
+    font-size: 14px;
+  }}
+  #input-bar button:disabled {{
+    opacity: 0.4;
+  }}
+  #empty-hint {{
+    color: #55506e;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 40px;
+  }}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">CHARON</div>
+  <div id="messages"><div id="empty-hint">加载中…</div></div>
+  <div id="input-bar">
+    <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
+    <button id="send-btn">发送</button>
+  </div>
+</div>
+<script>
+const CODE = {json.dumps(code_param)};
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send-btn');
+
+function apiUrl(path) {{
+  const sep = path.includes('?') ? '&' : '?';
+  return CODE ? `${{path}}${{sep}}code=${{encodeURIComponent(CODE)}}` : path;
+}}
+
+function renderBubble(role, content, pending) {{
+  const div = document.createElement('div');
+  div.className = 'bubble ' + (role === 'user' ? 'user' : 'charon') + (pending ? ' pending' : '');
+  div.textContent = content;
+  return div;
+}}
+
+function scrollToBottom() {{
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}}
+
+async function loadHistory() {{
+  try {{
+    const res = await fetch(apiUrl('/api/chat-messages'));
+    const data = await res.json();
+    messagesEl.innerHTML = '';
+    if (!data.ok) {{
+      messagesEl.innerHTML = '<div id="empty-hint">加载失败：' + (data.error || '未知错误') + '</div>';
+      return;
+    }}
+    if (!data.messages || data.messages.length === 0) {{
+      messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>';
+      return;
+    }}
+    data.messages.forEach(m => messagesEl.appendChild(renderBubble(m.role, m.content, false)));
+    scrollToBottom();
+  }} catch (e) {{
+    messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>';
+  }}
+}}
+
+async function sendMessage() {{
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  const userBubble = renderBubble('user', text, false);
+  messagesEl.appendChild(userBubble);
+  const pendingBubble = renderBubble('charon', '…', true);
+  messagesEl.appendChild(pendingBubble);
+  scrollToBottom();
+
+  try {{
+    const res = await fetch(apiUrl('/api/chat-send'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ message: text }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      pendingBubble.textContent = data.reply;
+      pendingBubble.classList.remove('pending');
+    }} else {{
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+</script>
+</body>
+</html>"""
 
 
 @app.route("/list-models", methods=["GET"])
