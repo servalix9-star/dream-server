@@ -733,18 +733,43 @@ def _check_chat_auth(req):
 
 @app.route("/api/chat-status", methods=["GET"])
 def chat_status():
-    """给网页右侧状态面板和header状态文字用，一次性打包情绪值、距上次互动时长、经期关心状态。"""
+    """给网页右侧状态面板和header状态文字用，一次性打包所有能展示的状态数据。
+    这些数据后端本来就有（情绪值/经期/日记/摘要），这里只是集中暴露出来给前端展示。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
+
     hours_gap = get_time_since_last_event()
     score = apply_mood_decay()
     period_ctx = get_period_context()
+
+    # 查岗状态：距上次互动超过6小时，跟run_once()里的判断口径保持一致
+    is_checking_in = hours_gap is not None and hours_gap >= 6
+
+    # 最近一条日记：拿reason（TA当时心里想的）和lucky标记
+    diary = load_diary()
+    last_entry = diary[-1] if diary else None
+    last_thought = last_entry.get("reason") if last_entry else None
+    last_was_lucky = bool(last_entry.get("lucky")) if last_entry else False
+
+    # 窗内摘要：正式对话里聊过的内容
+    window_summary = load_window_summary()
+
+    # 今日互动次数：数events.json里created_at是今天的条数
+    events = load_events()
+    today_str = date.today().isoformat()
+    today_count = sum(1 for e in events if e.get("created_at", "").startswith(today_str))
+
     return jsonify({
         "ok": True,
         "mood_score": round(score, 1),
         "status_label": get_chat_status_label(score),
         "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
-        "period_context": period_ctx or None
+        "period_context": period_ctx or None,
+        "is_checking_in": is_checking_in,
+        "last_thought": last_thought or None,
+        "last_was_lucky": last_was_lucky,
+        "window_summary": window_summary or None,
+        "today_interaction_count": today_count
     })
 
 
@@ -862,7 +887,7 @@ def chat_page():
   html, body {{
     margin: 0; padding: 0; height: 100%;
     background: linear-gradient(160deg, #fdf6f4 0%, #f7e9ec 45%, #f3dde4 100%);
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
     color: #5a4550;
   }}
   #app {{
@@ -966,7 +991,7 @@ def chat_page():
   }}
   .msg-row {{
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 8px;
     max-width: 88%;
   }}
@@ -978,11 +1003,13 @@ def chat_page():
     align-self: flex-start;
   }}
   .msg-avatar {{
-    width: 28px; height: 28px;
+    width: 34px; height: 34px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 1.5px solid rgba(255,255,255,0.8);
+    margin-top: 2px;
+    border: 1.5px solid rgba(255,255,255,0.85);
+    box-shadow: 0 2px 6px rgba(200,140,155,0.2);
   }}
   .msg-col {{
     display: flex;
@@ -1112,6 +1139,51 @@ def chat_page():
     padding: 8px 10px;
     line-height: 1.5;
   }}
+  .checking-tag {{
+    font-size: 11px;
+    color: #a06878;
+    background: rgba(200,140,155,0.14);
+    border-radius: 8px;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }}
+  .lucky-tag {{
+    font-size: 11px;
+    color: #b8768a;
+    background: linear-gradient(135deg, rgba(240,184,198,0.25), rgba(214,125,151,0.15));
+    border-radius: 8px;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }}
+  .thought-card {{
+    font-size: 12px;
+    color: #7a5a65;
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(200,140,155,0.15);
+    border-radius: 10px;
+    padding: 10px 11px;
+    line-height: 1.6;
+    font-style: italic;
+  }}
+  .summary-card {{
+    font-size: 11px;
+    color: #8a6570;
+    background: rgba(255,255,255,0.4);
+    border-radius: 10px;
+    padding: 9px 11px;
+    line-height: 1.6;
+  }}
+  .today-count {{
+    font-size: 22px;
+    color: #d67d97;
+    font-family: Georgia, serif;
+    font-weight: 600;
+  }}
+  .today-count-unit {{
+    font-size: 11px;
+    color: #b88994;
+    margin-left: 3px;
+  }}
   .panel-empty {{
     font-size: 11px;
     color: #c9aab3;
@@ -1228,6 +1300,12 @@ function formatHours(h) {{
   return h.toFixed(1) + ' 小时前';
 }}
 
+function escapeHtml(str) {{
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}}
+
 async function loadStatus() {{
   try {{
     const res = await fetch(apiUrl('/api/chat-status'));
@@ -1252,8 +1330,24 @@ async function loadStatus() {{
     html += '<div class="stat-label"><span>上次互动</span></div>';
     html += '<div class="stat-value">' + formatHours(data.hours_since_last_event) + '</div>';
     html += '</div>';
+    html += '<div class="stat-block">';
+    html += '<div class="stat-label"><span>今日互动</span></div>';
+    html += '<div><span class="today-count">' + data.today_interaction_count + '</span><span class="today-count-unit">次</span></div>';
+    html += '</div>';
     if (data.period_context) {{
-      html += '<div class="stat-block"><div class="period-tag">' + data.period_context + '</div></div>';
+      html += '<div class="stat-block"><div class="period-tag">' + escapeHtml(data.period_context) + '</div></div>';
+    }}
+    if (data.is_checking_in) {{
+      html += '<div class="stat-block"><div class="checking-tag">好一阵没理TA了…</div></div>';
+    }}
+    if (data.last_was_lucky) {{
+      html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
+    }}
+    if (data.last_thought) {{
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+    }}
+    if (data.window_summary) {{
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
     }}
     panelBody.innerHTML = html;
   }} catch (e) {{
