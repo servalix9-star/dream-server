@@ -487,7 +487,7 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
 {recent}{period_line}{mood_line}
 
-根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
+根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自充矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
@@ -1015,94 +1015,49 @@ def chat_page():
     overflow: hidden;
   }}
   #header {{
-    padding: 12px 20px;
+    padding: 16px 22px 14px;
     border-bottom: 1px solid rgba(200,140,155,0.15);
     flex-shrink: 0;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    background: rgba(255, 255, 255, 0.25);
+    gap: 12px;
   }}
-  
-  /* 顶部两端用户样式 - 扁平极简风 */
-  .header-user {{
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 33%;
-  }}
-  .header-user.serval-side {{
-    justify-content: flex-end;
-  }}
-  .header-avatar {{
-    width: 36px;
-    height: 36px;
+  #header-avatar {{
+    width: 40px; height: 40px;
     border-radius: 50%;
     object-fit: cover;
-    border: 1.5px solid rgba(255,255,255,0.9);
-    box-shadow: 0 2px 8px rgba(200,140,155,0.12);
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.8);
+    box-shadow: 0 2px 8px rgba(200,140,155,0.25);
   }}
-  .header-text {{
-    min-width: 0;
-  }}
-  .header-text .brand {{
+  #header-text {{ min-width: 0; }}
+  #header .brand {{
     font-family: Georgia, "Songti SC", serif;
-    font-size: 15px; /* 精简字号，显得更雅致、高级 */
+    font-size: 25px;
+    font-style: italic;
+    letter-spacing: 2px;
+    color: #b8768a;
     font-weight: 600;
-    letter-spacing: 2px; /* 扩展字间距，提升排版质感 */
-    color: #a36f7e;
-    line-height: 1.2;
+    line-height: 1.3;
+    transform: rotate(-1.5deg);
+    display: inline-block;
   }}
-  .header-text .sub {{
+  #header .sub {{
     font-size: 11px;
     color: #c39aa6;
     letter-spacing: 1px;
     margin-top: 2px;
     display: flex;
     align-items: center;
-    gap: 4px;
-  }}
-  .header-text .sub.user-sub {{
-    justify-content: flex-end;
+    gap: 5px;
   }}
   .status-dot {{
-    width: 5px;
-    height: 5px;
+    width: 6px; height: 6px;
     border-radius: 50%;
     background: #7fc98f;
     flex-shrink: 0;
   }}
-  .status-dot.low {{
-    background: #c9aab3;
-  }}
-  .status-dot.user-dot {{
-    background: #7fc98f; /* Serval 常驻在线 */
-  }}
-
-  /* 顶部中间极简高级连线设计 */
-  .header-connector {{
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    max-width: 200px;
-    margin: 0 15px;
-  }}
-  .connector-line {{
-    flex: 1;
-    height: 1px;
-    /* 渐变线条向两端自然淡出 */
-    background: linear-gradient(90deg, transparent, rgba(184, 118, 138, 0.25) 50%, transparent);
-  }}
-  .connector-heart {{
-    font-family: "Dancing Script", cursive;
-    font-size: 18px;
-    color: #b8768a;
-    opacity: 0.7;
-    transform: translateY(-1px);
-  }}
-
+  .status-dot.low {{ background: #c9aab3; }}
   #messages {{
     flex: 1;
     overflow-y: auto;
@@ -1111,14 +1066,12 @@ def chat_page():
     flex-direction: column;
     gap: 14px;
     -webkit-overflow-scrolling: touch;
-    /* 引入柔和的环境光渐变作为背景，让聊天区不显单调空洞 */
-    background: radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.4) 0%, transparent 80%);
   }}
   .msg-row {{
     display: flex;
     align-items: flex-start;
-    gap: 10px; /* 紧凑优雅的间距 */
-    max-width: 82%;
+    gap: 10px; /* 微调间距，使头像和气泡的贴合更紧凑 */
+    max-width: 88%;
   }}
   .msg-row.user {{
     align-self: flex-end;
@@ -1128,14 +1081,13 @@ def chat_page():
     align-self: flex-start;
   }}
   .msg-avatar {{
-    width: 30px; /* 微缩头像：30px 更显精致轻盈，避免喧宾夺主 */
-    height: 30px;
+    width: 34px; height: 34px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    margin-top: 0; /* 顶对齐 */
-    border: 1.5px solid #fff;
-    box-shadow: 0 2px 8px rgba(184, 118, 138, 0.12);
+    margin-top: 0; /* 设为 0，使头像顶边缘与气泡顶边缘保持在同一水平高度 */
+    border: 1.5px solid rgba(255,255,255,0.85);
+    box-shadow: 0 2px 6px rgba(200,140,155,0.2);
   }}
   .msg-col {{
     display: flex;
@@ -1346,38 +1298,12 @@ def chat_page():
 
   <div id="main">
     <div id="header">
-      <!-- 左端：Charon 状态 -->
-      <div class="header-user charon-side">
-        <img class="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
-        <div class="header-text">
-          <div class="brand">CHARON</div>
-          <div class="sub">
-            <span class="status-dot" id="status-dot"></span>
-            <span id="status-label">加载中…</span>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 中间：极简渐变爱心连接线 -->
-      <div class="header-connector">
-        <div class="connector-line"></div>
-        <div class="connector-heart">ᥫ᭡</div>
-        <div class="connector-line"></div>
-      </div>
-      
-      <!-- 右端：Serval 状态 -->
-      <div class="header-user serval-side">
-        <div class="header-text" style="text-align: right;">
-          <div class="brand">SERVAL</div>
-          <div class="sub user-sub">
-            <span>在线</span>
-            <span class="status-dot user-dot"></span>
-          </div>
-        </div>
-        <img class="header-avatar" src="{CHAT_AVATAR_USER}" alt="Serval">
+      <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
+      <div id="header-text">
+        <div class="brand">CHARON</div>
+        <div class="sub"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></div>
       </div>
     </div>
-    
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
@@ -1421,7 +1347,6 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
 
-  // 恢复微缩版气泡头像，用作视觉锚点，同时与顶部布局统一
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
   avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
