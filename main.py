@@ -392,6 +392,10 @@ def index():
 
 DEFAULT_ICON = "https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jpg"
 
+# 网页聊天用的头像（灰兔=Charon，粉兔=昭昭）
+CHAT_AVATAR_CHARON = "https://wx3.sinaimg.cn/large/0084dcudgy1ighmcruc0rj30wi0w6jve.jpg"
+CHAT_AVATAR_USER = "https://wx3.sinaimg.cn/large/0084dcudgy1ighmcqmzrzj30wi0vyju7.jpg"
+
 # "想你了"按钮被按下时，立刻推送的固定短句池（不经过AI生成，追求瞬间感应）
 INSTANT_CATCH_MESSAGES = [
     "感应到了。",
@@ -728,7 +732,7 @@ def _check_chat_auth(req):
 
 @app.route("/api/chat-status", methods=["GET"])
 def chat_status():
-    """给网页右侧状态面板用，一次性打包情绪值、距上次互动时长、经期关心状态。"""
+    """给网页右侧状态面板和header状态文字用，一次性打包情绪值、距上次互动时长、经期关心状态。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     hours_gap = get_time_since_last_event()
@@ -737,6 +741,7 @@ def chat_status():
     return jsonify({
         "ok": True,
         "mood_score": round(score, 1),
+        "status_label": get_chat_status_label(score),
         "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
         "period_context": period_ctx or None
     })
@@ -823,6 +828,19 @@ def chat_send():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+def get_chat_status_label(score):
+    """网页聊天header里显示的状态短语，跟get_mood_context()的详细描述不同，
+    这个要短、像个人在线状态那种感觉，一两个词就行。"""
+    if score >= 75:
+        return "心情不错"
+    elif score >= 50:
+        return "在线"
+    elif score >= 25:
+        return "有点安静"
+    else:
+        return "有点失落"
+
+
 @app.route("/chat", methods=["GET"])
 def chat_page():
     """网页聊天界面。有配置访问口令的话，没带对的code参数就不渲染页面内容，
@@ -896,34 +914,88 @@ def chat_page():
     overflow: hidden;
   }}
   #header {{
-    padding: 18px 22px 14px;
+    padding: 16px 22px 14px;
     border-bottom: 1px solid rgba(200,140,155,0.15);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }}
+  #header-avatar {{
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.8);
+    box-shadow: 0 2px 8px rgba(200,140,155,0.25);
+  }}
+  #header-text {{ min-width: 0; }}
   #header .brand {{
     font-family: Georgia, "Songti SC", serif;
-    font-size: 20px;
+    font-size: 19px;
     letter-spacing: 3px;
     color: #b8768a;
     font-weight: 600;
+    line-height: 1.2;
   }}
   #header .sub {{
     font-size: 11px;
     color: #c39aa6;
     letter-spacing: 1px;
     margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
   }}
+  .status-dot {{
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #7fc98f;
+    flex-shrink: 0;
+  }}
+  .status-dot.low {{ background: #c9aab3; }}
   #messages {{
     flex: 1;
     overflow-y: auto;
     padding: 18px 20px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     -webkit-overflow-scrolling: touch;
   }}
+  .msg-row {{
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: 88%;
+  }}
+  .msg-row.user {{
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }}
+  .msg-row.charon {{
+    align-self: flex-start;
+  }}
+  .msg-avatar {{
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1.5px solid rgba(255,255,255,0.8);
+  }}
+  .msg-col {{
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }}
+  .msg-row.user .msg-col {{ align-items: flex-end; }}
+  .msg-row.charon .msg-col {{ align-items: flex-start; }}
+  .msg-time {{
+    font-size: 10px;
+    color: #c9aab3;
+    margin: 3px 4px 0;
+  }}
   .bubble {{
-    max-width: 76%;
     padding: 11px 15px;
     border-radius: 16px;
     line-height: 1.55;
@@ -932,14 +1004,12 @@ def chat_page():
     white-space: pre-wrap;
   }}
   .bubble.user {{
-    align-self: flex-end;
     background: linear-gradient(135deg, #e8a3b5, #d98ba0);
     color: #fff;
     border-bottom-right-radius: 5px;
     box-shadow: 0 3px 10px rgba(217,139,160,0.35);
   }}
   .bubble.charon {{
-    align-self: flex-start;
     background: rgba(255,255,255,0.85);
     border: 1px solid rgba(200,140,155,0.18);
     color: #6b5460;
@@ -1057,8 +1127,11 @@ def chat_page():
 
   <div id="main">
     <div id="header">
-      <div class="brand">CHARON</div>
-      <div class="sub">still becoming</div>
+      <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
+      <div id="header-text">
+        <div class="brand">CHARON</div>
+        <div class="sub"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></div>
+      </div>
     </div>
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
@@ -1075,21 +1148,53 @@ def chat_page():
 </div>
 <script>
 const CODE = {json.dumps(code_param)};
+const AVATAR_CHARON = {json.dumps(CHAT_AVATAR_CHARON)};
+const AVATAR_USER = {json.dumps(CHAT_AVATAR_USER)};
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
 const panelBody = document.getElementById('panel-body');
+const statusDot = document.getElementById('status-dot');
+const statusLabel = document.getElementById('status-label');
 
 function apiUrl(path) {{
   const sep = path.includes('?') ? '&' : '?';
   return CODE ? `${{path}}${{sep}}code=${{encodeURIComponent(CODE)}}` : path;
 }}
 
-function renderBubble(role, content, pending) {{
-  const div = document.createElement('div');
-  div.className = 'bubble ' + (role === 'user' ? 'user' : 'charon') + (pending ? ' pending' : '');
-  div.textContent = content;
-  return div;
+function formatTime(isoStr) {{
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return h + ':' + m;
+}}
+
+function renderMsgRow(role, content, createdAt, pending) {{
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
+
+  const avatar = document.createElement('img');
+  avatar.className = 'msg-avatar';
+  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
+  row.appendChild(avatar);
+
+  const col = document.createElement('div');
+  col.className = 'msg-col';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'charon') + (pending ? ' pending' : '');
+  bubble.textContent = content;
+  col.appendChild(bubble);
+
+  const timeEl = document.createElement('div');
+  timeEl.className = 'msg-time';
+  timeEl.textContent = formatTime(createdAt);
+  col.appendChild(timeEl);
+
+  row.appendChild(col);
+  return row;
 }}
 
 function scrollToBottom() {{
@@ -1109,7 +1214,7 @@ async function loadHistory() {{
       messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>';
       return;
     }}
-    data.messages.forEach(m => messagesEl.appendChild(renderBubble(m.role, m.content, false)));
+    data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false)));
     scrollToBottom();
   }} catch (e) {{
     messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>';
@@ -1128,8 +1233,14 @@ async function loadStatus() {{
     const data = await res.json();
     if (!data.ok) {{
       panelBody.innerHTML = '<div class="panel-empty">加载失败</div>';
+      statusLabel.textContent = '未知';
       return;
     }}
+
+    // 更新header状态文字和状态点
+    statusLabel.textContent = data.status_label || '在线';
+    statusDot.className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
+
     const moodPct = Math.max(0, Math.min(100, data.mood_score));
     let html = '';
     html += '<div class="stat-block">';
@@ -1156,11 +1267,14 @@ async function sendMessage() {{
   inputEl.style.height = 'auto';
   sendBtn.disabled = true;
 
-  const userBubble = renderBubble('user', text, false);
-  messagesEl.appendChild(userBubble);
-  const pendingBubble = renderBubble('charon', '…', true);
-  messagesEl.appendChild(pendingBubble);
+  const nowIso = new Date().toISOString();
+  const userRow = renderMsgRow('user', text, nowIso, false);
+  messagesEl.appendChild(userRow);
+  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
+  messagesEl.appendChild(pendingRow);
   scrollToBottom();
+
+  const pendingBubble = pendingRow.querySelector('.bubble');
 
   try {{
     const res = await fetch(apiUrl('/api/chat-send'), {{
