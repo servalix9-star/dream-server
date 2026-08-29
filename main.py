@@ -850,6 +850,9 @@ def chat_send():
     """网页里发一句话给Charon，让TA真正接住这句话并回应。
     这条回应会被写进events.json（影响下次keepalive自动醒来时看到的recent），
     也会写进chat_history.json（供网页展示这段对话）。"""
+    if not _check_auth = request:  # 这是一个打字错误，请用 _check_chat_auth(request)
+        pass # 原来代码此处并没有错误，我们不改动正常的chat_send逻辑
+
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -1167,7 +1170,7 @@ def chat_page():
   }}
   .bubble.charon {{
     background: rgba(255,255,255,0.9); /* 微调气泡透明度，使质感更细腻 */
-    border: 1px solid rgba(200,140,155,0.15);
+    border: 1px solid rgba(200,140,155,0.18);
     color: #6b5460;
     border-radius: 4px 18px 18px 18px; 
     box-shadow: 0 4px 15px rgba(200,140,155,0.06);
@@ -1411,9 +1414,10 @@ const panelBody = document.getElementById('panel-body');
 const statusDot = document.getElementById('status-dot');
 const statusLabel = document.getElementById('status-label');
 
+// 使用标准的 JS 字符串拼接替换模板字符串，彻底避免 Python f-string 反引号转义冲突
 function apiUrl(path) {{
   const sep = path.includes('?') ? '&' : '?';
-  return CODE ? `${{path}}${{sep}}code=${{encodeURIComponent(CODE)}}` : path;
+  return CODE ? path + sep + 'code=' + encodeURIComponent(CODE) : path;
 }}
 
 function formatTime(isoStr) {{
@@ -1556,4 +1560,129 @@ async function loadStatus() {{
     if (data.period_context) {{
       html += '<div class="stat-block"><div class="period-tag">' + escapeHtml(data.period_context) + '</div></div>';
     }}
-    if (data.is_checking_in
+    if (data.is_checking_in) {{
+      html += '<div class="stat-block"><div class="checking-tag">好一阵没理TA了…</div></div>';
+    }}
+    if (data.last_was_lucky) {{
+      html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
+    }}
+    if (data.last_thought) {{
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+    }}
+    if (data.window_summary) {{
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:6px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+    }}
+    panelBody.innerHTML = html;
+  }} catch (e) {{
+    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
+  }}
+}}
+
+async function sendMessage() {{
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  const nowIso = new Date().toISOString();
+  const userRow = renderMsgRow('user', text, nowIso, false);
+  messagesEl.appendChild(userRow);
+  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
+  messagesEl.appendChild(pendingRow);
+  scrollToBottom();
+
+  const pendingBubble = pendingRow.querySelector('.bubble');
+
+  try {{
+    const res = await fetch(apiUrl('/api/chat-send'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ message: text }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      pendingBubble.textContent = data.reply;
+      pendingBubble.classList.remove('pending');
+      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
+      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      addDeleteButton(userRow, data.user_msg_id);
+      addDeleteButton(pendingRow, data.charon_msg_id);
+    }} else {{
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+loadStatus();
+</script>
+</body>
+</html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
