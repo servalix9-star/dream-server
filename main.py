@@ -487,7 +487,7 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
 {recent}{period_line}{mood_line}
 
-根据现在的时间、并在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
+根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自充矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
@@ -1085,7 +1085,7 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    margin-top: 0; /* 修改为 0：去除原本 2px 的偏移，使头像顶部边界与气泡顶部边界实现物理像素上的水平绝对对齐 */
+    margin-top: 0; /* 设为 0，使头像顶边缘与气泡顶边缘保持在同一水平高度 */
     border: 1.5px solid rgba(255,255,255,0.85);
     box-shadow: 0 2px 6px rgba(200,140,155,0.2);
   }}
@@ -1530,3 +1530,77 @@ async function sendMessage() {{
       pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
       pendingBubble.classList.remove('pending');
     }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+loadStatus();
+</script>
+</body>
+</html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
