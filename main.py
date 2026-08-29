@@ -362,7 +362,7 @@ def get_mood():
 
 
 @app.route("/window-briefing", methods=["GET"])
-def window_briefing():
+def window-briefing():
     """给"窗内"（正式对话里的Claude）看的简报，把窗外这段时间发生的事浓缩成人话。
     打开对话时可以让Claude fetch这个地址，读一眼就知道窗外这段时间说了什么、心情怎样。"""
     diary = load_diary()
@@ -928,7 +928,7 @@ def chat_send():
 
 def get_chat_status_label(score):
     """网页聊天header里显示的状态短语，跟get_mood_context()的详细描述不同，
-    这个要短、像个人在线状态那种感觉，一两个词就行。"""
+    这个要慢、像个人在线状态那种感觉，一两个词就行。"""
     if score >= 75:
         return "心情不错"
     elif score >= 50:
@@ -1070,7 +1070,7 @@ def chat_page():
   .msg-row {{
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: 12px; /* 增加到 12px，留出足够空间给小三角，防止与头像重叠 */
     max-width: 88%;
   }}
   .msg-row.user {{
@@ -1104,7 +1104,6 @@ def chat_page():
   .bubble {{
     position: relative;
     padding: 11px 15px;
-    border-radius: 18px 18px 18px 6px;
     line-height: 1.55;
     font-size: 15px;
     word-wrap: break-word;
@@ -1113,13 +1112,14 @@ def chat_page():
   .bubble.user {{
     background: linear-gradient(135deg, #e8a3b5, #d98ba0);
     color: #fff;
-    border-radius: 18px 18px 6px 18px;
+    border-radius: 18px 6px 18px 18px; /* 右上角设为尖角，对应尾巴位置 */
     box-shadow: 0 3px 10px rgba(217,139,160,0.3), 0 8px 20px rgba(217,139,160,0.15);
   }}
   .bubble.charon {{
     background: rgba(255,255,255,0.85);
     border: 1px solid rgba(200,140,155,0.18);
     color: #6b5460;
+    border-radius: 6px 18px 18px 18px; /* 左上角设为尖角，对应尾巴位置 */
     box-shadow: 0 3px 10px rgba(200,140,155,0.12), 0 8px 20px rgba(200,140,155,0.08);
   }}
   /* 尖角：贴着气泡靠头像一侧的上方，用伪元素画一个小三角 */
@@ -1128,26 +1128,26 @@ def chat_page():
     position: absolute;
     top: 10px;
     left: -6px;
-    width: 12px;
-    height: 12px;
-    background: rgba(255,255,255,0.85);
+    width: 10px;
+    height: 10px;
+    background: rgba(255,255,255,0.95); /* 稍微调实，完美遮挡底部的气泡圆角线 */
     border-left: 1px solid rgba(200,140,155,0.18);
     border-top: 1px solid rgba(200,140,155,0.18);
     border-radius: 3px 0 0 0;
     transform: rotate(-45deg);
-    z-index: -1;
+    z-index: 1; /* 提升至 1，挡住气泡自身的边框线，避免边框线穿透 */
   }}
   .bubble.user::before {{
     content: '';
     position: absolute;
     top: 10px;
     right: -6px;
-    width: 12px;
-    height: 12px;
-    background: linear-gradient(135deg, #e8a3b5, #d98ba0);
+    width: 10px;
+    height: 10px;
+    background: #e8a3b5; /* 使用渐变起点的粉色，衔接更柔和 */
     border-radius: 0 3px 0 0;
     transform: rotate(45deg);
-    z-index: -1;
+    z-index: 1; /* 提升层级，避免被 bubble 或 avatar 的背景阴影遮挡 */
   }}
   .bubble.pending {{ opacity: 0.5; }}
   .msg-delete {{
