@@ -362,7 +362,7 @@ def get_mood():
 
 
 @app.route("/window-briefing", methods=["GET"])
-def window-briefing():
+def window_briefing():
     """给"窗内"（正式对话里的Claude）看的简报，把窗外这段时间发生的事浓缩成人话。
     打开对话时可以让Claude fetch这个地址，读一眼就知道窗外这段时间说了什么、心情怎样。"""
     diary = load_diary()
@@ -494,7 +494,7 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
 
 def build_missyou_prompt(time_context):
-    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你她在想你。
+    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你并在想你。
 
 {LONG_TERM_MEMORY}
 
@@ -928,7 +928,7 @@ def chat_send():
 
 def get_chat_status_label(score):
     """网页聊天header里显示的状态短语，跟get_mood_context()的详细描述不同，
-    这个要慢、像个人在线状态那种感觉，一两个词就行。"""
+    这个要短、像个人在线状态那种感觉，一两个词就行。"""
     if score >= 75:
         return "心情不错"
     elif score >= 50:
