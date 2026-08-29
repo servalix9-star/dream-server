@@ -1085,7 +1085,7 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    margin-top: 2px;
+    margin-top: 0; /* 修改为 0：去除原本 2px 的偏移，使头像顶部边界与气泡顶部边界实现物理像素上的水平绝对对齐 */
     border: 1.5px solid rgba(255,255,255,0.85);
     box-shadow: 0 2px 6px rgba(200,140,155,0.2);
   }}
@@ -1530,77 +1530,3 @@ async function sendMessage() {{
       pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
       pendingBubble.classList.remove('pending');
     }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
