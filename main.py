@@ -850,9 +850,6 @@ def chat_send():
     """网页里发一句话给Charon，让TA真正接住这句话并回应。
     这条回应会被写进events.json（影响下次keepalive自动醒来时看到的recent），
     也会写进chat_history.json（供网页展示这段对话）。"""
-    if not _check_auth = request:  # 这是一个打字错误，请用 _check_chat_auth(request)
-        pass # 原来代码此处并没有错误，我们不改动正常的chat_send逻辑
-
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -1017,26 +1014,22 @@ def chat_page():
     box-shadow: 0 8px 32px rgba(200,140,155,0.14);
     overflow: hidden;
   }}
-  
-  /* 顶部导航栏：采用精致柔和的半透明磨砂设计 */
   #header {{
-    padding: 16px 24px;
-    border-bottom: 1px solid rgba(200,140,155,0.12);
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(200,140,155,0.15);
     flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.25);
   }}
   
-  /* 两端用户排版 */
+  /* 顶部两端用户样式 - 扁平极简风 */
   .header-user {{
     display: flex;
     align-items: center;
-    gap: 12px;
-    width: 35%;
+    gap: 10px;
+    width: 33%;
   }}
   .header-user.serval-side {{
     justify-content: flex-end;
@@ -1046,19 +1039,18 @@ def chat_page():
     height: 36px;
     border-radius: 50%;
     object-fit: cover;
-    border: 1px solid rgba(200, 140, 155, 0.25);
-    box-shadow: 0 2px 10px rgba(200, 140, 155, 0.1);
+    border: 1.5px solid rgba(255,255,255,0.9);
+    box-shadow: 0 2px 8px rgba(200,140,155,0.12);
   }}
   .header-text {{
     min-width: 0;
   }}
   .header-text .brand {{
     font-family: Georgia, "Songti SC", serif;
-    font-size: 16px;
+    font-size: 15px; /* 精简字号，显得更雅致、高级 */
     font-weight: 600;
-    font-style: italic;
-    letter-spacing: 2px;
-    color: #b8768a;
+    letter-spacing: 2px; /* 扩展字间距，提升排版质感 */
+    color: #a36f7e;
     line-height: 1.2;
   }}
   .header-text .sub {{
@@ -1074,8 +1066,8 @@ def chat_page():
     justify-content: flex-end;
   }}
   .status-dot {{
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     background: #7fc98f;
     flex-shrink: 0;
@@ -1084,63 +1076,66 @@ def chat_page():
     background: #c9aab3;
   }}
   .status-dot.user-dot {{
-    background: #7fc98f;
+    background: #7fc98f; /* Serval 常驻在线 */
   }}
 
-  /* 顶部中间极其纤细优雅的轻奢心形连接饰条 */
+  /* 顶部中间极简高级连线设计 */
   .header-connector {{
     flex: 1;
     display: flex;
-    justify-content: center;
     align-items: center;
-    min-width: 100px;
-    padding: 0 10px;
+    justify-content: center;
+    gap: 10px;
+    max-width: 200px;
+    margin: 0 15px;
   }}
-  .connector-svg {{
-    width: 100%;
-    max-width: 220px;
-    height: auto;
+  .connector-line {{
+    flex: 1;
+    height: 1px;
+    /* 渐变线条向两端自然淡出 */
+    background: linear-gradient(90deg, transparent, rgba(184, 118, 138, 0.25) 50%, transparent);
+  }}
+  .connector-heart {{
+    font-family: "Dancing Script", cursive;
+    font-size: 18px;
+    color: #b8768a;
+    opacity: 0.7;
+    transform: translateY(-1px);
   }}
 
   #messages {{
-    position: relative;
     flex: 1;
     overflow-y: auto;
-    padding: 24px 30px;
+    padding: 18px 20px;
     display: flex;
     flex-direction: column;
     gap: 14px;
     -webkit-overflow-scrolling: touch;
+    /* 引入柔和的环境光渐变作为背景，让聊天区不显单调空洞 */
+    background: radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.4) 0%, transparent 80%);
   }}
-  
-  /* 专属定制感的水印底纹，使失去头像的气泡区显得不再空旷 */
-  #messages::before {{
-    content: 'Charon   ʚ♡ɞ   Serval';
-    position: absolute;
-    top: 48%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-5deg);
-    font-family: 'Dancing Script', Georgia, serif;
-    font-size: 34px;
-    color: #b8768a;
-    opacity: 0.04; /* 极其微弱，保证高雅不喧宾夺主 */
-    pointer-events: none;
-    z-index: 0;
-    letter-spacing: 3px;
-    white-space: nowrap;
-  }}
-  
   .msg-row {{
     display: flex;
     align-items: flex-start;
-    max-width: 70%; /* 微微收窄消息宽度，让排版更内敛、高级 */
-    z-index: 1;
+    gap: 10px; /* 紧凑优雅的间距 */
+    max-width: 82%;
   }}
   .msg-row.user {{
     align-self: flex-end;
+    flex-direction: row-reverse;
   }}
   .msg-row.charon {{
     align-self: flex-start;
+  }}
+  .msg-avatar {{
+    width: 30px; /* 微缩头像：30px 更显精致轻盈，避免喧宾夺主 */
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    margin-top: 0; /* 顶对齐 */
+    border: 1.5px solid #fff;
+    box-shadow: 0 2px 8px rgba(184, 118, 138, 0.12);
   }}
   .msg-col {{
     display: flex;
@@ -1156,7 +1151,7 @@ def chat_page():
   }}
   .bubble {{
     position: relative;
-    padding: 12px 18px; /* 稍微增加气泡内边距，让气泡显得饱满柔和，填补空旷感 */
+    padding: 11px 15px;
     line-height: 1.55;
     font-size: 15px;
     word-wrap: break-word;
@@ -1165,15 +1160,17 @@ def chat_page():
   .bubble.user {{
     background: linear-gradient(135deg, #e8a3b5, #d98ba0);
     color: #fff;
+    /* 不对称圆角：右上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(217,139,160,0.22); /* 优化投影，使其比原来更轻柔高级 */
+    box-shadow: 0 3px 10px rgba(217,139,160,0.3), 0 8px 20px rgba(217,139,160,0.15);
   }}
   .bubble.charon {{
-    background: rgba(255,255,255,0.9); /* 微调气泡透明度，使质感更细腻 */
+    background: rgba(255,255,255,0.85);
     border: 1px solid rgba(200,140,155,0.18);
     color: #6b5460;
+    /* 不对称圆角：左上角设为较小的 4px 稍微内收，其余三个角使用饱满的 18px */
     border-radius: 4px 18px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(200,140,155,0.06);
+    box-shadow: 0 3px 10px rgba(200,140,155,0.12), 0 8px 20px rgba(200,140,155,0.08);
   }}
   .bubble.pending {{ opacity: 0.5; }}
   .msg-delete {{
@@ -1361,20 +1358,11 @@ def chat_page():
         </div>
       </div>
       
-      <!-- 中间：极其纤柔高雅的玫瑰金连线设计 -->
+      <!-- 中间：极简渐变爱心连接线 -->
       <div class="header-connector">
-        <svg viewBox="0 0 300 40" class="connector-svg">
-          <!-- 左侧极细连接线 -->
-          <line x1="10" y1="20" x2="132" y2="20" stroke="#c39aa6" stroke-width="0.8" opacity="0.6" />
-          <!-- 左侧微点缀 -->
-          <circle cx="132" cy="20" r="1.5" fill="#b8768a" />
-          <!-- 中间空心骨线爱心 -->
-          <path d="M 150,15 C 147,10 141,13 150,23 C 159,13 153,10 150,15 Z" fill="none" stroke="#b8768a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-          <!-- 右侧微点缀 -->
-          <circle cx="168" cy="20" r="1.5" fill="#b8768a" />
-          <!-- 右侧极细连接线 -->
-          <line x1="168" y1="20" x2="290" y2="20" stroke="#c39aa6" stroke-width="0.8" opacity="0.6" />
-        </svg>
+        <div class="connector-line"></div>
+        <div class="connector-heart">ᥫ᭡</div>
+        <div class="connector-line"></div>
       </div>
       
       <!-- 右端：Serval 状态 -->
@@ -1414,10 +1402,9 @@ const panelBody = document.getElementById('panel-body');
 const statusDot = document.getElementById('status-dot');
 const statusLabel = document.getElementById('status-label');
 
-// 使用标准的 JS 字符串拼接替换模板字符串，彻底避免 Python f-string 反引号转义冲突
 function apiUrl(path) {{
   const sep = path.includes('?') ? '&' : '?';
-  return CODE ? path + sep + 'code=' + encodeURIComponent(CODE) : path;
+  return CODE ? `${{path}}${{sep}}code=${{encodeURIComponent(CODE)}}` : path;
 }}
 
 function formatTime(isoStr) {{
@@ -1433,6 +1420,12 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
+
+  // 恢复微缩版气泡头像，用作视觉锚点，同时与顶部布局统一
+  const avatar = document.createElement('img');
+  avatar.className = 'msg-avatar';
+  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
+  row.appendChild(avatar);
 
   const col = document.createElement('div');
   col.className = 'msg-col';
