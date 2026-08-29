@@ -726,6 +726,22 @@ def _check_chat_auth(req):
     return provided == CHAT_ACCESS_CODE
 
 
+@app.route("/api/chat-status", methods=["GET"])
+def chat_status():
+    """给网页右侧状态面板用，一次性打包情绪值、距上次互动时长、经期关心状态。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    hours_gap = get_time_since_last_event()
+    score = apply_mood_decay()
+    period_ctx = get_period_context()
+    return jsonify({
+        "ok": True,
+        "mood_score": round(score, 1),
+        "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
+        "period_context": period_ctx or None
+    })
+
+
 @app.route("/api/chat-messages", methods=["GET"])
 def get_chat_messages():
     """拉取网页聊天的历史记录，供前端渲染。"""
@@ -810,7 +826,8 @@ def chat_send():
 @app.route("/chat", methods=["GET"])
 def chat_page():
     """网页聊天界面。有配置访问口令的话，没带对的code参数就不渲染页面内容，
-    只提示需要口令（页面本身的静态HTML谁都能看到结构，但没有真实数据）。"""
+    只提示需要口令（页面本身的静态HTML谁都能看到结构，但没有真实数据）。
+    三栏布局：左侧简化导航（首页/日记）+ 中间对话区 + 右侧状态面板（mood_score等）。"""
     if not _check_chat_auth(request):
         return "<h3>需要访问口令</h3><p>在链接后加 ?code=你的口令</p>", 401
 
@@ -825,108 +842,243 @@ def chat_page():
   * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
   html, body {{
     margin: 0; padding: 0; height: 100%;
-    background: #0d0d12;
+    background: linear-gradient(160deg, #fdf6f4 0%, #f7e9ec 45%, #f3dde4 100%);
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #e8e6f0;
+    color: #5a4550;
   }}
   #app {{
-    display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+    display: flex;
+    height: 100vh; height: 100dvh;
+    padding: 10px;
+    gap: 10px;
+  }}
+
+  /* ---- 左侧导航栏 ---- */
+  #nav {{
+    width: 56px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0;
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 4px 24px rgba(200,140,155,0.12);
+  }}
+  .nav-icon {{
+    width: 40px; height: 40px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.7);
+    color: #b8768a;
+    font-size: 18px;
+    text-decoration: none;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }}
+  .nav-icon:active {{ transform: scale(0.92); background: #f3c9d3; }}
+
+  /* ---- 中间对话区 ---- */
+  #main {{
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255,255,255,0.5);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.7);
+    box-shadow: 0 8px 32px rgba(200,140,155,0.14);
+    overflow: hidden;
   }}
   #header {{
-    padding: 16px 20px 12px;
-    border-bottom: 1px solid #1f1f2b;
-    font-size: 15px;
-    letter-spacing: 2px;
-    color: #8a86a8;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid rgba(200,140,155,0.15);
     flex-shrink: 0;
+  }}
+  #header .brand {{
+    font-family: Georgia, "Songti SC", serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    color: #b8768a;
+    font-weight: 600;
+  }}
+  #header .sub {{
+    font-size: 11px;
+    color: #c39aa6;
+    letter-spacing: 1px;
+    margin-top: 2px;
   }}
   #messages {{
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 18px 20px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     -webkit-overflow-scrolling: touch;
   }}
   .bubble {{
-    max-width: 78%;
-    padding: 10px 14px;
-    border-radius: 14px;
-    line-height: 1.5;
+    max-width: 76%;
+    padding: 11px 15px;
+    border-radius: 16px;
+    line-height: 1.55;
     font-size: 15px;
     word-wrap: break-word;
     white-space: pre-wrap;
   }}
   .bubble.user {{
     align-self: flex-end;
-    background: #3a3550;
-    color: #f0eef8;
-    border-bottom-right-radius: 4px;
+    background: linear-gradient(135deg, #e8a3b5, #d98ba0);
+    color: #fff;
+    border-bottom-right-radius: 5px;
+    box-shadow: 0 3px 10px rgba(217,139,160,0.35);
   }}
   .bubble.charon {{
     align-self: flex-start;
-    background: #17171f;
-    border: 1px solid #26263a;
-    color: #d8d5e8;
-    border-bottom-left-radius: 4px;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(200,140,155,0.18);
+    color: #6b5460;
+    border-bottom-left-radius: 5px;
   }}
-  .bubble.pending {{
-    opacity: 0.5;
-  }}
+  .bubble.pending {{ opacity: 0.5; }}
   #input-bar {{
     display: flex;
     gap: 8px;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-    border-top: 1px solid #1f1f2b;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(200,140,155,0.15);
     flex-shrink: 0;
-    background: #0d0d12;
   }}
   #input-bar textarea {{
     flex: 1;
     resize: none;
-    border-radius: 12px;
-    border: 1px solid #26263a;
-    background: #17171f;
-    color: #e8e6f0;
-    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(200,140,155,0.25);
+    background: rgba(255,255,255,0.75);
+    color: #5a4550;
+    padding: 10px 14px;
     font-size: 15px;
     font-family: inherit;
     max-height: 100px;
   }}
+  #input-bar textarea::placeholder {{ color: #c9aab3; }}
   #input-bar button {{
     border: none;
-    border-radius: 12px;
-    background: #4a4270;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #e8a3b5, #d67d97);
     color: #fff;
-    padding: 0 18px;
+    padding: 0 20px;
     font-size: 14px;
+    box-shadow: 0 3px 10px rgba(217,139,160,0.4);
   }}
-  #input-bar button:disabled {{
-    opacity: 0.4;
-  }}
+  #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; }}
   #empty-hint {{
-    color: #55506e;
+    color: #c9aab3;
     font-size: 13px;
     text-align: center;
     margin-top: 40px;
+  }}
+
+  /* ---- 右侧状态面板 ---- */
+  #panel {{
+    width: 190px;
+    flex-shrink: 0;
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 16px;
+    background: rgba(255,255,255,0.5);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,0.7);
+    box-shadow: 0 6px 28px rgba(200,140,155,0.13);
+    overflow-y: auto;
+  }}
+  @media (min-width: 720px) {{
+    #panel {{ display: flex; }}
+  }}
+  .panel-title {{
+    font-family: Georgia, "Songti SC", serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: #b8768a;
+    margin-bottom: 4px;
+  }}
+  .stat-block {{ margin-bottom: 4px; }}
+  .stat-label {{
+    font-size: 11px;
+    color: #b88994;
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+  }}
+  .stat-bar-track {{
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(200,140,155,0.15);
+    overflow: hidden;
+  }}
+  .stat-bar-fill {{
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #f0b8c6, #d67d97);
+    transition: width 0.4s ease;
+  }}
+  .stat-value {{
+    font-size: 12px;
+    color: #8a6570;
+  }}
+  .period-tag {{
+    font-size: 11px;
+    color: #b8768a;
+    background: rgba(232,163,181,0.18);
+    border-radius: 8px;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }}
+  .panel-empty {{
+    font-size: 11px;
+    color: #c9aab3;
   }}
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="header">CHARON</div>
-  <div id="messages"><div id="empty-hint">加载中…</div></div>
-  <div id="input-bar">
-    <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
-    <button id="send-btn">发送</button>
+
+  <div id="nav">
+    <a class="nav-icon" href="/" title="首页">⌂</a>
+    <a class="nav-icon" href="{'/diary/read?code=' + code_param if code_param else '/diary/read'}" title="日记">✎</a>
   </div>
+
+  <div id="main">
+    <div id="header">
+      <div class="brand">CHARON</div>
+      <div class="sub">still becoming</div>
+    </div>
+    <div id="messages"><div id="empty-hint">加载中…</div></div>
+    <div id="input-bar">
+      <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
+      <button id="send-btn">发送</button>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div class="panel-title">PULSE</div>
+    <div id="panel-body"><div class="panel-empty">加载中…</div></div>
+  </div>
+
 </div>
 <script>
 const CODE = {json.dumps(code_param)};
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
+const panelBody = document.getElementById('panel-body');
 
 function apiUrl(path) {{
   const sep = path.includes('?') ? '&' : '?';
@@ -964,6 +1116,39 @@ async function loadHistory() {{
   }}
 }}
 
+function formatHours(h) {{
+  if (h === null || h === undefined) return '还没互动过';
+  if (h < 1) return Math.round(h * 60) + ' 分钟前';
+  return h.toFixed(1) + ' 小时前';
+}}
+
+async function loadStatus() {{
+  try {{
+    const res = await fetch(apiUrl('/api/chat-status'));
+    const data = await res.json();
+    if (!data.ok) {{
+      panelBody.innerHTML = '<div class="panel-empty">加载失败</div>';
+      return;
+    }}
+    const moodPct = Math.max(0, Math.min(100, data.mood_score));
+    let html = '';
+    html += '<div class="stat-block">';
+    html += '<div class="stat-label"><span>情绪值</span><span>' + data.mood_score + '/100</span></div>';
+    html += '<div class="stat-bar-track"><div class="stat-bar-fill" style="width:' + moodPct + '%"></div></div>';
+    html += '</div>';
+    html += '<div class="stat-block">';
+    html += '<div class="stat-label"><span>上次互动</span></div>';
+    html += '<div class="stat-value">' + formatHours(data.hours_since_last_event) + '</div>';
+    html += '</div>';
+    if (data.period_context) {{
+      html += '<div class="stat-block"><div class="period-tag">' + data.period_context + '</div></div>';
+    }}
+    panelBody.innerHTML = html;
+  }} catch (e) {{
+    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
+  }}
+}}
+
 async function sendMessage() {{
   const text = inputEl.value.trim();
   if (!text) return;
@@ -997,6 +1182,7 @@ async function sendMessage() {{
   }}
   scrollToBottom();
   sendBtn.disabled = false;
+  loadStatus();
 }}
 
 sendBtn.addEventListener('click', sendMessage);
@@ -1012,6 +1198,7 @@ inputEl.addEventListener('input', () => {{
 }});
 
 loadHistory();
+loadStatus();
 </script>
 </body>
 </html>"""
