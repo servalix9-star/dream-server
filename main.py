@@ -474,7 +474,7 @@ def send_bark(title, content, icon=None, sound=None):
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
-    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n快此刻的状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -1037,7 +1037,7 @@ def chat_page():
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.12); /* 调整容器不透明度至0.12，释放极致磨砂晶莹质感 */
+    background: rgba(255, 255, 255, 0.35);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
     border-radius: 28px;
@@ -1093,7 +1093,7 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2.5px solid #ffffff; /* 恢复白色发光圆环 */
+    border: 2px solid #ffffff; /* 恢复白色发光圆环 */
     box-shadow: 0 0 12px rgba(255, 255, 255, 0.6); /* 恢复发光效果 */
   }}
   #header-text {{ 
@@ -1191,8 +1191,6 @@ def chat_page():
     border: 1.5px solid rgba(255, 255, 255, 0.85);
     box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
   }}
-  
-  /* 彻底移除各处 100% 宽度，利用原生 Flex 自动对齐机制，让时间戳完美、对称靠向两侧头像 */
   .msg-col {{
     display: flex;
     flex-direction: column;
@@ -1206,6 +1204,7 @@ def chat_page():
     margin: 4px 4px 0;
   }}
   
+  /* 时间戳位置优化 */
   .msg-time-row {{
     display: flex;
     align-items: center;
@@ -1223,19 +1222,14 @@ def chat_page():
     cursor: pointer;
   }}
   .bubble.user {{
-    /* 彻底换成亮粉色半透明毛玻璃特效，降低不透明度从0.8降至0.55，释放高透冰爽感 */
-    background: rgba(255, 179, 193, 0.55); 
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 马卡龙甜美暮粉渐变 */
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.1);
+    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
   }}
   .bubble.charon {{
-    /* 进一步增加透明度从 0.38 降至 0.22 */
-    background: rgba(255, 255, 255, 0.22); 
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    background: rgba(255, 255, 255, 0.55);
+    border: none; /* 彻底取消气泡边框 */
     color: #6b5460;
     border-radius: 4px 18px 18px 18px; 
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
@@ -1276,6 +1270,7 @@ def chat_page():
     border-right: 1px solid rgba(255, 255, 255, 0.15);
   }}
 
+  /* ---- 输入栏 ---- */
   #input-bar {{
     display: flex;
     gap: 10px;
@@ -1333,24 +1328,19 @@ def chat_page():
   #input-bar button {{
     position: relative;
     z-index: 1;
-    border: 2px solid #000000; /* 高对比度纯黑圆圈线 */
-    border-radius: 16px; /* 形状保持不变 */
-    /* 发送键改为上至下 亮粉色#ffb3c1 渐变至 暖粉色#cf7d90 */
-    background: linear-gradient(to bottom, #ffb3c1 0%, #cf7d90 100%);
+    border: none;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #e599a9, #cf7d90);
     color: #fff;
     padding: 0 22px;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* 实体投影 */
-    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.2);
+    transition: all 0.2s ease;
   }}
   #input-bar button:hover {{
-    background: rgba(255, 179, 193, 0.9);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
-  }}
-  #input-bar button:active {{
-    transform: translateY(0) scale(0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.3);
   }}
   #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
 
@@ -1362,7 +1352,7 @@ def chat_page():
     flex-direction: column;
     gap: 16px;
     padding: 22px 18px;
-    background: rgba(255, 235, 240, 0.12); /* 调整容器不透明度至0.12，释放极致磨砂晶莹质感 */
+    background: rgba(255, 235, 240, 0.55); /* 提升粉嫩底色 */
     border-radius: 24px;
     position: relative;
     overflow: hidden;
