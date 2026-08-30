@@ -263,7 +263,7 @@ def get_diary():
 
 @app.route("/diary/read", methods=["GET"])
 def read_diary():
-    """更适合人眼看的日记页面，把reason下来和thought配对展示，不是裸JSON。"""
+    """更适合人眼看的日记页面，把reason和thought配对展示，不是裸JSON。"""
     diary = load_diary()
     if not diary:
         return "还没有日记"
@@ -375,7 +375,7 @@ def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
     顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
-    避免Charon下次醒来时recent里还看定义已经删掉的话。"""
+    避免Charon下次醒来时recent里还看得到已经删掉的话。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -495,15 +495,6 @@ def chat_send():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-def _check_chat_auth(req):
-    """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
-    配置了的话要求query参数或header里带code，两种都支持方便不同客户端调用。"""
-    if not CHAT_ACCESS_CODE:
-        return True
-    provided = req.args.get("code") or req.headers.get("X-Chat-Code")
-    return provided == CHAT_ACCESS_CODE
-
-
 def get_chat_status_label(score):
     """网页聊天header里显示的状态短语，跟get_mood_context()的详细描述不同，
     这个要短、像个人在线状态那种感觉，一两个词就行。"""
@@ -515,6 +506,15 @@ def get_chat_status_label(score):
         return "有点安静"
     else:
         return "有点失落"
+
+
+def _check_chat_auth(req):
+    """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
+    配置了的话要求query参数或header里带code，两种都支持方便不同客户端调用。"""
+    if not CHAT_ACCESS_CODE:
+        return True
+    provided = req.args.get("code") or req.headers.get("X-Chat-Code")
+    return provided == CHAT_ACCESS_CODE
 
 
 @app.route("/chat", methods=["GET"])
@@ -885,7 +885,7 @@ def chat_page():
     align-items: baseline;
   }}
   
-  /* 情绪值进度条：完美复刻参考图（2px 极简扁平细直轨样式，无圆角） */
+  /* 情绪值进度条：完美复刻参考图（2px 极简细直轨样式，无圆角） */
   .stat-bar-track {{
     height: 2px; 
     border-radius: 0;
@@ -928,15 +928,15 @@ def chat_page():
     line-height: 1.5;
   }}
   
-  /* “心里话”卡片：完美恢复原版倾斜字体、颜色、气泡阴影与白透磨砂无框设计 */
+  /* “心里话”卡片：恢复原版倾斜字体、颜色、气泡阴影与白透磨砂无框设计 */
   .thought-card {{
     font-size: 12px;
-    color: #7a5a65; /* 彻底恢复原版深粉玫瑰灰字体颜色 */
+    color: #7a5a65; /* 恢复原版深粉玫瑰灰字体颜色 */
     background: rgba(255, 255, 255, 0.6); 
     border-radius: 14px;
     padding: 12px 14px;
     line-height: 1.6;
-    font-style: italic; /* 彻底恢复原版经典优雅倾斜体 */
+    font-style: italic; /* 恢复原版经典优雅倾斜体 */
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05); /* 柔和阴影 */
   }}
   .summary-card {{
@@ -1305,51 +1305,3 @@ loadStatus();
 </script>
 </body>
 </html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
