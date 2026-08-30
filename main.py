@@ -564,7 +564,7 @@ def parse_reason_message(raw_text):
     """解析DeepSeek返回的 {reason, message} JSON。
     做了容错：万一模型没按格式来（比如混进代码块标记），退化成把全部内容当message，reason留空。"""
     text = raw_text.strip()
-    # 去掉可能的代码块包裹
+    # 去点可能的代码块包裹
     if text.startswith("```"):
         text = text.strip("`")
         if text.startswith("json"):
@@ -1221,47 +1221,20 @@ def chat_page():
     user-select: none; /* 移动端防干扰长按 */
     cursor: pointer;
   }}
-  
-  /* User 气泡：粉色 #cf7d90 半透明玻璃质感 */
   .bubble.user {{
-    background: rgba(207, 125, 144, 0.65); /* 半透明毛玻璃粉色底色 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.25); /* 软亮白框线 */
+    /* 彻底换成亮粉色半透明毛玻璃特效 */
+    background: rgba(255, 179, 193, 0.8); 
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(207, 125, 144, 0.15);
+    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.1);
   }}
-  
-  /* User 气泡上的一对可爱兔耳 */
-  .bubble.user::before {{
-    content: '';
-    position: absolute;
-    top: -11px;
-    right: 18px;
-    width: 5px;
-    height: 12px;
-    background: #cf7d90;
-    border-radius: 4px 4px 0 0;
-    transform: rotate(-12deg);
-    z-index: 1;
-  }}
-  .bubble.user::after {{
-    content: '';
-    position: absolute;
-    top: -11px;
-    right: 10px;
-    width: 5px;
-    height: 12px;
-    background: #cf7d90;
-    border-radius: 4px 4px 0 0;
-    transform: rotate(12deg);
-    z-index: 1;
-  }}
-  
   .bubble.charon {{
-    background: rgba(255, 255, 255, 0.55);
-    border: none; /* 彻底取消气泡边框 */
+    /* 进一步增加透明度从 0.55 降至 0.38 */
+    background: rgba(255, 255, 255, 0.38); 
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
     color: #6b5460;
     border-radius: 4px 18px 18px 18px; 
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
@@ -1361,18 +1334,18 @@ def chat_page():
     z-index: 1;
     border: none;
     border-radius: 16px;
-    /* 发送按钮自上而下 暖粉#cf7d90 渐变至 亮粉#ffb3c1 */
-    background: linear-gradient(to bottom, #cf7d90 0%, #ffb3c1 100%);
+    /* 发送键改为上至下 亮粉色#ffb3c1 渐变至 暖粉色#cf7d90 */
+    background: linear-gradient(to bottom, #ffb3c1 0%, #cf7d90 100%);
     color: #fff;
     padding: 0 22px;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(207, 125, 144, 0.2);
+    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.2);
     transition: all 0.2s ease;
   }}
   #input-bar button:hover {{
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(207, 125, 144, 0.3);
+    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.3);
   }}
   #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
 
@@ -1398,7 +1371,7 @@ def chat_page():
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直粉-白-粉(1:3:1)极浅甜酷渐变 */
+    /* 垂直极浅粉-白-粉(1:3:1)渐变，比例完美还原 */
     background-image: 
       linear-gradient(to bottom, #ffeef1 0%, #ffeef1 20%, #ffffff 35%, #ffffff 65%, #ffeef1 80%, #ffeef1 100%);
     -webkit-mask-image: 
