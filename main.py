@@ -721,7 +721,7 @@ def miss_you():
     instant_msg = random.choice(INSTANT_CATCH_MESSAGES)
     send_bark("Charon", instant_msg, icon=ICON_LUCKY)
 
-    # 记一笔事件，方便后续也能在网页里发一句话给Charon，让TA真正接住这句话并回应。
+    # 记一笔事件，方便后续也能在正常消息生成时看到这个动态
     events = load_events()
     events.append({
         "type": "miss_you",
@@ -979,120 +979,6 @@ def chat_page():
     z-index: 2;
   }}
 
-  /* ---- 头像专属高定霓虹旋转光圈容器 ---- */
-  .avatar-wrap {{
-    position: relative;
-    display: inline-block;
-    flex-shrink: 0;
-  }}
-  .avatar-wrap.header-style {{
-    width: 44px; height: 44px;
-  }}
-  .avatar-wrap.msg-style {{
-    width: 36px; height: 36px;
-    margin-top: 0;
-  }}
-
-  /* 流星轨道 1 (外圈 - 顺时针流星) */
-  .avatar-wrap::before {{
-    content: '';
-    position: absolute;
-    top: -4px; left: -4px; right: -4px; bottom: -4px;
-    border-radius: 50%;
-    border: 1px solid transparent;
-    pointer-events: none;
-    z-index: 0;
-  }}
-
-  /* 流星轨道 2 (内圈 - 逆时针流星) */
-  .avatar-wrap::after {{
-    content: '';
-    position: absolute;
-    top: -1.5px; left: -1.5px; right: -1.5px; bottom: -1.5px;
-    border-radius: 50%;
-    border: 1px solid transparent;
-    pointer-events: none;
-    z-index: 0;
-  }}
-
-  /* --- 角色色彩分化 --- */
-  
-  /* Charon 侧（左 / AI）：幽邃冷魅的电光紫与银白流星 */
-  .avatar-wrap.charon-theme::before {{
-    border-top: 1.2px solid #9b5de5;
-    border-left: 1.2px solid rgba(155, 93, 229, 0.2);
-    animation: rotate-clockwise 4s linear infinite;
-  }}
-  .avatar-wrap.charon-theme::after {{
-    border-bottom: 1.2px solid #ffffff;
-    border-right: 1.2px solid rgba(255, 255, 255, 0.25);
-    animation: rotate-counter-clockwise 3s linear infinite;
-  }}
-  .avatar-wrap.charon-theme .star-accent {{
-    text-shadow: 0 0 4px #ffffff, 0 0 10px #9b5de5, 0 0 20px #8a42ff;
-  }}
-
-  /* User 侧（右 / 用户）：甜美温柔的蜜桃粉与柔金流星 */
-  .avatar-wrap.user-theme::before {{
-    border-top: 1.2px solid #ff5e84;
-    border-left: 1.2px solid rgba(255, 94, 132, 0.2);
-    animation: rotate-clockwise 4.5s linear infinite;
-  }}
-  .avatar-wrap.user-theme::after {{
-    border-bottom: 1.2px solid #ffffff;
-    border-right: 1.2px solid rgba(255, 229, 236, 0.3);
-    animation: rotate-counter-clockwise 3.5s linear infinite;
-  }}
-  .avatar-wrap.user-theme .star-accent {{
-    text-shadow: 0 0 4px #ffffff, 0 0 10px #ff5e84, 0 0 20px #ff2a7d;
-  }}
-
-  /* 旋转动画定义 */
-  @keyframes rotate-clockwise {{
-    0% {{ transform: rotate(0deg); }}
-    100% {{ transform: rotate(360deg); }}
-  }}
-
-  @keyframes rotate-counter-clockwise {{
-    0% {{ transform: rotate(360deg); }}
-    100% {{ transform: rotate(0deg); }}
-  }}
-
-  /* 悬浮强对比呼吸星芒 ✦ */
-  .star-accent {{
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    z-index: 2; /* 置于头像上面 */
-    color: #ffffff;
-    font-size: 15px; /* 进一步放大星芒 */
-    animation: blink-star 2s ease-in-out infinite; /* 缓慢明暗呼吸灯效果 */
-    pointer-events: none;
-    user-select: none;
-  }}
-
-  @keyframes blink-star {{
-    0%, 100% {{ opacity: 0.35; transform: scale(0.85); }}
-    50% {{ opacity: 1; transform: scale(1.1); }}
-  }}
-
-  /* 头像本体 */
-  .msg-avatar, #header-avatar {{
-    display: block;
-    border-radius: 50%;
-    position: relative;
-    z-index: 1; /* 盖在光圈上 */
-    object-fit: cover;
-    border: none !important;
-    box-shadow: none !important;
-  }}
-  #header-avatar {{
-    width: 44px; height: 44px;
-  }}
-  .msg-avatar {{
-    width: 36px; height: 36px;
-  }}
-
   /* ---- 左侧波点玻璃舱导航栏 ---- */
   #nav {{
     width: 60px;
@@ -1124,9 +1010,56 @@ def chat_page():
     z-index: 0;
     opacity: 0.85;
   }}
+  
+  /* 极致精细头像星轨包裹容器（公用类，支持左侧导航、顶部Header及对话消息头像） */
+  .avatar-wrapper {{
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }}
+  /* 导航栏专用尺寸 */
+  #nav .avatar-wrapper {{
+    width: 44px; height: 44px;
+    margin-bottom: 2px;
+  }}
+  
+  /* 极细慢速旋转星轨线（轨道） */
+  .orbit-ring {{
+    position: absolute;
+    width: 110%; height: 100%;
+    border-radius: 50%;
+    border: 1px dashed rgba(255, 255, 255, 0.55);
+    animation: orbit-spin 24s linear infinite;
+    z-index: 1;
+    pointer-events: none;
+  }}
+  @keyframes orbit-spin {{
+    0% {{ transform: rotate(0deg); }}
+    100% {{ transform: rotate(360deg); }}
+  }}
+  
+  /* 极小精细呼吸闪烁星芒 */
+  .cyber-star {{
+    position: absolute;
+    top: -2px; right: -2px;
+    font-size: 10px; /* 极细小 */
+    color: #ffffff;
+    text-shadow: 0 0 8px #ff5e84, 0 0 3px #ffffff;
+    z-index: 3;
+    animation: star-pulse 2s ease-in-out infinite;
+    pointer-events: none;
+    user-select: none;
+  }}
+  @keyframes star-pulse {{
+    0%, 100% {{ opacity: 0.25; transform: scale(0.85); }}
+    50% {{ opacity: 1; transform: scale(1.15); }}
+  }}
+
   .nav-icon {{
     position: relative;
-    z-index: 1; /* 确保不被波点底层遮挡，保持可点 */
+    z-index: 2; /* 确保不被波点底层遮挡，保持可点 */
     width: 42px; height: 42px;
     border-radius: 50%; /* 圆形按钮 */
     display: flex; align-items: center; justify-content: center;
@@ -1201,9 +1134,26 @@ def chat_page():
     z-index: 0;
   }}
   
+  /* 顶部 Header 头像容器与样式 */
+  #header .avatar-wrapper {{
+    width: 50px; height: 50px; /* 稍微放大预留星轨虚线空间 */
+  }}
+  #header-avatar {{
+    position: relative;
+    z-index: 2;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #ffffff; /* 纯白高光内圆环 */
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.45);
+  }}
+  #header .orbit-ring {{
+    width: 46px; height: 46px;
+  }}
+  
   #header-text {{ 
     position: relative;
-    z-index: 1;
+    z-index: 2;
     min-width: 0; 
   }}
   #header .brand {{
@@ -1253,7 +1203,7 @@ def chat_page():
   /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
   .header-signature {{
     position: relative;
-    z-index: 1;
+    z-index: 2;
     font-family: "Dancing Script", "Brush Script MT", cursive;
     font-size: 22px; /* 签名体 */
     color: rgba(255, 255, 255, 0.92);
@@ -1286,6 +1236,23 @@ def chat_page():
   }}
   .msg-row.charon {{
     align-self: flex-start;
+  }}
+  
+  /* 消息区头像包裹结构样式 */
+  .msg-row .avatar-wrapper {{
+    width: 44px; height: 44px;
+  }}
+  .msg-avatar {{
+    position: relative;
+    z-index: 2;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid #ffffff;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+  }}
+  .msg-row .orbit-ring {{
+    width: 39px; height: 39px;
   }}
   
   .msg-col {{
@@ -1597,23 +1564,27 @@ def chat_page():
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (圆包装修饰) -->
   <div id="nav">
-    <!-- 包裹层支持双重发光旋转光圈与悬浮星芒 -->
-    <div class="avatar-wrap msg-style user-theme" style="margin-bottom: 12px; cursor: pointer;" onclick="location.href='/'">
-      <img class="msg-avatar" src="https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jpg" alt="Home">
-      <span class="star-accent">✦</span>
+    <div class="avatar-wrapper">
+      <div class="orbit-ring"></div>
+      <a class="nav-icon" href="/" title="首页">✦</a>
+      <span class="cyber-star">✦</span>
     </div>
-    <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
+    <div class="avatar-wrapper">
+      <div class="orbit-ring"></div>
+      <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
+      <span class="cyber-star">✦</span>
+    </div>
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 大头像双重霓虹旋转光圈与发光星芒 -->
-      <div class="avatar-wrap header-style charon-theme">
+      <div class="avatar-wrapper">
+        <div class="orbit-ring"></div>
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
-        <span class="star-accent">✦</span>
+        <span class="cyber-star">✦</span>
       </div>
       <div id="header-text">
         <div class="brand">CHARON</div>
@@ -1677,21 +1648,25 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
 
-  // 使用外层 avatar-wrap 包装头像，并智能区分角色配色
-  const avatarWrap = document.createElement('div');
-  avatarWrap.className = 'avatar-wrap msg-style ' + (role === 'user' ? 'user-theme' : 'charon-theme');
+  // 消息区头像加入星轨圆环精细化包裹包装
+  const avatarWrapper = document.createElement('div');
+  avatarWrapper.className = 'avatar-wrapper';
+  
+  const orbitRing = document.createElement('div');
+  orbitRing.className = 'orbit-ring';
+  avatarWrapper.appendChild(orbitRing);
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
   avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
-  avatarWrap.appendChild(avatar);
-
+  avatarWrapper.appendChild(avatar);
+  
   const star = document.createElement('span');
-  star.className = 'star-accent';
+  star.className = 'cyber-star';
   star.textContent = '✦';
-  avatarWrap.appendChild(star);
-
-  row.appendChild(avatarWrap);
+  avatarWrapper.appendChild(star);
+  
+  row.appendChild(avatarWrapper);
 
   const col = document.createElement('div');
   col.className = 'msg-col';
@@ -1885,130 +1860,4 @@ async function loadStatus() {{
       html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
     }}
     if (data.last_thought) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
-    }}
-    if (data.window_summary) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
-    }}
-    panelBody.innerHTML = html;
-  }} catch (e) {{
-    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
-  }}
-}}
-
-async function sendMessage() {{
-  const text = inputEl.value.trim();
-  if (!text) return;
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
-  sendBtn.disabled = true;
-
-  const nowIso = new Date().toISOString();
-  const userRow = renderMsgRow('user', text, nowIso, false);
-  messagesEl.appendChild(userRow);
-  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
-  messagesEl.appendChild(pendingRow);
-  scrollToBottom();
-
-  const pendingBubble = pendingRow.querySelector('.bubble');
-
-  try {{
-    const res = await fetch(apiUrl('/api/chat-send'), {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{ message: text }})
-    }});
-    const data = await res.json();
-    if (data.ok) {{
-      pendingBubble.textContent = data.reply;
-      pendingBubble.classList.remove('pending');
-      
-      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
-      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
-      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
-      
-      // 动态将渲染出来的泡泡重置并正确绑定事件
-      const newUserCol = userRow.querySelector('.msg-col');
-      const newCharonCol = pendingRow.querySelector('.msg-col');
-      
-      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
-      
-    }} else {{
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
-    }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(
