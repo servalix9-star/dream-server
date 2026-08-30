@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -959,17 +959,20 @@ def chat_page():
 <title>Charon</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+<!-- 引入优雅手写花体字 -->
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
 <style>
   * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
+  
   html, body {{
     margin: 0; padding: 0; height: 100%;
-    /* 网格径向渐变，调浅调亮为晨曦迷雾般的柔和马卡龙粉 */
+    /* 渐变底色，调浅调亮为晨曦迷雾般的柔和粉 */
     background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
     color: #5a4550; /* 恢复至初始雅致深紫灰 */
   }}
+  
   #app {{
     display: flex;
     height: 100vh; height: 100dvh;
@@ -977,7 +980,7 @@ def chat_page():
     gap: 14px;
   }}
 
-  /* ---- 左侧玻璃舱导航栏（移除高光白线边框，增强透明度） ---- */
+  /* ---- 1. 左侧导航栏：复古波点 + 垂直黑粉白渐变淡出效果 ---- */
   #nav {{
     width: 60px;
     flex-shrink: 0;
@@ -986,18 +989,44 @@ def chat_page():
     align-items: center;
     gap: 16px;
     padding: 24px 0;
-    background: rgba(255, 255, 255, 0.16); /* 调低白度至0.16，增强底色透光感 */
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
+    position: relative;
+    background-color: #ebd3d9;
+    /* 细腻的复古双层交错波点 */
+    background-image: 
+      radial-gradient(#5a4550 14%, transparent 15%),
+      radial-gradient(#5a4550 14%, transparent 15%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
     border-radius: 24px;
-    border: none; /* 彻底去除边缘白色线框 */
+    border: none;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
+    overflow: hidden;
   }}
+  
+  /* 利用 overlay 混合模式，在波点层上完美渲染“黑 ➔ 粉 ➔ 白 ➔ 粉 ➔ 黑”的渐变淡出 */
+  #nav::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(to bottom, 
+      rgba(26, 18, 30, 0.95) 0%, 
+      rgba(229, 153, 169, 0.45) 25%, 
+      rgba(255, 255, 255, 0.1) 50%, 
+      rgba(229, 153, 169, 0.45) 75%, 
+      rgba(26, 18, 30, 0.95) 100%
+    );
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 1;
+  }}
+  
   .nav-icon {{
+    position: relative;
+    z-index: 2;
     width: 42px; height: 42px;
     border-radius: 14px;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.4);
     color: #a66275;
     font-size: 19px;
     text-decoration: none;
@@ -1005,61 +1034,91 @@ def chat_page():
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
   }}
   .nav-icon:hover {{
-    background: rgba(255, 255, 255, 0.65);
+    background: rgba(255, 255, 255, 0.75);
     transform: translateY(-2px);
     color: #8c4b5d;
+    box-shadow: 0 4px 12px rgba(184, 118, 138, 0.15);
   }}
   .nav-icon:active {{ transform: translateY(0) scale(0.95); }}
 
-  /* ---- 中间玻璃舱对话区（移除高光边框） ---- */
+  /* ---- 2. 中间对话区 ---- */
   #main {{
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.16); /* 降低白度以增强通透感 */
+    background: rgba(255, 255, 255, 0.16); 
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
     border-radius: 28px;
-    border: none; /* 彻底去除边缘白色线框 */
+    border: none;
     box-shadow: 0 12px 40px rgba(184, 118, 138, 0.10);
     overflow: hidden;
   }}
+  
+  /* 黑色渐变 Header：左边深黑（带白色小波点）右边透明淡出，强烈黑白撞色 */
   #header {{
     padding: 20px 24px 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
     flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 14px;
+    background-image: 
+      radial-gradient(rgba(255, 255, 255, 0.12) 10%, transparent 11%),
+      linear-gradient(to right, #1a121e 0%, rgba(26, 18, 30, 0.9) 35%, rgba(255, 255, 255, 0) 100%);
+    background-size: 12px 12px, 100% 100%;
   }}
+  
   #header-avatar {{
     width: 44px; height: 44px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid rgba(255, 255, 255, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.85);
     box-shadow: 0 4px 12px rgba(184, 118, 138, 0.15);
   }}
-  #header-text {{ min-width: 0; }}
+  #header-text {{ 
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }}
+  
+  /* 做旧雕刻描边金属艺术字体效果 */
   #header .brand {{
     font-family: "Georgia", "Songti SC", serif;
     font-size: 26px;
-    font-style: italic;
-    letter-spacing: 3px;
-    color: #a66275;
-    font-weight: 500;
-    line-height: 1.2;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: #dfbac4; /* 玫瑰金底色 */
     text-transform: uppercase;
+    text-shadow: 
+      -1px -1px 0px rgba(255, 255, 255, 0.8), /* 左上高光线 */
+      1px 1px 0px rgba(0, 0, 0, 0.95),       /* 右下纯黑深切边 */
+      0 0 10px rgba(229, 153, 169, 0.3);
   }}
+  
   #header .sub {{
-    font-size: 11px;
-    color: #b08d98;
-    letter-spacing: 1px;
     margin-top: 3px;
     display: flex;
     align-items: center;
     gap: 6px;
+  }}
+  
+  /* 在线徽章：白透毛玻璃贴片背景 */
+  .status-badge {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 1px;
   }}
   .status-dot {{
     width: 6px; height: 6px;
@@ -1072,6 +1131,20 @@ def chat_page():
     background: #c3a1ad; 
     box-shadow: 0 0 8px #c3a1ad;
   }}
+  
+  /* 右上角手写感签名花体字 */
+  .signature {{
+    font-family: 'Dancing Script', 'Snell Roundhand', 'Brush Script MT', cursive;
+    font-size: 21px;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+    margin-left: auto; /* 靠右对齐 */
+    padding-right: 12px;
+    user-select: none;
+    transform: rotate(-1.5deg);
+  }}
+
+  /* 消息区背景：铺满清透圆润的白色波点纹理 */
   #messages {{
     flex: 1;
     overflow-y: auto;
@@ -1079,8 +1152,14 @@ def chat_page():
     display: flex;
     flex-direction: column;
     gap: 16px;
+    background-image: 
+      radial-gradient(rgba(255, 255, 255, 0.42) 12%, transparent 13%),
+      radial-gradient(rgba(255, 255, 255, 0.42) 12%, transparent 13%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
     -webkit-overflow-scrolling: touch;
   }}
+  
   .msg-row {{
     display: flex;
     align-items: flex-start;
@@ -1103,8 +1182,6 @@ def chat_page():
     border: 1.5px solid rgba(255, 255, 255, 0.85);
     box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
   }}
-  
-  /* 移除 width: 100%，恢复宽度自适应以修复时间戳右对齐问题 */
   .msg-col {{
     display: flex;
     flex-direction: column;
@@ -1126,15 +1203,15 @@ def chat_page():
     white-space: pre-wrap;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 调浅更温柔自然的粉色渐变 */
+    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 温柔的马卡龙粉渐变 */
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
     box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
   }}
   .bubble.charon {{
-    background: rgba(255, 255, 255, 0.55);
-    border: none; /* 完全移除 Charon 气泡边框 */
-    color: #6b5460; /* 恢复至原版优雅冷粉灰色 */
+    background: rgba(255, 255, 255, 0.7); /* 略微提高白度，使信息更易读 */
+    border: none; /* 移除气泡外边框 */
+    color: #6b5460; /* 恢复原版优雅粉灰色 */
     border-radius: 4px 18px 18px 18px; 
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }}
@@ -1152,26 +1229,31 @@ def chat_page():
   .msg-row:hover .msg-delete {{ opacity: 1; }}
   .msg-delete:hover {{ color: #cf7d90; }}
   
-  /* 时间戳控制行（移除 100% 宽度，利用父容器 align-items 自动吸附左右两侧，靠拢头像） */
   .msg-time-row {{
     display: flex;
     align-items: center;
     gap: 4px;
   }}
 
+  /* 输入栏：背景延伸消息区的波点，确保视觉连贯 */
   #input-bar {{
     display: flex;
     gap: 10px;
     padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    background-image: 
+      radial-gradient(rgba(255, 255, 255, 0.42) 12%, transparent 13%),
+      radial-gradient(rgba(255, 255, 255, 0.42) 12%, transparent 13%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
     flex-shrink: 0;
   }}
   #input-bar textarea {{
     flex: 1;
     resize: none;
     border-radius: 16px;
-    border: none; /* 移除外边框 */
-    background: rgba(255, 255, 255, 0.25); /* 提升透明玻璃质感 */
+    border: none;
+    background: rgba(255, 255, 255, 0.5); /* 柔白毛玻璃输入贴片 */
     color: #5a4550;
     padding: 11px 16px;
     font-size: 15px;
@@ -1179,15 +1261,16 @@ def chat_page():
     max-height: 100px;
     outline: none;
     transition: background 0.2s ease;
+    box-shadow: 0 2px 8px rgba(184, 118, 138, 0.04);
   }}
   #input-bar textarea:focus {{
-    background: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.75);
   }}
   #input-bar textarea::placeholder {{ color: #b08d98; }}
   #input-bar button {{
     border: none;
     border-radius: 16px;
-    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 同步调整发送按钮色 */
+    background: linear-gradient(135deg, #e599a9, #cf7d90);
     color: #fff;
     padding: 0 22px;
     font-size: 14px;
@@ -1210,7 +1293,7 @@ def chat_page():
     margin-top: 40px;
   }}
 
-  /* ---- 右侧玻璃舱状态面板（移除白线边框，增强透光度） ---- */
+  /* ---- 3. 右侧状态面板：铺满粉、白色波点纹理 ---- */
   #panel {{
     width: 210px;
     flex-shrink: 0;
@@ -1218,11 +1301,17 @@ def chat_page():
     flex-direction: column;
     gap: 16px;
     padding: 22px 18px;
-    background: rgba(255, 255, 255, 0.16); /* 调低白度以增强通透度 */
+    background-color: rgba(255, 255, 255, 0.16);
+    /* 铺满细腻轻柔的粉、白色交织波点纹理 */
+    background-image: 
+      radial-gradient(rgba(229, 153, 169, 0.16) 12%, transparent 13%),
+      radial-gradient(rgba(255, 255, 255, 0.25) 12%, transparent 13%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
     border-radius: 24px;
-    border: none; /* 彻底去除边缘白色线框 */
+    border: none;
     box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
     overflow-y: auto;
   }}
@@ -1242,29 +1331,29 @@ def chat_page():
   .stat-label {{
     font-size: 11px;
     color: #b08d98;
-    margin-bottom: 4px;
+    margin-bottom: 5px;
     display: flex;
     justify-content: space-between;
     align-items: baseline;
   }}
   
-  /* 情绪值进度条：完美复刻参考图（2px 极简扁平细直轨样式，无圆角） */
+  /* 进度条样式还原：极细扁平细直轨，无边框 */
   .stat-bar-track {{
     height: 2px; 
-    border-radius: 0; /* 彻底去除圆角，使其为凌厉纯平细轨 */
-    background: rgba(90, 69, 80, 0.1); 
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.35);
     overflow: hidden;
     width: 100%;
   }}
   .stat-bar-fill {{
     height: 100%;
     border-radius: 0;
-    background: #cf7d90; /* 纯色玫瑰粉指示条 */
+    background: #cf7d90;
     transition: width 0.4s ease;
   }}
   .stat-value {{
-    font-size: 11px;
-    color: #b08d98;
+    font-size: 12px;
+    color: #6e505f;
   }}
   .period-tag {{
     font-size: 11px;
@@ -1294,17 +1383,17 @@ def chat_page():
     line-height: 1.5;
   }}
   
-  /* “心里话”板块：完美恢复原版倾斜字体、颜色、气泡阴影与白透磨砂无框设计 */
+  /* “心里话”卡片：完美恢复原版倾斜字体、颜色（#7a5a65）以及白透磨砂无框设计 */
   .thought-card {{
     font-size: 12px;
-    color: #7a5a65; /* 彻底恢复原版深粉玫瑰灰字体颜色 */
+    color: #7a5a65; /* 恢复原版经典深玫瑰灰 */
     background: rgba(255, 255, 255, 0.45); 
-    border: none; /* 移除外边框 */
+    border: none;
     border-radius: 14px;
     padding: 12px 14px;
     line-height: 1.6;
-    font-style: italic; /* 彻底恢复原版经典优雅倾斜体 */
-    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05); /* 柔和阴影 */
+    font-style: italic; /* 经典优雅斜体 */
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }}
   .summary-card {{
     font-size: 11px;
@@ -1345,8 +1434,15 @@ def chat_page():
       <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
       <div id="header-text">
         <div class="brand">CHARON</div>
-        <div class="sub"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></div>
+        <div class="sub">
+          <span class="status-badge">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-label">加载中…</span>
+          </span>
+        </div>
       </div>
+      <!-- 右上角手写感花体字签名 -->
+      <div class="signature">@Seraphina</div>
     </div>
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
