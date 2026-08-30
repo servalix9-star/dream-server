@@ -806,7 +806,7 @@ def chat_delete():
     顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
-    不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
+    not绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -1085,7 +1085,7 @@ def chat_page():
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 纯黑到粉色(渐变底色拉高)的渐变条，增强右侧粉色饱和度，确保 signature 可见 */
+    /* 从纯黑到粉色的渐变条，增强右侧粉色饱和度，确保 signature 可见 */
     background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.95) 25%, #cf7d90 85%, #ffb3c1 100%);
   }}
   /* 增强白色波点颜色对比度 */
@@ -1359,18 +1359,12 @@ def chat_page():
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-image: 
-      radial-gradient(circle, rgba(229, 153, 171, 0.45) 15%, transparent 15.5%),
-      radial-gradient(circle, rgba(255, 255, 255, 0.95) 15%, transparent 15.5%);
-    background-size: 14px 14px; /* 比导航栏波点小，比原来大一点点 */
-    background-position: 0 0, 7px 7px;
     /* 垂直粉白粉(2:3:2)渐变效果 */
-    background-image: 
-      linear-gradient(to bottom, #ff5e84 0%, #ff5e84 28%, #ffffff 40%, #ffffff 60%, #ff5e84 72%, #ff5e84 100%);
+    background: linear-gradient(to bottom, #ff5e84 0%, #ff5e84 28%, #ffffff 40%, #ffffff 60%, #ff5e84 72%, #ff5e84 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 14px 14px;
+    -webkit-mask-size: 14px 14px; /* 右侧比导航栏稍微小一点，比原先大一点 */
     -webkit-mask-position: 0 0, 7px 7px;
     pointer-events: none;
     z-index: 0;
@@ -1778,107 +1772,4 @@ async function sendMessage() {{
   messagesEl.appendChild(userRow);
   const pendingRow = renderMsgRow('charon', '…', nowIso, true);
   messagesEl.appendChild(pendingRow);
-  scrollToBottom();
-
-  const pendingBubble = pendingRow.querySelector('.bubble');
-
-  try {{
-    const res = await fetch(apiUrl('/api/chat-send'), {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{ message: text }})
-    }});
-    const data = await res.json();
-    if (data.ok) {{
-      pendingBubble.textContent = data.reply;
-      pendingBubble.classList.remove('pending');
-      
-      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
-      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
-      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
-      
-      // 动态将渲染出来的泡泡重置并正确绑定事件
-      const newUserCol = userRow.querySelector('.msg-col');
-      const newCharonCol = pendingRow.querySelector('.msg-col');
-      
-      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
-      
-    }} else {{
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
-    }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+  scr
