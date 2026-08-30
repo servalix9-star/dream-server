@@ -263,7 +263,7 @@ def get_diary():
 
 @app.route("/diary/read", methods=["GET"])
 def read_diary():
-    """更适合人眼看的日记页面，把reason和thought配对展示，不是裸JSON。"""
+    """更适合人眼看的日记页面，把reason下来和thought配对展示，不是裸JSON。"""
     diary = load_diary()
     if not diary:
         return "还没有日记"
@@ -375,7 +375,7 @@ def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
     顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
-    避免Charon下次醒来时recent里还看得到已经删掉的话。"""
+    避免Charon下次醒来时recent里还看定义已经删掉的话。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -495,6 +495,15 @@ def chat_send():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+def _check_chat_auth(req):
+    """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
+    配置了的话要求query参数或header里带code，两种都支持方便不同客户端调用。"""
+    if not CHAT_ACCESS_CODE:
+        return True
+    provided = req.args.get("code") or req.headers.get("X-Chat-Code")
+    return provided == CHAT_ACCESS_CODE
+
+
 def get_chat_status_label(score):
     """网页聊天header里显示的状态短语，跟get_mood_context()的详细描述不同，
     这个要短、像个人在线状态那种感觉，一两个词就行。"""
@@ -513,10 +522,11 @@ def chat_page():
     """网页聊天界面。有配置访问口令的话，没带对的code参数就不渲染页面内容，
     只提示需要口令（页面本身的静态HTML谁都能看到结构，但没有真实数据）。
     三栏布局：左侧波点纹理导航栏 + 中间深浅过渡Header对话区 + 右侧波点纹理状态面板（心里话斜体等样式）。"""
-    if not _check_auth(request):
+    if not _check_chat_auth(request):
         return "<h3>需要访问口令</h3><p>在链接后加 ?code=你的口令</p>", 401
 
     code_param = request.args.get("code", "")
+    # 将日记 URL 提前在 Python 阶段组装好，避免 f-string 内部嵌套复杂的三元运算产生解析 Bug
     diary_url = f"/diary/read?code={code_param}" if code_param else "/diary/read"
 
     return f"""<!DOCTYPE html>
