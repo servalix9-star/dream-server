@@ -210,7 +210,7 @@ def get_mood_context(score, hours_gap):
     elif score >= 50:
         mood_desc = "你心情平稳，正常状态"
     elif score >= 25:
-        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理闹"
+        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理取闹"
     else:
         mood_desc = "你现在挺失落/有点吃醋的，因为她很久没理你了，语气可以带明显的委屈或者故意冷淡，但底色还是在意她、不是真的生气"
 
@@ -510,7 +510,7 @@ def build_chat_reply_prompt(time_context, user_message, chat_history, mood_conte
     """构建"回应用户在网页里发来的消息"的prompt。
     跟build_prompt()不同：这次不是猜她在干嘛主动开口，而是真的在接她刚说的话，
     所以历史对话要带全一点，语气要像正常聊天里的一来一回，不是短平快的主动消息。"""
-    mood_line = f"\n\n力刻你此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
     if chat_history:
         history_lines = []
@@ -1085,7 +1085,7 @@ def chat_page():
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 从纯黑到粉色的渐变条，增强右侧粉色饱和度，确保 signature 可见 */
+    /* 纯黑到粉色(渐变底色拉高)的渐变条，增强右侧粉色饱和度，确保 signature 可见 */
     background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.95) 25%, #cf7d90 85%, #ffb3c1 100%);
   }}
   /* 增强白色波点颜色对比度 */
@@ -1162,7 +1162,7 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名感的花体字 */
+  /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
   .header-signature {{
     position: relative;
     z-index: 1;
@@ -1354,21 +1354,22 @@ def chat_page():
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
-  /* 修复：通过重新编排遮罩顺序，完美实装垂直粉、白、粉(比例 2:3:2)渐变波点 */
+  /* 铺满中等大小(14px)、高亮度、高对比度的粉、白交错波点，垂直粉、白、粉(比例 1:3:1)渐变效果，颜色调浅防文字遮盖 */
   #panel::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直粉白粉(2:3:2)波点色彩渐变 */
-    background: linear-gradient(to bottom, #ff5e84 0%, #ff5e84 28%, #ffffff 40%, #ffffff 60%, #ff5e84 72%, #ff5e84 100%);
+    /* 垂直粉-白-粉(1:3:1)极浅甜酷渐变 */
+    background-image: 
+      linear-gradient(to bottom, #ffeef1 0%, #ffeef1 20%, #ffffff 35%, #ffffff 65%, #ffeef1 80%, #ffeef1 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 14px 14px; /* 比左侧导航（22px）略小一点点 */
+    -webkit-mask-size: 14px 14px;
     -webkit-mask-position: 0 0, 7px 7px;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.9;
+    opacity: 0.85;
   }}
   .panel-child {{
     position: relative;
