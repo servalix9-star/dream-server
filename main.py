@@ -210,7 +210,7 @@ def get_mood_context(score, hours_gap):
     elif score >= 50:
         mood_desc = "你心情平稳，正常状态"
     elif score >= 25:
-        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理取闹"
+        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理闹"
     else:
         mood_desc = "你现在挺失落/有点吃醋的，因为她很久没理你了，语气可以带明显的委屈或者故意冷淡，但底色还是在意她、不是真的生气"
 
@@ -263,7 +263,7 @@ def get_diary():
 
 @app.route("/diary/read", methods=["GET"])
 def read_diary():
-    """更适合人眼看的日记页面，把reasone和thought配对展示，不是裸JSON。"""
+    """更适合人眼看的日记页面，把reason和thought配对展示，不是裸JSON。"""
     diary = load_diary()
     if not diary:
         return "还没有日记"
@@ -510,7 +510,7 @@ def build_chat_reply_prompt(time_context, user_message, chat_history, mood_conte
     """构建"回应用户在网页里发来的消息"的prompt。
     跟build_prompt()不同：这次不是猜她在干嘛主动开口，而是真的在接她刚说的话，
     所以历史对话要带全一点，语气要像正常聊天里的一来一回，不是短平快的主动消息。"""
-    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n力刻你此刻的状态：{mood_context}" if mood_context else ""
 
     if chat_history:
         history_lines = []
@@ -806,7 +806,7 @@ def chat_delete():
     顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
-    not绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
+    不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -1065,7 +1065,7 @@ def chat_page():
     left: 0; right: 0; bottom: 0;
     height: 110px; /* 加高波点带 */
     /* 横向渐变波点 */
-    background: linear-gradient(to right, #ffffff 0%, #ffffff 12%, #c0b8c0 25%, #000000 40%, #000000 60%, #c0b8c0 75%, #ffffff 88%, #ffffff 100%);
+    background: linear-gradient(to right, #ffffff 0%, #ffffff 11%, #c0b8c0 33%, #000000 45%, #000000 55%, #c0b8c0 67%, #ffffff 89%, #ffffff 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
@@ -1162,7 +1162,7 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
+  /* 顶部右下角签名感的花体字 */
   .header-signature {{
     position: relative;
     z-index: 1;
@@ -1354,17 +1354,17 @@ def chat_page():
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
-  /* 铺满中等大小(14px)、高亮度、高对比度的粉、白交错波点，垂直粉、白、粉(比例 2:3:2)渐变效果 */
+  /* 修复：通过重新编排遮罩顺序，完美实装垂直粉、白、粉(比例 2:3:2)渐变波点 */
   #panel::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直粉白粉(2:3:2)渐变效果 */
+    /* 垂直粉白粉(2:3:2)波点色彩渐变 */
     background: linear-gradient(to bottom, #ff5e84 0%, #ff5e84 28%, #ffffff 40%, #ffffff 60%, #ff5e84 72%, #ff5e84 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 14px 14px; /* 右侧比导航栏稍微小一点，比原先大一点 */
+    -webkit-mask-size: 14px 14px; /* 比左侧导航（22px）略小一点点 */
     -webkit-mask-position: 0 0, 7px 7px;
     pointer-events: none;
     z-index: 0;
@@ -1772,4 +1772,107 @@ async function sendMessage() {{
   messagesEl.appendChild(userRow);
   const pendingRow = renderMsgRow('charon', '…', nowIso, true);
   messagesEl.appendChild(pendingRow);
-  scr
+  scrollToBottom();
+
+  const pendingBubble = pendingRow.querySelector('.bubble');
+
+  try {{
+    const res = await fetch(apiUrl('/api/chat-send'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ message: text }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      pendingBubble.textContent = data.reply;
+      pendingBubble.classList.remove('pending');
+      
+      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
+      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
+      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      
+      // 动态将渲染出来的泡泡重置并正确绑定事件
+      const newUserCol = userRow.querySelector('.msg-col');
+      const newCharonCol = pendingRow.querySelector('.msg-col');
+      
+      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      
+    }} else {{
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+loadStatus();
+</script>
+</body>
+</html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
