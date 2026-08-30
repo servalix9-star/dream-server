@@ -793,7 +793,7 @@ def chat_status():
 @app.route("/api/chat-messages", methods=["GET"])
 def get_chat_messages():
     """拉取网页聊天的历史记录，供前端渲染。"""
-    if not _check_chat_auth(request):
+    if not _check_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     history = load_chat_history()
     return jsonify({"ok": True, "messages": history[-50:]})
@@ -988,7 +988,7 @@ def chat_page():
     align-items: center;
     gap: 16px;
     padding: 24px 0;
-    background: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 238, 241, 0.6); /* 马卡龙蜜桃粉色底色 */
     border-radius: 24px;
     position: relative;
     overflow: hidden;
@@ -1014,7 +1014,7 @@ def chat_page():
     position: relative;
     z-index: 1; /* 确保不被波点底层遮挡，保持可点 */
     width: 42px; height: 42px;
-    border-radius: 14px;
+    border-radius: 50%; /* 圆形按钮 */
     display: flex; align-items: center; justify-content: center;
     background: rgba(255, 255, 255, 0.45);
     color: #a66275;
@@ -1085,7 +1085,7 @@ def chat_page():
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 从纯黑由浅粉渐透明，强化黑白对比 */
+    /* 纯黑到浅粉色的渐变条 */
     background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.9) 35%, rgba(253, 245, 246, 0) 100%);
   }}
   /* 酷黑渐变条左侧点缀的浅色小波点 */
@@ -1110,8 +1110,8 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid #000000; /* 高对比度纯黑外圆环 */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); /* 强化投影 */
+    border: 2.5px solid #ffffff; /* 恢复白色发光圆环 */
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.6); /* 恢复发光效果 */
   }}
   #header-text {{ 
     position: relative;
@@ -1162,18 +1162,17 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名感的花体字 */
+  /* 顶部右下角签名感的花体字 - 移除倾斜角度防止歪斜 */
   .header-signature {{
     position: relative;
     z-index: 1;
     font-family: "Dancing Script", "Brush Script MT", cursive;
-    font-size: 22px; /* 放大签名体 */
+    font-size: 22px; /* 签名体 */
     color: rgba(255, 255, 255, 0.92);
     margin-left: auto; /* 靠右对齐 */
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
     user-select: none;
     pointer-events: none;
-    transform: rotate(-3deg); /* 微倾斜，显得随性且具有个人印记 */
   }}
 
   #messages {{
@@ -1297,22 +1296,28 @@ def chat_page():
     position: relative;
     z-index: 1;
   }}
+  
+  /* 增加高对比度高透光毛玻璃输入框，掩盖底部的密集黑粉波点 */
   #input-bar textarea {{
     flex: 1;
     resize: none;
     border-radius: 16px;
-    border: none;
-    background: rgba(255, 255, 255, 0.25);
+    border: 1.5px solid rgba(255, 255, 255, 0.6); /* 立体透明圆框 */
+    background: rgba(255, 255, 255, 0.75); /* 高浓度白色遮罩 */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     color: #5a4550;
     padding: 11px 16px;
     font-size: 15px;
     font-family: inherit;
     max-height: 100px;
     outline: none;
-    transition: background 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    box-shadow: 0 4px 12px rgba(184, 118, 138, 0.05);
   }}
   #input-bar textarea:focus {{
-    background: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(229, 153, 169, 0.8);
   }}
   #input-bar textarea::placeholder {{ color: #b08d98; }}
   #input-bar button {{
@@ -1340,7 +1345,7 @@ def chat_page():
     flex-direction: column;
     gap: 16px;
     padding: 22px 18px;
-    background: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 235, 240, 0.55); /* 提升粉嫩底色 */
     border-radius: 24px;
     position: relative;
     overflow: hidden;
@@ -1349,19 +1354,18 @@ def chat_page():
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
-  /* 铺满细腻、清晰且高亮度的粉白交错波点（大幅增加清晰对比度） */
+  /* 铺满细腻、清晰且高对比度的高亮白波点和粉波点 */
   #panel::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background-image: 
-      radial-gradient(rgba(229, 153, 169, 0.24) 15%, transparent 15.5%),
-      radial-gradient(rgba(255, 255, 255, 0.7) 15%, transparent 15.5%);
+      radial-gradient(circle, rgba(229, 153, 171, 0.45) 15%, transparent 15.5%),
+      radial-gradient(circle, rgba(255, 255, 255, 0.95) 15%, transparent 15.5%); /* 大幅提升白波点可见度 */
     background-size: 11px 11px;
     background-position: 0 0, 5.5px 5.5px;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.9; /* 大幅增加波点对比度 */
   }}
   .panel-child {{
     position: relative;
@@ -1432,7 +1436,7 @@ def chat_page():
     line-height: 1.5;
   }}
   
-  /* “心里话”板块：完美恢复原版经典斜体字、颜色 */
+  /* “心里话”板块：恢复经典斜体与原版文字色 */
   .thought-card {{
     font-size: 12px;
     color: #7a5a65; /* 彻底恢复原版深玫瑰灰 */
