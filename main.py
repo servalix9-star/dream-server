@@ -964,8 +964,8 @@ def chat_page():
   * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
   html, body {{
     margin: 0; padding: 0; height: 100%;
-    /* 网格径向渐变，完美模拟 NOCTURNE 原生天幕暮粉至暗夜熏紫的色彩层次 */
-    background: radial-gradient(circle at 10% 20%, #fbeff2 0%, #edd3da 30%, #dfbfca 65%, #cbb1bd 100%);
+    /* 网格径向渐变，调浅调亮为晨曦迷雾般的柔和马卡龙粉 */
+    background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
     color: #5a4550; /* 恢复至初始雅致深紫灰 */
@@ -1103,11 +1103,12 @@ def chat_page():
     border: 1.5px solid rgba(255, 255, 255, 0.85);
     box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
   }}
+  
+  /* 移除 width: 100%，恢复宽度自适应以修复时间戳右对齐问题 */
   .msg-col {{
     display: flex;
     flex-direction: column;
     min-width: 0;
-    width: 100%; /* 为宽度和定位打好基础 */
   }}
   .msg-row.user .msg-col {{ align-items: flex-end; }}
   .msg-row.charon .msg-col {{ align-items: flex-start; }}
@@ -1125,15 +1126,15 @@ def chat_page():
     white-space: pre-wrap;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, #d38195, #b86076);
+    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 调浅更温柔自然的粉色渐变 */
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.25);
+    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
   }}
   .bubble.charon {{
     background: rgba(255, 255, 255, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    color: #6b5460; /* 恢复至原版优雅冷粉色 */
+    border: none; /* 完全移除 Charon 气泡边框 */
+    color: #6b5460; /* 恢复至原版优雅冷粉灰色 */
     border-radius: 4px 18px 18px 18px; 
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }}
@@ -1149,20 +1150,13 @@ def chat_page():
     transition: opacity 0.15s ease;
   }}
   .msg-row:hover .msg-delete {{ opacity: 1; }}
-  .msg-delete:hover {{ color: #b86076; }}
+  .msg-delete:hover {{ color: #cf7d90; }}
   
-  /* 时间戳控制行：实现左消息左靠，右消息右靠 */
+  /* 时间戳控制行（移除 100% 宽度，利用父容器 align-items 自动吸附左右两侧，靠拢头像） */
   .msg-time-row {{
     display: flex;
     align-items: center;
     gap: 4px;
-    width: 100%;
-  }}
-  .msg-row.user .msg-time-row {{
-    justify-content: flex-end; /* 右侧用户消息时间戳完美居右，紧靠头像 */
-  }}
-  .msg-row.charon .msg-time-row {{
-    justify-content: flex-start; /* 左侧 Charon 消息时间戳完美居左，紧靠头像 */
   }}
 
   #input-bar {{
@@ -1193,17 +1187,17 @@ def chat_page():
   #input-bar button {{
     border: none;
     border-radius: 16px;
-    background: linear-gradient(135deg, #d38195, #b86076);
+    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 同步调整发送按钮色 */
     color: #fff;
     padding: 0 22px;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.3);
+    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.2);
     transition: all 0.2s ease;
   }}
   #input-bar button:hover {{
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.4);
+    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.3);
   }}
   #input-bar button:active {{
     transform: translateY(0);
@@ -1244,31 +1238,33 @@ def chat_page():
     text-transform: uppercase;
     font-weight: bold;
   }}
-  .stat-block {{ margin-bottom: 6px; }}
+  .stat-block {{ margin-bottom: 12px; }}
   .stat-label {{
     font-size: 11px;
     color: #b08d98;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
   }}
   
-  /* 情绪值进度条：调整高度为 4px 细轨道质感，模拟 Nocturne 的极简风格 */
+  /* 情绪值进度条：完美复刻参考图（2px 极简扁平细直轨样式，无圆角） */
   .stat-bar-track {{
-    height: 4px; 
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.25);
+    height: 2px; 
+    border-radius: 0; /* 彻底去除圆角，使其为凌厉纯平细轨 */
+    background: rgba(90, 69, 80, 0.1); 
     overflow: hidden;
+    width: 100%;
   }}
   .stat-bar-fill {{
     height: 100%;
-    border-radius: 2px;
-    background: linear-gradient(90deg, #f0b8c6, #b86076);
+    border-radius: 0;
+    background: #cf7d90; /* 纯色玫瑰粉指示条 */
     transition: width 0.4s ease;
   }}
   .stat-value {{
-    font-size: 12px;
-    color: #6e505f;
+    font-size: 11px;
+    color: #b08d98;
   }}
   .period-tag {{
     font-size: 11px;
@@ -1298,15 +1294,16 @@ def chat_page():
     line-height: 1.5;
   }}
   
-  /* “心里话”板块：重新定制圆润白卡片，增强磨砂玻璃感 */
+  /* “心里话”板块：完美恢复原版倾斜字体、颜色、气泡阴影与白透磨砂无框设计 */
   .thought-card {{
-    font-size: 12.5px;
-    color: #5c4451;
-    background: rgba(255, 255, 255, 0.45); /* 提高透明度与融合度 */
+    font-size: 12px;
+    color: #7a5a65; /* 彻底恢复原版深粉玫瑰灰字体颜色 */
+    background: rgba(255, 255, 255, 0.45); 
     border: none; /* 移除外边框 */
     border-radius: 14px;
     padding: 12px 14px;
     line-height: 1.6;
+    font-style: italic; /* 彻底恢复原版经典优雅倾斜体 */
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05); /* 柔和阴影 */
   }}
   .summary-card {{
