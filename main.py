@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -1037,7 +1037,7 @@ def chat_page():
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.12); /* 调整容器不透明度至0.12，释放极致磨砂晶莹质感 */
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
     border-radius: 28px;
@@ -1191,6 +1191,8 @@ def chat_page():
     border: 1.5px solid rgba(255, 255, 255, 0.85);
     box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
   }}
+  
+  /* 彻底移除各处 100% 宽度，利用原生 Flex 自动对齐机制，让时间戳完美、对称靠向两侧头像 */
   .msg-col {{
     display: flex;
     flex-direction: column;
@@ -1204,7 +1206,6 @@ def chat_page():
     margin: 4px 4px 0;
   }}
   
-  /* 时间戳位置优化 */
   .msg-time-row {{
     display: flex;
     align-items: center;
@@ -1222,8 +1223,8 @@ def chat_page():
     cursor: pointer;
   }}
   .bubble.user {{
-    /* 彻底换成亮粉色半透明毛玻璃特效 */
-    background: rgba(255, 179, 193, 0.8); 
+    /* 彻底换成亮粉色半透明毛玻璃特效，降低不透明度从0.8降至0.55，释放高透冰爽感 */
+    background: rgba(255, 179, 193, 0.55); 
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     color: #ffffff;
@@ -1231,8 +1232,8 @@ def chat_page():
     box-shadow: 0 4px 15px rgba(184, 96, 118, 0.1);
   }}
   .bubble.charon {{
-    /* 进一步增加透明度从 0.55 降至 0.38 */
-    background: rgba(255, 255, 255, 0.38); 
+    /* 进一步增加透明度从 0.38 降至 0.22 */
+    background: rgba(255, 255, 255, 0.22); 
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
     color: #6b5460;
@@ -1332,20 +1333,24 @@ def chat_page():
   #input-bar button {{
     position: relative;
     z-index: 1;
-    border: none;
-    border-radius: 16px;
+    border: 2px solid #000000; /* 高对比度纯黑圆圈线 */
+    border-radius: 16px; /* 形状保持不变 */
     /* 发送键改为上至下 亮粉色#ffb3c1 渐变至 暖粉色#cf7d90 */
     background: linear-gradient(to bottom, #ffb3c1 0%, #cf7d90 100%);
     color: #fff;
     padding: 0 22px;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.2);
-    transition: all 0.2s ease;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* 实体投影 */
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
   }}
   #input-bar button:hover {{
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.3);
+    background: rgba(255, 179, 193, 0.9);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+  }}
+  #input-bar button:active {{
+    transform: translateY(0) scale(0.95);
   }}
   #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
 
@@ -1357,7 +1362,7 @@ def chat_page():
     flex-direction: column;
     gap: 16px;
     padding: 22px 18px;
-    background: rgba(255, 235, 240, 0.55); /* 提升粉嫩底色 */
+    background: rgba(255, 235, 240, 0.12); /* 调整容器不透明度至0.12，释放极致磨砂晶莹质感 */
     border-radius: 24px;
     position: relative;
     overflow: hidden;
@@ -1371,7 +1376,7 @@ def chat_page():
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直极浅粉-白-粉(1:3:1)渐变，比例完美还原 */
+    /* 垂直粉-白-粉(1:3:1)极浅甜酷渐变 */
     background-image: 
       linear-gradient(to bottom, #ffeef1 0%, #ffeef1 20%, #ffffff 35%, #ffffff 65%, #ffeef1 80%, #ffeef1 100%);
     -webkit-mask-image: 
