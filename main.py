@@ -474,7 +474,7 @@ def send_bark(title, content, icon=None, sound=None):
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
-    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n快此刻的状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -1222,22 +1222,22 @@ def chat_page():
     cursor: pointer;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, rgba(229, 153, 169, 0.75), rgba(207, 125, 144, 0.75)); /* 磨砂粉色玻璃毛玻璃特效 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1.5px solid rgba(255, 255, 255, 0.4); /* 玻璃反光边缘 */
+    background: linear-gradient(135deg, rgba(229, 153, 169, 0.55), rgba(207, 125, 144, 0.55)); /* user气泡改成半透明效果 */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.15);
+    border: none;
+    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.12);
   }}
   .bubble.charon {{
-    background: rgba(255, 255, 255, 0.3); /* 降低白度，增加透明度 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.2); /* 淡淡的高光反射 */
+    background: rgba(255, 255, 255, 0.28); /* charon气泡增加透明度（从0.55下调至0.28） */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: none; /* 彻底取消气泡边框 */
     color: #6b5460;
     border-radius: 4px 18px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.03);
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }}
   .bubble.pending {{ opacity: 0.5; }}
 
@@ -1365,14 +1365,13 @@ def chat_page():
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
-  /* 铺满中等大小(14px)、高亮度、高对比度的粉、白交错波点，垂直粉、白、粉(比例 1:3:1)渐变效果，颜色调浅防文字遮盖 */
+  /* 铺满中等大小(14px)、高亮度、高对比度的粉、白交错波点，垂直粉、白、粉(比例 1:3:1)渐变效果，采用极浅过渡防遮盖文字 */
   #panel::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直粉-白-粉(1:3:1)极浅甜酷渐变 */
-    background-image: 
-      linear-gradient(to bottom, #ffeef1 0%, #ffeef1 20%, #ffffff 35%, #ffffff 65%, #ffeef1 80%, #ffeef1 100%);
+    /* 垂直粉-白-粉(1:3:1)极浅甜酷渐变，使用极浅马卡龙粉 #ffeef1 保证文字完全可读 */
+    background: linear-gradient(to bottom, #ffeef1 0%, #ffeef1 20%, #ffffff 35%, #ffffff 65%, #ffeef1 80%, #ffeef1 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
@@ -1657,6 +1656,7 @@ function showWeChatMenu(targetBubble, msgId, textContent) {{
   contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
 }}
 
+// 隐藏微信撤回菜单
 function hideWeChatMenu() {{
   contextMenu.style.display = 'none';
 }}
@@ -1805,86 +1805,4 @@ async function sendMessage() {{
       
       // 动态将渲染出来的泡泡重置并正确绑定事件
       const newUserCol = userRow.querySelector('.msg-col');
-      const newCharonCol = pendingRow.querySelector('.msg-col');
-      
-      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
-      
-    }} else {{
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
-    }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+      const newCharonCol = pendi
