@@ -474,7 +474,7 @@ def send_bark(title, content, icon=None, sound=None):
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
-    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n幕后状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -994,18 +994,18 @@ def chat_page():
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }}
-  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大到 22px 并且调整色比 */
+  /* 纯 CSS 垂直多色渐变遮罩波点 - 进一步放大到 24px 并精准控制色比 */
   #nav::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直黑-灰-白-灰-黑渐变 (比例 2:1:3:2:2) */
+    /* 垂直黑-灰-白-灰-黑渐变 (比例 2:1:3:2:2)，纯黑大波点 */
     background: linear-gradient(to bottom, #000000 0%, #000000 20%, #c0b8c0 30%, #ffffff 40%, #ffffff 60%, #c0b8c0 80%, #000000 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 22px 22px; /* 进一步放大波点 */
-    -webkit-mask-position: 0 0, 11px 11px;
+    -webkit-mask-size: 24px 24px; /* 进一步放大波点，增强视觉冲击 */
+    -webkit-mask-position: 0 0, 12px 12px;
     pointer-events: none;
     z-index: 0;
     opacity: 0.85;
@@ -1058,19 +1058,20 @@ def chat_page():
     pointer-events: none;
     z-index: 0;
   }}
-  /* 底部高浓度波点带：大小与左栏一致(22px)，从左到右白、灰、黑、灰、白 (比例 1:2:3:2:1) */
+  /* 底部高浓度波点带：大小与左栏一致(24px)，横向渐变色比白、灰、黑、灰、白 (比例 1:2:3:2:1) */
   #main::after {{
     content: '';
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    height: 110px; /* 加高波点带 */
+    height: 135px; /* 加高至 135px，使烟熏羽化渐变空间更充裕 */
     /* 横向渐变波点 */
     background: linear-gradient(to right, #ffffff 0%, #ffffff 11%, #c0b8c0 33%, #000000 45%, #000000 55%, #c0b8c0 67%, #ffffff 89%, #ffffff 100%);
     -webkit-mask-image: 
+      linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%), /* 向上柔和羽化褪色 */
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 22px 22px; /* 和左侧导航波点图案一样大小 */
-    -webkit-mask-position: 0 0, 11px 11px;
+    -webkit-mask-size: 100% 100%, 24px 24px, 24px 24px; /* 和左侧导航大波点图案一样大小 */
+    -webkit-mask-position: 0 0, 0 0, 12px 12px;
     pointer-events: none;
     z-index: 0;
     opacity: 0.85; /* 加深显色 */
@@ -1085,8 +1086,8 @@ def chat_page():
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 纯黑到粉色(渐变底色拉高)的渐变条，增强右侧粉色饱和度，确保 signature 可见 */
-    background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.95) 25%, #cf7d90 85%, #ffb3c1 100%);
+    /* 黑色在左侧延伸至18%，随后向粉色（非透明）进行有层次的平滑羽化，增强右侧粉色饱和度 */
+    background: linear-gradient(to right, #000000 0%, #000000 18%, rgba(0, 0, 0, 0.95) 30%, #cf7d90 85%, #ffb3c1 100%);
   }}
   /* 增强白色波点颜色对比度 */
   #header::before {{
@@ -1263,6 +1264,7 @@ def chat_page():
     -webkit-backdrop-filter: blur(10px);
     border-radius: 8px;
     padding: 6px 4px;
+    border: 1px solid rgba(229, 153, 169, 0.4); /* 发光悬浮边框，契合暗黑赛博感 */
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
     animation: menu-pop 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
   }}
@@ -1354,7 +1356,7 @@ def chat_page():
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
-  /* 铺满中等大小(14px)、高亮度、高对比度的粉、白交错波点，垂直粉、白、粉(比例 1:3:1)渐变效果，颜色调浅防文字遮盖 */
+  /* 铺满中等大小(14px)、高亮度、高对比度的粉、白交错波点，垂直极浅粉-白-极浅粉 (1:3:1) 渐变，绝不遮蔽前台文字 */
   #panel::before {{
     content: '';
     position: absolute;
