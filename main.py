@@ -957,174 +957,216 @@ def chat_page():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Charon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
 <style>
   * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
   html, body {{
     margin: 0; padding: 0; height: 100%;
-    background: #f3dde4;
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550;
+    /* 网格径向渐变，调浅调亮为晨曦迷雾般的柔和马卡龙粉 */
+    background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
+    background-attachment: fixed;
+    font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    color: #5a4550; /* 恢复至初始雅致深紫灰 */
   }}
   #app {{
     display: flex;
     height: 100vh; height: 100dvh;
-    padding: 10px;
-    gap: 10px;
-  }}
-
-  /* ---- 波点纹理基础类：黑→莓紫→白→莓紫→黑 竖直对称渐变（用于左侧导航栏） ---- */
-  .dots-vertical {{
+    padding: 14px;
+    gap: 14px;
     position: relative;
-    background-image: radial-gradient(circle, rgba(255,255,255,0.55) 1.1px, transparent 1.1px);
-    background-size: 9px 9px;
-    background-position: 0 0;
-  }}
-  .dots-vertical::before {{
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg,
-      #1a1418 0%, #7a3d54 22%, #e8b8cc 42%,
-      #fbeef3 50%, #e8b8cc 58%, #7a3d54 78%, #1a1418 100%);
-    z-index: -1;
-    border-radius: inherit;
+    z-index: 2;
   }}
 
-  /* 水平版：黑（带浅点）从左向右渐变透明，用于header */
-  .dots-horizontal {{
-    position: relative;
-    background-image: radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1px);
-    background-size: 8px 8px;
-  }}
-  .dots-horizontal::before {{
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(90deg, #0d0a0d 0%, #241a20 40%, rgba(36,26,32,0.35) 75%, transparent 100%);
-    z-index: -1;
-  }}
-
-  /* 面板用：粉白细波点，铺在浅色底上 */
-  .dots-panel {{
-    position: relative;
-    background-image: radial-gradient(circle, rgba(150,80,105,0.3) 1px, transparent 1px);
-    background-size: 9px 9px;
-  }}
-  .dots-panel::before {{
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(160deg, #fdf3f0, #f6d9e3);
-    z-index: -1;
-    border-radius: inherit;
-  }}
-
-  /* ---- 左侧导航栏 ---- */
+  /* ---- 左侧波点玻璃舱导航栏 ---- */
   #nav {{
-    width: 56px;
+    width: 60px;
     flex-shrink: 0;
-    border-radius: 22px;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
-    padding: 18px 0;
-    box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+    gap: 16px;
+    padding: 24px 0;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
+  }}
+  /* 纯 CSS 垂直多色渐变遮罩波点 */
+  #nav::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    /* 垂直黑-粉-白-粉-黑经典甜酷渐变 */
+    background: linear-gradient(to bottom, #1c1218 0%, #e599a9 30%, #ffffff 50%, #e599a9 70%, #1c1218 100%);
+    -webkit-mask-image: 
+      radial-gradient(circle, #000 15%, transparent 15.5%),
+      radial-gradient(circle, #000 15%, transparent 15.5%);
+    -webkit-mask-size: 11px 11px;
+    -webkit-mask-position: 0 0, 5.5px 5.5px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.85;
   }}
   .nav-icon {{
-    width: 38px; height: 38px;
-    border-radius: 50%;
+    position: relative;
+    z-index: 1; /* 确保不被波点底层遮挡，保持可点 */
+    width: 42px; height: 42px;
+    border-radius: 14px;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(255,255,255,0.88);
-    color: #a85d78;
-    font-size: 16px;
+    background: rgba(255, 255, 255, 0.45);
+    color: #a66275;
+    font-size: 19px;
     text-decoration: none;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    transition: transform 0.15s ease;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 2px 8px rgba(184, 118, 138, 0.05);
   }}
-  .nav-icon:active {{ transform: scale(0.92); }}
+  .nav-icon:hover {{
+    background: rgba(255, 255, 255, 0.8);
+    transform: translateY(-2px);
+    color: #8c4b5d;
+  }}
+  .nav-icon:active {{ transform: translateY(0) scale(0.95); }}
 
-  /* ---- 中间对话区 ---- */
+  /* ---- 中间玻璃舱对话区 ---- */
   #main {{
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(160deg, #fdf3f0, #f8e5eb);
-    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border-radius: 28px;
+    box-shadow: 0 12px 40px rgba(184, 118, 138, 0.10);
     overflow: hidden;
-    box-shadow: 0 12px 40px rgba(150,90,110,0.18);
-  }}
-  #header {{
     position: relative;
-    height: 86px;
+  }}
+  /* 底部渐变波点纹理 */
+  #main::after {{
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 70px;
+    background: linear-gradient(to top, rgba(229, 153, 169, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+    -webkit-mask-image: 
+      radial-gradient(circle, #000 15%, transparent 15.5%),
+      radial-gradient(circle, #000 15%, transparent 15.5%);
+    -webkit-mask-size: 11px 11px;
+    -webkit-mask-position: 0 0, 5.5px 5.5px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.55;
+  }}
+  
+  /* ---- 酷黑渐变 Header ---- */
+  #header {{
+    padding: 20px 24px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 0 20px;
-    flex-shrink: 0;
-    overflow: hidden;
+    position: relative;
+    /* 黑色从左至右由深渐透明 */
+    background: linear-gradient(to right, #1a121e 0%, rgba(26, 18, 30, 0.8) 40%, rgba(255, 255, 255, 0) 100%);
   }}
-  .header-content {{ position: relative; display: flex; align-items: center; gap: 14px; z-index: 1; }}
+  /* 酷黑渐变条左侧点缀的浅色小波点 */
+  #header::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 45%;
+    background-image:
+      radial-gradient(rgba(255, 255, 255, 0.16) 15%, transparent 15.5%),
+      radial-gradient(rgba(255, 255, 255, 0.16) 15%, transparent 15.5%);
+    background-size: 8px 8px;
+    background-position: 0 0, 4px 4px;
+    -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+    pointer-events: none;
+    z-index: 0;
+  }}
   #header-avatar {{
+    position: relative;
+    z-index: 1;
     width: 44px; height: 44px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid rgba(255,255,255,0.3);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 12px rgba(184, 118, 138, 0.15);
   }}
-  #header-text {{ min-width: 0; position: relative; z-index: 1; }}
+  #header-text {{ 
+    position: relative;
+    z-index: 1;
+    min-width: 0; 
+  }}
   #header .brand {{
-    font-family: Georgia, "Songti SC", serif;
-    font-size: 27px;
+    font-family: "Georgia", "Songti SC", serif;
+    font-size: 26px;
+    font-style: italic;
     letter-spacing: 3px;
-    font-weight: 700;
-    color: #d4a8bc;
-    text-shadow:
-      0 1px 0 rgba(0,0,0,0.6),
-      0 -1px 0 rgba(255,255,255,0.15),
-      0 2px 4px rgba(0,0,0,0.5);
-    -webkit-text-stroke: 0.4px rgba(80,40,55,0.4);
-    line-height: 1.25;
+    color: #e599a9; /* 玫瑰粉色搭配黑色背带 */
+    font-weight: 500;
+    line-height: 1.2;
+    text-transform: uppercase;
   }}
   #header .sub {{
     font-size: 11px;
-    color: #e0c4d0;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 1px;
     margin-top: 3px;
     display: flex;
     align-items: center;
     gap: 6px;
   }}
+  
+  /* 带有半透明白色背景框的在线状态 */
   .status-badge {{
-    background: rgba(255,255,255,0.22);
-    padding: 2px 9px;
-    border-radius: 7px;
-    color: #fbeef3;
-    backdrop-filter: blur(4px);
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 1px 7px;
+    border-radius: 5px;
+    font-size: 10px;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }}
   .status-dot {{
-    width: 6px; height: 6px;
+    width: 5px; height: 5px;
     border-radius: 50%;
-    background: #7fd9a8;
-    box-shadow: 0 0 6px rgba(127,217,168,0.7);
-    flex-shrink: 0;
+    background: #84cc9a;
+    display: inline-block;
+    box-shadow: 0 0 6px #84cc9a;
   }}
-  .status-dot.low {{
-    background: #d99bb0;
-    box-shadow: 0 0 6px rgba(217,155,176,0.7);
+  .status-dot.low {{ 
+    background: #c3a1ad; 
+    box-shadow: 0 0 6px #c3a1ad;
   }}
+  
+  /* 顶部右下角签名感的花体字 */
   .header-signature {{
-    position: absolute;
-    bottom: 9px; right: 20px;
-    font-family: "Brush Script MT", cursive;
-    font-style: italic;
-    font-size: 18px;
-    color: rgba(255,255,255,0.55);
+    position: relative;
     z-index: 1;
+    font-family: "Dancing Script", "Brush Script MT", cursive;
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.85);
+    margin-left: auto; /* 靠右对齐 */
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    user-select: none;
+    pointer-events: none;
   }}
 
   #messages {{
+    position: relative;
+    z-index: 1;
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 22px 24px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -1134,21 +1176,25 @@ def chat_page():
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    max-width: 84%;
-    position: relative;
+    max-width: 88%;
   }}
-  .msg-row.user {{ align-self: flex-end; flex-direction: row-reverse; }}
-  .msg-row.charon {{ align-self: flex-start; }}
+  .msg-row.user {{
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }}
+  .msg-row.charon {{
+    align-self: flex-start;
+  }}
   .msg-avatar {{
-    width: 32px; height: 32px;
+    width: 36px; height: 36px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 1.5px solid rgba(255,255,255,0.85);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    margin-top: 0;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
   }}
   .msg-col {{
-    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -1157,195 +1203,275 @@ def chat_page():
   .msg-row.charon .msg-col {{ align-items: flex-start; }}
   .msg-time {{
     font-size: 10px;
-    color: #b98a9a;
+    color: #b08d98;
     margin: 4px 4px 0;
   }}
+  
+  /* 时间戳位置优化 */
+  .msg-time-row {{
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }}
+
   .bubble {{
-    padding: 11px 16px;
-    line-height: 1.55;
+    position: relative;
+    padding: 12px 18px;
+    line-height: 1.6;
     font-size: 15px;
     word-wrap: break-word;
     white-space: pre-wrap;
-    user-select: none;
-    -webkit-user-select: none;
+    user-select: none; /* 移动端防干扰长按 */
     cursor: pointer;
-    transition: transform 0.1s ease, filter 0.1s ease;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, #d4738f, #b85575);
-    color: #fff;
-    border-radius: 18px 4px 18px 18px;
-    box-shadow: 0 4px 14px rgba(184,96,118,0.28);
+    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 马卡龙甜美暮粉渐变 */
+    color: #ffffff;
+    border-radius: 18px 4px 18px 18px; 
+    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
   }}
   .bubble.charon {{
-    background: rgba(255,255,255,0.78);
+    background: rgba(255, 255, 255, 0.55);
+    border: none; /* 彻底取消气泡边框 */
     color: #6b5460;
-    border-radius: 4px 18px 18px 18px;
-    box-shadow: 0 3px 10px rgba(150,90,110,0.1);
+    border-radius: 4px 18px 18px 18px; 
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }}
   .bubble.pending {{ opacity: 0.5; }}
-  .bubble.pressed {{ transform: scale(0.97); filter: brightness(0.94); }}
-  .bubble.recalled {{ opacity: 0.45; font-style: italic; }}
 
-  /* 长按弹出的菜单，替代原来悬停撤回按钮 */
-  .ctx-menu {{
+  /* ---- 悬浮微信样式撤回菜单 ---- */
+  #bubble-menu {{
+    display: none;
     position: absolute;
-    bottom: calc(100% + 6px);
-    background: rgba(28,22,26,0.94);
+    z-index: 1000;
+    background: rgba(26, 18, 30, 0.95);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border-radius: 12px;
-    padding: 6px;
-    display: none;
-    gap: 2px;
-    z-index: 20;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-  }}
-  .msg-row.user .ctx-menu {{ right: 0; }}
-  .msg-row.charon .ctx-menu {{ left: 42px; }}
-  .ctx-menu.show {{ display: flex; }}
-  .ctx-menu button {{
-    background: none; border: none;
-    color: #f0e4ea;
-    font-size: 13px;
-    padding: 8px 16px;
     border-radius: 8px;
-    cursor: pointer;
-    white-space: nowrap;
+    padding: 6px 4px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    animation: menu-pop 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
   }}
-  .ctx-menu button:active {{ background: rgba(255,255,255,0.14); }}
-  .ctx-menu button.danger {{ color: #e88fa8; }}
+  @keyframes menu-pop {{
+    0% {{ transform: scale(0.9); opacity: 0; }}
+    100% {{ transform: scale(1); opacity: 1; }}
+  }}
+  .menu-btn {{
+    background: none;
+    border: none;
+    color: #e2cbd4;
+    font-size: 12px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.15s;
+  }}
+  .menu-btn:hover {{
+    color: #ffb3c1;
+  }}
+  .menu-btn:not(:last-child) {{
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+  }}
 
   #input-bar {{
     display: flex;
-    gap: 8px;
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    gap: 10px;
+    padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
     flex-shrink: 0;
+    position: relative;
+    z-index: 1;
   }}
   #input-bar textarea {{
     flex: 1;
     resize: none;
-    border-radius: 14px;
-    border: 1px solid rgba(150,90,110,0.15);
-    background: rgba(255,255,255,0.7);
+    border-radius: 16px;
+    border: none;
+    background: rgba(255, 255, 255, 0.25);
     color: #5a4550;
-    padding: 10px 14px;
+    padding: 11px 16px;
     font-size: 15px;
     font-family: inherit;
     max-height: 100px;
     outline: none;
+    transition: background 0.2s ease;
   }}
-  #input-bar textarea::placeholder {{ color: #c9aab3; }}
+  #input-bar textarea:focus {{
+    background: rgba(255, 255, 255, 0.45);
+  }}
+  #input-bar textarea::placeholder {{ color: #b08d98; }}
   #input-bar button {{
     border: none;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #d4738f, #b85575);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #e599a9, #cf7d90);
     color: #fff;
-    padding: 0 20px;
+    padding: 0 22px;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 3px 10px rgba(184,96,118,0.35);
+    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.2);
+    transition: all 0.2s ease;
   }}
-  #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; }}
-  #empty-hint {{
-    color: #c9aab3;
-    font-size: 13px;
-    text-align: center;
-    margin-top: 40px;
+  #input-bar button:hover {{
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.3);
   }}
+  #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
 
-  /* ---- 右侧状态面板：粉白波点纹理 ---- */
+  /* ---- 右侧玻璃舱状态面板（铺满粉白双色波点） ---- */
   #panel {{
-    width: 200px;
+    width: 210px;
     flex-shrink: 0;
     display: none;
     flex-direction: column;
-    gap: 12px;
-    padding: 20px 16px;
-    border-radius: 22px;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(150,90,110,0.15);
+    gap: 16px;
+    padding: 22px 18px;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
   }}
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
+  /* 铺满细腻、精致的小粉色与白色双色交错波点 */
+  #panel::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: 
+      radial-gradient(rgba(229, 153, 169, 0.15) 15%, transparent 15.5%),
+      radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%);
+    background-size: 11px 11px;
+    background-position: 0 0, 5.5px 5.5px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.75;
+  }}
+  .panel-child {{
+    position: relative;
+    z-index: 1; /* 确保内容处于波点上面，便于阅读 */
+  }}
   .panel-title {{
-    font-family: Georgia, "Songti SC", serif;
-    font-size: 13px;
-    letter-spacing: 2px;
-    color: #a85d78;
-    margin-bottom: 4px;
+    font-family: "Georgia", "Songti SC", serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: #a66275;
+    margin-bottom: 6px;
     text-transform: uppercase;
     font-weight: bold;
   }}
-  .stat-block {{ margin-bottom: 4px; }}
+  .stat-block {{ margin-bottom: 12px; }}
   .stat-label {{
     font-size: 11px;
-    color: #8a5568;
+    color: #b08d98;
     margin-bottom: 5px;
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
   }}
+  
+  /* 情绪值进度条：完美复刻参考图（2px 极简扁平细轨，无圆角） */
   .stat-bar-track {{
-    height: 4px;
-    background: rgba(150,80,105,0.15);
+    height: 2px; 
+    border-radius: 0;
+    background: rgba(90, 69, 80, 0.1); 
     overflow: hidden;
+    width: 100%;
   }}
   .stat-bar-fill {{
     height: 100%;
-    background: linear-gradient(90deg, #d4738f, #b85575);
+    border-radius: 0;
+    background: #cf7d90;
     transition: width 0.4s ease;
   }}
-  .stat-value {{ font-size: 12px; color: #6a4558; }}
-  .period-tag, .checking-tag, .lucky-tag {{
+  .stat-value {{
+    font-size: 12px;
+    color: #6e505f;
+  }}
+  .period-tag {{
     font-size: 11px;
-    color: #7a5568;
-    background: rgba(255,255,255,0.5);
+    color: #a66275;
+    background: rgba(255, 255, 255, 0.4);
+    border: none;
     border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
   }}
-  .thought-card, .summary-card {{
-    font-size: 12px;
-    color: #6a4558;
-    background: rgba(255,255,255,0.5);
+  .checking-tag {{
+    font-size: 11px;
+    color: #7d5a68;
+    background: rgba(255, 255, 255, 0.4);
+    border: none;
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }}
+  .lucky-tag {{
+    font-size: 11px;
+    color: #b86076;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.35));
+    border: none;
+    border-radius: 10px;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }}
+  
+  /* “心里话”板块：完美恢复原版经典斜体字、颜色 */
+  .thought-card {{
+    font-size: 12px;
+    color: #7a5a65; /* 彻底恢复原版深玫瑰灰 */
+    background: rgba(255, 255, 255, 0.45); 
+    border: none;
+    border-radius: 14px;
+    padding: 12px 14px;
     line-height: 1.6;
-    font-style: italic;
+    font-style: italic; /* 彻底恢复经典斜体 */
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
+  }}
+  .summary-card {{
+    font-size: 11px;
+    color: #6e505f;
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    border-radius: 12px;
+    padding: 9px 11px;
+    line-height: 1.6;
   }}
   .today-count {{
-    font-size: 22px;
-    color: #b8768a;
-    font-family: Georgia, serif;
+    font-size: 24px;
+    color: #b86076;
+    font-family: "Georgia", serif;
     font-weight: 600;
   }}
   .today-count-unit {{
     font-size: 11px;
-    color: #8a5568;
+    color: #b08d98;
     margin-left: 3px;
   }}
   .panel-empty {{
     font-size: 11px;
-    color: #8a5568;
+    color: #b08d98;
   }}
 </style>
 </head>
 <body>
 <div id="app">
 
-  <div id="nav" class="dots-vertical">
-    <a class="nav-icon" href="/" title="首页">⌂</a>
+  <!-- 1. 左侧波点玻璃舱导航栏 -->
+  <div id="nav">
+    <a class="nav-icon" href="/" title="首页">✦</a>
     <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
   </div>
 
+  <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
-    <div id="header" class="dots-horizontal">
-      <div class="header-content">
-        <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
-        <div id="header-text">
-          <div class="brand">CHARON</div>
-          <div class="sub"><span class="status-dot" id="status-dot"></span><span class="status-badge" id="status-label">加载中…</span></div>
+    <div id="header">
+      <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
+      <div id="header-text">
+        <div class="brand">CHARON</div>
+        <div class="sub">
+          <span class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></span>
         </div>
       </div>
       <div class="header-signature">@Seraphina</div>
@@ -1357,12 +1483,17 @@ def chat_page():
     </div>
   </div>
 
-  <div id="panel" class="dots-panel">
-    <div class="panel-title">PULSE</div>
-    <div id="panel-body"><div class="panel-empty">加载中…</div></div>
+  <!-- 3. 右侧状态面板 -->
+  <div id="panel">
+    <div class="panel-child panel-title">PULSE</div>
+    <div id="panel-body" class="panel-child"><div class="panel-empty">加载中…</div></div>
   </div>
 
 </div>
+
+<!-- 微信悬浮微信菜单元素 -->
+<div id="bubble-menu"></div>
+
 <script>
 const CODE = {json.dumps(code_param)};
 const AVATAR_CHARON = {json.dumps(CHAT_AVATAR_CHARON)};
@@ -1373,6 +1504,12 @@ const sendBtn = document.getElementById('send-btn');
 const panelBody = document.getElementById('panel-body');
 const statusDot = document.getElementById('status-dot');
 const statusLabel = document.getElementById('status-label');
+const contextMenu = document.getElementById('bubble-menu');
+
+// 长按/右键菜单相关的触发状态记录
+let pressTimer;
+let currentActiveMsgId = null;
+let currentActiveRowEl = null;
 
 function apiUrl(path) {{
   const sep = path.includes('?') ? '&' : '?';
@@ -1387,40 +1524,6 @@ function formatTime(isoStr) {{
   const m = String(d.getMinutes()).padStart(2, '0');
   return h + ':' + m;
 }}
-
-function escapeHtml(str) {{
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}}
-
-/* 长按弹出菜单：复制 + 撤回，两边消息都能撤回 */
-function bindLongPress(bubbleEl, menuEl) {{
-  let pressTimer = null;
-  const start = () => {{
-    bubbleEl.classList.add('pressed');
-    pressTimer = setTimeout(() => {{
-      document.querySelectorAll('.ctx-menu.show').forEach(m => m.classList.remove('show'));
-      menuEl.classList.add('show');
-      bubbleEl.classList.remove('pressed');
-    }}, 420);
-  }};
-  const cancel = () => {{
-    clearTimeout(pressTimer);
-    bubbleEl.classList.remove('pressed');
-  }};
-  bubbleEl.addEventListener('mousedown', start);
-  bubbleEl.addEventListener('mouseup', cancel);
-  bubbleEl.addEventListener('mouseleave', cancel);
-  bubbleEl.addEventListener('touchstart', start, {{ passive: true }});
-  bubbleEl.addEventListener('touchend', cancel);
-}}
-
-document.addEventListener('click', (e) => {{
-  if (!e.target.closest('.ctx-menu') && !e.target.closest('.bubble')) {{
-    document.querySelectorAll('.ctx-menu.show').forEach(m => m.classList.remove('show'));
-  }}
-}});
 
 function renderMsgRow(role, content, createdAt, pending, msgId) {{
   const row = document.createElement('div');
@@ -1440,37 +1543,99 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   bubble.textContent = content;
   col.appendChild(bubble);
 
-  const timeEl = document.createElement('div');
+  const timeRow = document.createElement('div');
+  timeRow.className = 'msg-time-row';
+
+  const timeEl = document.createElement('span');
   timeEl.className = 'msg-time';
   timeEl.textContent = formatTime(createdAt);
-  col.appendChild(timeEl);
+  timeRow.appendChild(timeEl);
 
-  const menu = document.createElement('div');
-  menu.className = 'ctx-menu';
-  const copyBtn = document.createElement('button');
-  copyBtn.textContent = '复制';
-  copyBtn.addEventListener('click', () => {{
-    navigator.clipboard?.writeText(bubble.textContent).catch(() => {{}});
-    menu.classList.remove('show');
-  }});
-  menu.appendChild(copyBtn);
-  const recallBtn = document.createElement('button');
-  recallBtn.className = 'danger';
-  recallBtn.textContent = '撤回';
-  recallBtn.addEventListener('click', () => {{
-    if (row.dataset.msgId) recallMessage(row.dataset.msgId, row, bubble);
-    menu.classList.remove('show');
-  }});
-  menu.appendChild(recallBtn);
-  col.appendChild(menu);
-
-  bindLongPress(bubble, menu);
-
+  col.appendChild(timeRow);
   row.appendChild(col);
+
+  // 微信悬浮菜单触发机制 (电脑端右键，移动端长按)
+  const bindContextMenu = (e) => {{
+    e.preventDefault();
+    currentActiveMsgId = msgId;
+    currentActiveRowEl = row;
+    showWeChatMenu(bubble, msgId, content);
+  }};
+
+  bubble.addEventListener('contextmenu', bindContextMenu);
+  
+  bubble.addEventListener('touchstart', (e) => {{
+    // 600ms 定时器检测长按
+    pressTimer = setTimeout(() => {{
+      currentActiveMsgId = msgId;
+      currentActiveRowEl = row;
+      showWeChatMenu(bubble, msgId, content);
+    }}, 600);
+  }}, {{ passive: true }});
+  
+  bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
+  bubble.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
   return row;
 }}
 
-async function recallMessage(msgId, rowEl, bubbleEl) {{
+// 显示仿微信长按菜单浮窗
+function showWeChatMenu(targetBubble, msgId, textContent) {{
+  const rect = targetBubble.getBoundingClientRect();
+  contextMenu.style.display = 'flex';
+  
+  // 清理旧按钮
+  contextMenu.innerHTML = '';
+  
+  // 复制按钮
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'menu-btn';
+  copyBtn.textContent = '复制';
+  copyBtn.onclick = () => {{
+    navigator.clipboard.writeText(textContent).then(() => {{
+      hideWeChatMenu();
+    }}).catch(() => {{
+      alert('复制失败，请手动选择复制');
+    }});
+  }};
+  contextMenu.appendChild(copyBtn);
+  
+  // 仅在存在 ID (即已发出的消息) 时显示撤回按钮
+  if (msgId) {{
+    const recallBtn = document.createElement('button');
+    recallBtn.className = 'menu-btn';
+    recallBtn.textContent = '撤回';
+    recallBtn.onclick = () => {{
+      if (currentActiveRowEl) {{
+        deleteMessage(msgId, currentActiveRowEl);
+      }}
+      hideWeChatMenu();
+    }};
+    contextMenu.appendChild(recallBtn);
+  }}
+
+  // 动态定位计算
+  const menuWidth = contextMenu.offsetWidth || 120;
+  const menuHeight = contextMenu.offsetHeight || 34;
+  
+  // 水平居中对齐气泡，垂直置于气泡之上，留出 8px 间距
+  contextMenu.style.left = (rect.left + rect.width / 2 - menuWidth / 2 + window.scrollX) + 'px';
+  contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
+}}
+
+function hideWeChatMenu() {{
+  contextMenu.style.display = 'none';
+}}
+
+// 监听屏幕全局点击事件，随时收起浮窗
+document.addEventListener('click', (e) => {{
+  if (!e.target.classList.contains('bubble') && !e.target.classList.contains('menu-btn')) {{
+    hideWeChatMenu();
+  }}
+}});
+
+async function deleteMessage(msgId, rowEl) {{
+  if (!confirm('确定要撤回这条消息吗？')) return;
   try {{
     const res = await fetch(apiUrl('/api/chat-delete'), {{
       method: 'POST',
@@ -1479,13 +1644,13 @@ async function recallMessage(msgId, rowEl, bubbleEl) {{
     }});
     const data = await res.json();
     if (data.ok) {{
-      bubbleEl.textContent = '（已撤回）';
-      bubbleEl.classList.add('recalled');
+      rowEl.remove();
+      loadStatus(); // 更新互动的统计次数和心里话面板
     }} else {{
       alert('撤回失败：' + (data.error || '未知错误'));
     }}
   }} catch (e) {{
-    alert('网络错误，没撤回成');
+    alert('网络错误，无法撤回');
   }}
 }}
 
@@ -1519,6 +1684,12 @@ function formatHours(h) {{
   return h.toFixed(1) + ' 小时前';
 }}
 
+function escapeHtml(str) {{
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}}
+
 async function loadStatus() {{
   try {{
     const res = await fetch(apiUrl('/api/chat-status'));
@@ -1529,18 +1700,18 @@ async function loadStatus() {{
       return;
     }}
 
+    // 更新 header 的状态标签
     statusLabel.textContent = data.status_label || '在线';
     statusDot.className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
     const moodPct = Math.max(0, Math.min(100, data.mood_score));
     let html = '';
     html += '<div class="stat-block">';
-    html += '<div class="stat-label"><span>情绪值</span><span>' + data.mood_score + '/100</span></div>';
+    html += '<div class="stat-label"><span>情绪值</span><span class="stat-value">' + data.mood_score + '/100</span></div>';
     html += '<div class="stat-bar-track"><div class="stat-bar-fill" style="width:' + moodPct + '%"></div></div>';
     html += '</div>';
     html += '<div class="stat-block">';
-    html += '<div class="stat-label"><span>上次互动</span></div>';
-    html += '<div class="stat-value">' + formatHours(data.hours_since_last_event) + '</div>';
+    html += '<div class="stat-label"><span>上次互动</span><span class="stat-value">' + formatHours(data.hours_since_last_event) + '</span></div>';
     html += '</div>';
     html += '<div class="stat-block">';
     html += '<div class="stat-label"><span>今日互动</span></div>';
@@ -1556,10 +1727,10 @@ async function loadStatus() {{
       html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
     }}
     if (data.last_thought) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:10px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
     }}
     if (data.window_summary) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:10px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
     }}
     panelBody.innerHTML = html;
   }} catch (e) {{
@@ -1593,8 +1764,18 @@ async function sendMessage() {{
     if (data.ok) {{
       pendingBubble.textContent = data.reply;
       pendingBubble.classList.remove('pending');
+      
+      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
       if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
       if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      
+      // 动态将渲染出来的泡泡重置并正确绑定事件
+      const newUserCol = userRow.querySelector('.msg-col');
+      const newCharonCol = pendingRow.querySelector('.msg-col');
+      
+      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      
     }} else {{
       pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
       pendingBubble.classList.remove('pending');
