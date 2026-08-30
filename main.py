@@ -263,7 +263,7 @@ def get_diary():
 
 @app.route("/diary/read", methods=["GET"])
 def read_diary():
-    """更适合人眼看的日记页面，把reason和thought配对展示，不是裸JSON。"""
+    """更适合人眼看的日记页面，把reasone和thought配对展示，不是裸JSON。"""
     diary = load_diary()
     if not diary:
         return "还没有日记"
@@ -793,7 +793,7 @@ def chat_status():
 @app.route("/api/chat-messages", methods=["GET"])
 def get_chat_messages():
     """拉取网页聊天的历史记录，供前端渲染。"""
-    if not _check_auth(request):
+    if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     history = load_chat_history()
     return jsonify({"ok": True, "messages": history[-50:]})
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -994,18 +994,18 @@ def chat_page():
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }}
-  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大到 18px */
+  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大到 22px 并且调整色比 */
   #nav::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直黑-粉-白-粉-黑经典甜酷渐变，纯黑提升对比度 */
-    background: linear-gradient(to bottom, #000000 0%, #ff5e84 30%, #ffffff 50%, #ff5e84 70%, #000000 100%);
+    /* 垂直黑-灰-白-灰-黑渐变 (比例 2:1:3:2:2) */
+    background: linear-gradient(to bottom, #000000 0%, #000000 20%, #c0b8c0 30%, #ffffff 40%, #ffffff 60%, #c0b8c0 80%, #000000 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 18px 18px; /* 放大波点 */
-    -webkit-mask-position: 0 0, 9px 9px;
+    -webkit-mask-size: 22px 22px; /* 进一步放大波点 */
+    -webkit-mask-position: 0 0, 11px 11px;
     pointer-events: none;
     z-index: 0;
     opacity: 0.85;
@@ -1058,19 +1058,19 @@ def chat_page():
     pointer-events: none;
     z-index: 0;
   }}
-  /* 底部高浓度、黑粉渐变波点带 */
+  /* 底部高浓度波点带：大小与左栏一致(22px)，从左到右白、灰、黑、灰、白 (比例 1:2:3:2:1) */
   #main::after {{
     content: '';
     position: absolute;
     left: 0; right: 0; bottom: 0;
     height: 110px; /* 加高波点带 */
-    /* 底部高对比黑粉色波点波浪 */
-    background: linear-gradient(to top, #ff5e84 0%, #000000 45%, rgba(255, 255, 255, 0) 100%);
+    /* 横向渐变波点 */
+    background: linear-gradient(to right, #ffffff 0%, #ffffff 12%, #c0b8c0 25%, #000000 40%, #000000 60%, #c0b8c0 75%, #ffffff 88%, #ffffff 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 13px 13px; /* 略微放大 */
-    -webkit-mask-position: 0 0, 6.5px 6.5px;
+    -webkit-mask-size: 22px 22px; /* 和左侧导航波点图案一样大小 */
+    -webkit-mask-position: 0 0, 11px 11px;
     pointer-events: none;
     z-index: 0;
     opacity: 0.85; /* 加深显色 */
@@ -1085,18 +1085,18 @@ def chat_page():
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 纯黑到浅粉色的渐变条 */
-    background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.9) 35%, rgba(253, 245, 246, 0) 100%);
+    /* 纯黑到粉色(渐变底色拉高)的渐变条，增强右侧粉色饱和度，确保 signature 可见 */
+    background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.95) 25%, #cf7d90 85%, #ffb3c1 100%);
   }}
-  /* 酷黑渐变条左侧点缀的浅色小波点 */
+  /* 增强白色波点颜色对比度 */
   #header::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; bottom: 0;
     width: 45%;
     background-image:
-      radial-gradient(rgba(255, 255, 255, 0.16) 15%, transparent 15.5%),
-      radial-gradient(rgba(255, 255, 255, 0.16) 15%, transparent 15.5%);
+      radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%),
+      radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%);
     background-size: 8px 8px;
     background-position: 0 0, 4px 4px;
     -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
@@ -1123,7 +1123,7 @@ def chat_page():
     font-size: 26px;
     font-style: italic;
     letter-spacing: 3px;
-    color: #e599a9; /* 玫瑰粉色搭配黑色背带 */
+    color: #e599a9; /* 玫瑰粉色搭配 */
     font-weight: 500;
     line-height: 1.2;
     text-transform: uppercase;
@@ -1162,7 +1162,7 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名感的花体字 - 移除倾斜角度防止歪斜 */
+  /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
   .header-signature {{
     position: relative;
     z-index: 1;
@@ -1354,18 +1354,27 @@ def chat_page():
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
-  /* 铺满细腻、清晰且高对比度的高亮白波点和粉波点 */
+  /* 铺满中等大小(14px)、高亮度、高对比度的粉、白交错波点，垂直粉、白、粉(比例 2:3:2)渐变效果 */
   #panel::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background-image: 
       radial-gradient(circle, rgba(229, 153, 171, 0.45) 15%, transparent 15.5%),
-      radial-gradient(circle, rgba(255, 255, 255, 0.95) 15%, transparent 15.5%); /* 大幅提升白波点可见度 */
-    background-size: 11px 11px;
-    background-position: 0 0, 5.5px 5.5px;
+      radial-gradient(circle, rgba(255, 255, 255, 0.95) 15%, transparent 15.5%);
+    background-size: 14px 14px; /* 比导航栏波点小，比原来大一点点 */
+    background-position: 0 0, 7px 7px;
+    /* 垂直粉白粉(2:3:2)渐变效果 */
+    background-image: 
+      linear-gradient(to bottom, #ff5e84 0%, #ff5e84 28%, #ffffff 40%, #ffffff 60%, #ff5e84 72%, #ff5e84 100%);
+    -webkit-mask-image: 
+      radial-gradient(circle, #000 15%, transparent 15.5%),
+      radial-gradient(circle, #000 15%, transparent 15.5%);
+    -webkit-mask-size: 14px 14px;
+    -webkit-mask-position: 0 0, 7px 7px;
     pointer-events: none;
     z-index: 0;
+    opacity: 0.9;
   }}
   .panel-child {{
     position: relative;
