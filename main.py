@@ -474,7 +474,7 @@ def send_bark(title, content, icon=None, sound=None):
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
-    mood_line = f"\n\n快此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -533,7 +533,7 @@ she 刚刚说："{user_message}"
 回应她。这是正常聊天里的一来一回，不是你主动找她那种短消息，可以根据她说的内容自然展开，长度不用刻意压缩，但也别写成一大段论述——像真的在对话就行。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
-{{"reason": "一两句话，说说看到这句话后你心里念头", "message": "实际要回复的话"}}"""
+{{"reason": "一两句话，说说看到这句话后你心里的念头", "message": "实际要回复的话"}}"""
 
 
 def get_time_context(hour):
@@ -564,7 +564,7 @@ def parse_reason_message(raw_text):
     """解析DeepSeek返回的 {reason, message} JSON。
     做了容错：万一模型没按格式来（比如混进代码块标记），退化成把全部内容当message，reason留空。"""
     text = raw_text.strip()
-    # 去点可能的代码块包裹
+    # 去掉可能的代码块包裹
     if text.startswith("```"):
         text = text.strip("`")
         if text.startswith("json"):
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -1221,34 +1221,44 @@ def chat_page():
     user-select: none; /* 移动端防干扰长按 */
     cursor: pointer;
   }}
-  /* 兔耳设计：利用伪元素在 User 气泡顶部生成精致的白粉磨砂兔耳朵 */
-  .bubble.user::before, .bubble.user::after {{
-    content: '';
-    position: absolute;
-    top: -12px; /* 浮于气泡之上 */
-    width: 8px;
-    height: 16px;
-    background: rgba(207, 125, 144, 0.85); /* 稍微降低透明度使耳廓轮廓鲜明 */
-    border-radius: 50% 50% 0 0; /* 圆润可爱的兔耳尖 */
-    transform-origin: bottom center;
-    z-index: -1; /* 耳根插于气泡磨砂板后方，浑然一体 */
-  }}
-  .bubble.user::before {{
-    right: 22px;
-    transform: rotate(-15deg); /* 左耳微斜 */
-  }}
-  .bubble.user::after {{
-    right: 10px;
-    transform: rotate(15deg); /* 右耳微斜 */
-  }}
+  
+  /* User 气泡：粉色 #cf7d90 半透明玻璃质感 */
   .bubble.user {{
-    background: rgba(207, 125, 144, 0.65); /* 使用 #cf7d90 进行 0.65 浓度的粉色毛玻璃设计 */
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(207, 125, 144, 0.65); /* 半透明毛玻璃粉色底色 */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.25); /* 软亮白框线 */
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
+    box-shadow: 0 4px 15px rgba(207, 125, 144, 0.15);
   }}
+  
+  /* User 气泡上的一对可爱兔耳 */
+  .bubble.user::before {{
+    content: '';
+    position: absolute;
+    top: -11px;
+    right: 18px;
+    width: 5px;
+    height: 12px;
+    background: #cf7d90;
+    border-radius: 4px 4px 0 0;
+    transform: rotate(-12deg);
+    z-index: 1;
+  }}
+  .bubble.user::after {{
+    content: '';
+    position: absolute;
+    top: -11px;
+    right: 10px;
+    width: 5px;
+    height: 12px;
+    background: #cf7d90;
+    border-radius: 4px 4px 0 0;
+    transform: rotate(12deg);
+    z-index: 1;
+  }}
+  
   .bubble.charon {{
     background: rgba(255, 255, 255, 0.55);
     border: none; /* 彻底取消气泡边框 */
@@ -1351,18 +1361,18 @@ def chat_page():
     z-index: 1;
     border: none;
     border-radius: 16px;
-    /* 发送按钮由上至下暖粉色#cf7d90渐变至亮粉色#ffb3c1 */
+    /* 发送按钮自上而下 暖粉#cf7d90 渐变至 亮粉#ffb3c1 */
     background: linear-gradient(to bottom, #cf7d90 0%, #ffb3c1 100%);
     color: #fff;
     padding: 0 22px;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.2);
+    box-shadow: 0 4px 12px rgba(207, 125, 144, 0.2);
     transition: all 0.2s ease;
   }}
   #input-bar button:hover {{
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.3);
+    box-shadow: 0 6px 16px rgba(207, 125, 144, 0.3);
   }}
   #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
 
@@ -1874,4 +1884,35 @@ def list_models():
 def test_trigger():
     """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
     来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "defaul
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
