@@ -528,7 +528,7 @@ def build_chat_reply_prompt(time_context, user_message, chat_history, mood_conte
 
 现在是{time_context}。{history_block}{mood_line}
 
-她刚刚说："{user_message}"
+she 刚刚说："{user_message}"
 
 回应她。这是正常聊天里的一来一回，不是你主动找她那种短消息，可以根据她说的内容自然展开，长度不用刻意压缩，但也别写成一大段论述——像真的在对话就行。
 
@@ -994,18 +994,18 @@ def chat_page():
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }}
-  /* 纯 CSS 垂直多色渐变遮罩波点 */
+  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大到 18px */
   #nav::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直黑-粉-白-粉-黑经典甜酷渐变 */
-    background: linear-gradient(to bottom, #1c1218 0%, #e599a9 30%, #ffffff 50%, #e599a9 70%, #1c1218 100%);
+    /* 垂直黑-粉-白-粉-黑经典甜酷渐变，纯黑提升对比度 */
+    background: linear-gradient(to bottom, #000000 0%, #ff5e84 30%, #ffffff 50%, #ff5e84 70%, #000000 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 11px 11px;
-    -webkit-mask-position: 0 0, 5.5px 5.5px;
+    -webkit-mask-size: 18px 18px; /* 放大波点 */
+    -webkit-mask-position: 0 0, 9px 9px;
     pointer-events: none;
     z-index: 0;
     opacity: 0.85;
@@ -1020,9 +1020,9 @@ def chat_page():
     color: #a66275;
     font-size: 19px;
     text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 2px solid #000000; /* 高对比度纯黑圆圈线 */
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-    box-shadow: 0 2px 8px rgba(184, 118, 138, 0.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* 实体投影 */
   }}
   .nav-icon:hover {{
     background: rgba(255, 255, 255, 0.8);
@@ -1045,21 +1045,35 @@ def chat_page():
     overflow: hidden;
     position: relative;
   }}
-  /* 底部渐变波点纹理 */
+  /* 聊天室通体淡淡的白色微小波点背景 */
+  #main::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: 
+      radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%),
+      radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%);
+    background-size: 10px 10px;
+    background-position: 0 0, 5px 5px;
+    pointer-events: none;
+    z-index: 0;
+  }}
+  /* 底部高浓度、黑粉渐变波点带 */
   #main::after {{
     content: '';
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    height: 70px;
-    background: linear-gradient(to top, rgba(229, 153, 169, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+    height: 110px; /* 加高波点带 */
+    /* 底部高对比黑粉色波点波浪 */
+    background: linear-gradient(to top, #ff5e84 0%, #000000 45%, rgba(255, 255, 255, 0) 100%);
     -webkit-mask-image: 
       radial-gradient(circle, #000 15%, transparent 15.5%),
       radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 11px 11px;
-    -webkit-mask-position: 0 0, 5.5px 5.5px;
+    -webkit-mask-size: 13px 13px; /* 略微放大 */
+    -webkit-mask-position: 0 0, 6.5px 6.5px;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.55;
+    opacity: 0.85; /* 加深显色 */
   }}
   
   /* ---- 酷黑渐变 Header ---- */
@@ -1071,8 +1085,8 @@ def chat_page():
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 黑色从左至右由深渐透明 */
-    background: linear-gradient(to right, #1a121e 0%, rgba(26, 18, 30, 0.8) 40%, rgba(255, 255, 255, 0) 100%);
+    /* 从纯黑由浅粉渐透明，强化黑白对比 */
+    background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.9) 35%, rgba(253, 245, 246, 0) 100%);
   }}
   /* 酷黑渐变条左侧点缀的浅色小波点 */
   #header::before {{
@@ -1096,8 +1110,8 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 4px 12px rgba(184, 118, 138, 0.15);
+    border: 2px solid #000000; /* 高对比度纯黑外圆环 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); /* 强化投影 */
   }}
   #header-text {{ 
     position: relative;
@@ -1153,12 +1167,13 @@ def chat_page():
     position: relative;
     z-index: 1;
     font-family: "Dancing Script", "Brush Script MT", cursive;
-    font-size: 20px;
-    color: rgba(255, 255, 255, 0.85);
+    font-size: 22px; /* 放大签名体 */
+    color: rgba(255, 255, 255, 0.92);
     margin-left: auto; /* 靠右对齐 */
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
     user-select: none;
     pointer-events: none;
+    transform: rotate(-3deg); /* 微倾斜，显得随性且具有个人印记 */
   }}
 
   #messages {{
@@ -1317,7 +1332,7 @@ def chat_page():
   }}
   #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
 
-  /* ---- 右侧玻璃舱状态面板（铺满粉白双色波点） ---- */
+  /* ---- 右侧状态面板 ---- */
   #panel {{
     width: 210px;
     flex-shrink: 0;
@@ -1334,19 +1349,19 @@ def chat_page():
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
-  /* 铺满细腻、精致的小粉色与白色双色交错波点 */
+  /* 铺满细腻、清晰且高亮度的粉白交错波点（大幅增加清晰对比度） */
   #panel::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background-image: 
-      radial-gradient(rgba(229, 153, 169, 0.15) 15%, transparent 15.5%),
-      radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%);
+      radial-gradient(rgba(229, 153, 169, 0.24) 15%, transparent 15.5%),
+      radial-gradient(rgba(255, 255, 255, 0.7) 15%, transparent 15.5%);
     background-size: 11px 11px;
     background-position: 0 0, 5.5px 5.5px;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.75;
+    opacity: 0.9; /* 大幅增加波点对比度 */
   }}
   .panel-child {{
     position: relative;
@@ -1554,7 +1569,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 微信悬浮菜单触发机制 (电脑端右键，移动端长按)
+  // 微信悬浮微信菜单触发机制 (电脑端右键，移动端长按)
   const bindContextMenu = (e) => {{
     e.preventDefault();
     currentActiveMsgId = msgId;
