@@ -474,7 +474,7 @@ def send_bark(title, content, icon=None, sound=None):
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
-    mood_line = f"\n\n快此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -494,7 +494,7 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
 
 def build_missyou_prompt(time_context):
-    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你她在想你。
+    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你你在想你。
 
 {LONG_TERM_MEMORY}
 
@@ -564,7 +564,7 @@ def parse_reason_message(raw_text):
     """解析DeepSeek返回的 {reason, message} JSON。
     做了容错：万一模型没按格式来（比如混进代码块标记），退化成把全部内容当message，reason留空。"""
     text = raw_text.strip()
-    # 去点可能的代码块包裹
+    # 去掉可能的代码块包裹
     if text.startswith("```"):
         text = text.strip("`")
         if text.startswith("json"):
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -1093,7 +1093,7 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid #ffffff; /* 恢复白色发光圆环 */
+    border: 2.5px solid #ffffff; /* 恢复白色发光圆环 */
     box-shadow: 0 0 12px rgba(255, 255, 255, 0.6); /* 恢复发光效果 */
   }}
   #header-text {{ 
@@ -1211,6 +1211,7 @@ def chat_page():
     gap: 4px;
   }}
 
+  /* 引入 8px 微型双重波点隐形压花气泡工艺 */
   .bubble {{
     position: relative;
     padding: 12px 18px;
@@ -1222,13 +1223,21 @@ def chat_page():
     cursor: pointer;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 马卡龙甜美暮粉渐变 */
+    /* 甜美暮粉渐变底色之上，叠加 12% 极淡深暗粉色压花小波点 */
+    background: 
+      radial-gradient(circle, rgba(142, 60, 78, 0.12) 15%, transparent 15.5%) 0 0 / 8px 8px,
+      radial-gradient(circle, rgba(142, 60, 78, 0.12) 15%, transparent 15.5%) 4px 4px / 8px 8px,
+      linear-gradient(135deg, #e599a9, #cf7d90);
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
     box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
   }}
   .bubble.charon {{
-    background: rgba(255, 255, 255, 0.55);
+    /* 极致白透毛玻璃底色之上，叠加 60% 纯白细腻压花小波点 */
+    background: 
+      radial-gradient(circle, rgba(255, 255, 255, 0.6) 15%, transparent 15.5%) 0 0 / 8px 8px,
+      radial-gradient(circle, rgba(255, 255, 255, 0.6) 15%, transparent 15.5%) 4px 4px / 8px 8px,
+      rgba(255, 255, 255, 0.55);
     border: none; /* 彻底取消气泡边框 */
     color: #6b5460;
     border-radius: 4px 18px 18px 18px; 
@@ -1270,7 +1279,6 @@ def chat_page():
     border-right: 1px solid rgba(255, 255, 255, 0.15);
   }}
 
-  /* ---- 输入栏 ---- */
   #input-bar {{
     display: flex;
     gap: 10px;
@@ -1760,127 +1768,3 @@ async function loadStatus() {{
       html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
     }}
     if (data.window_summary) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
-    }}
-    panelBody.innerHTML = html;
-  }} catch (e) {{
-    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
-  }}
-}}
-
-async function sendMessage() {{
-  const text = inputEl.value.trim();
-  if (!text) return;
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
-  sendBtn.disabled = true;
-
-  const nowIso = new Date().toISOString();
-  const userRow = renderMsgRow('user', text, nowIso, false);
-  messagesEl.appendChild(userRow);
-  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
-  messagesEl.appendChild(pendingRow);
-  scrollToBottom();
-
-  const pendingBubble = pendingRow.querySelector('.bubble');
-
-  try {{
-    const res = await fetch(apiUrl('/api/chat-send'), {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{ message: text }})
-    }});
-    const data = await res.json();
-    if (data.ok) {{
-      pendingBubble.textContent = data.reply;
-      pendingBubble.classList.remove('pending');
-      
-      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
-      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
-      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
-      
-      // 动态将渲染出来的泡泡重置并正确绑定事件
-      const newUserCol = userRow.querySelector('.msg-col');
-      const newCharonCol = pendingRow.querySelector('.msg-col');
-      
-      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
-      
-    }} else {{
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
-    }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
