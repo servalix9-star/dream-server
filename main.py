@@ -474,7 +474,7 @@ def send_bark(title, content, icon=None, sound=None):
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
-    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n快此刻的状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -564,7 +564,7 @@ def parse_reason_message(raw_text):
     """解析DeepSeek返回的 {reason, message} JSON。
     做了容错：万一模型没按格式来（比如混进代码块标记），退化成把全部内容当message，reason留空。"""
     text = raw_text.strip()
-    # 去掉可能的代码块包裹
+    # 去点可能的代码块包裹
     if text.startswith("```"):
         text = text.strip("`")
         if text.startswith("json"):
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -1016,9 +1016,9 @@ def chat_page():
     width: 42px; height: 42px;
     border-radius: 50%; /* 圆形按钮 */
     display: flex; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.45);
-    color: #a66275;
-    font-size: 19px;
+    background: #ffb3c1; /* 填充亮粉色 */
+    color: #ffffff; /* 亮白色图标 */
+    font-size: 23px; /* 图案放大 */
     text-decoration: none;
     border: 2px solid #000000; /* 高对比度纯黑圆圈线 */
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -1027,7 +1027,7 @@ def chat_page():
   .nav-icon:hover {{
     background: rgba(255, 255, 255, 0.8);
     transform: translateY(-2px);
-    color: #8c4b5d;
+    color: #ffffff;
   }}
   .nav-icon:active {{ transform: translateY(0) scale(0.95); }}
 
@@ -1058,23 +1058,6 @@ def chat_page():
     pointer-events: none;
     z-index: 0;
   }}
-  /* 底部高浓度波点带：大小与左栏一致(22px)，从左到右白、灰、黑、灰、白 (比例 1:2:3:2:1) */
-  #main::after {{
-    content: '';
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: 110px; /* 加高波点带 */
-    /* 横向渐变波点 */
-    background: linear-gradient(to right, #ffffff 0%, #ffffff 11%, #c0b8c0 33%, #000000 45%, #000000 55%, #c0b8c0 67%, #ffffff 89%, #ffffff 100%);
-    -webkit-mask-image: 
-      radial-gradient(circle, #000 15%, transparent 15.5%),
-      radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 22px 22px; /* 和左侧导航波点图案一样大小 */
-    -webkit-mask-position: 0 0, 11px 11px;
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.85; /* 加深显色 */
-  }}
   
   /* ---- 酷黑渐变 Header ---- */
   #header {{
@@ -1085,20 +1068,20 @@ def chat_page():
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 纯黑到粉色(渐变底色拉高)的渐变条，增强右侧粉色饱和度，确保 signature 可见 */
-    background: linear-gradient(to right, #000000 0%, rgba(0, 0, 0, 0.95) 25%, #cf7d90 85%, #ffb3c1 100%);
+    /* 纯黑到粉色(渐变底色拉高)的渐变条，黑、粉渐变比例为 3:2 */
+    background: linear-gradient(to right, #000000 0%, #000000 52%, rgba(26, 18, 30, 0.9) 62%, #cf7d90 85%, #ffb3c1 100%);
   }}
-  /* 增强白色波点颜色对比度 */
+  /* 增强白色波点颜色对比度并共同往右扩展 (65% 宽度) */
   #header::before {{
     content: '';
     position: absolute;
     top: 0; left: 0; bottom: 0;
-    width: 45%;
+    width: 65%; /* 伴随黑色渐变一起向右扩展 */
     background-image:
       radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%),
       radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%);
-    background-size: 8px 8px;
-    background-position: 0 0, 4px 4px;
+    background-size: 11px 11px; /* 内部波点放大 */
+    background-position: 0 0, 5.5px 5.5px;
     -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
     pointer-events: none;
     z-index: 0;
@@ -1110,7 +1093,7 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2.5px solid #ffffff; /* 恢复白色发光圆环 */
+    border: 2px solid #ffffff; /* 恢复白色发光圆环 */
     box-shadow: 0 0 12px rgba(255, 255, 255, 0.6); /* 恢复发光效果 */
   }}
   #header-text {{ 
@@ -1287,6 +1270,7 @@ def chat_page():
     border-right: 1px solid rgba(255, 255, 255, 0.15);
   }}
 
+  /* ---- 输入栏 ---- */
   #input-bar {{
     display: flex;
     gap: 10px;
@@ -1295,10 +1279,30 @@ def chat_page():
     flex-shrink: 0;
     position: relative;
     z-index: 1;
+    overflow: hidden; /* 裁剪边缘 */
   }}
   
-  /* 增加高对比度高透光毛玻璃输入框，掩盖底部的密集黑粉波点 */
+  /* 完美清除主聊区底部的溢出波点，并将其严格限制、封装于输入框背景中（对齐最左侧 22px 渐变波点尺寸） */
+  #input-bar::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    /* 横向白、灰、黑、灰、白渐变波点 (比例 1:2:3:2:1) */
+    background: linear-gradient(to right, #ffffff 0%, #ffffff 11%, #c0b8c0 33%, #000000 45%, #000000 55%, #c0b8c0 67%, #ffffff 89%, #ffffff 100%);
+    -webkit-mask-image: 
+      radial-gradient(circle, #000 15%, transparent 15.5%),
+      radial-gradient(circle, #000 15%, transparent 15.5%);
+    -webkit-mask-size: 22px 22px; /* 和左栏波点大小完全保持一致 */
+    -webkit-mask-position: 0 0, 11px 11px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.85;
+  }}
+  
+  /* 增加高对比度高透光毛玻璃输入框，遮挡背景的波点 */
   #input-bar textarea {{
+    position: relative;
+    z-index: 1; /* 确保在背景波点之上 */
     flex: 1;
     resize: none;
     border-radius: 16px;
@@ -1320,7 +1324,10 @@ def chat_page():
     border-color: rgba(229, 153, 169, 0.8);
   }}
   #input-bar textarea::placeholder {{ color: #b08d98; }}
+  
   #input-bar button {{
+    position: relative;
+    z-index: 1;
     border: none;
     border-radius: 16px;
     background: linear-gradient(135deg, #e599a9, #cf7d90);
