@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -564,7 +564,7 @@ def parse_reason_message(raw_text):
     """解析DeepSeek返回的 {reason, message} JSON。
     做了容错：万一模型没按格式来（比如混进代码块标记），退化成把全部内容当message，reason留空。"""
     text = raw_text.strip()
-    # 去点可能的代码块包裹
+    # 去掉可能的代码块包裹
     if text.startswith("```"):
         text = text.strip("`")
         if text.startswith("json"):
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -881,7 +881,7 @@ def chat_send():
         save_events(events)
         recover_mood(MOOD_RECOVERY_PER_EVENT)
 
-        # 生成Charon的回应，带上历史让语气能接得上
+        // 生成Charon的回应，带上历史让语气能接得上
         hour = datetime.now().hour
         time_context = get_time_context(hour)
         hours_gap = get_time_since_last_event()
@@ -1010,56 +1010,9 @@ def chat_page():
     z-index: 0;
     opacity: 0.85;
   }}
-  
-  /* 极致精细头像星轨包裹容器（公用类，支持左侧导航、顶部Header及对话消息头像） */
-  .avatar-wrapper {{
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }}
-  /* 导航栏专用尺寸 */
-  #nav .avatar-wrapper {{
-    width: 44px; height: 44px;
-    margin-bottom: 2px;
-  }}
-  
-  /* 极细慢速旋转星轨线（轨道） */
-  .orbit-ring {{
-    position: absolute;
-    width: 110%; height: 100%;
-    border-radius: 50%;
-    border: 1px dashed rgba(255, 255, 255, 0.55);
-    animation: orbit-spin 24s linear infinite;
-    z-index: 1;
-    pointer-events: none;
-  }}
-  @keyframes orbit-spin {{
-    0% {{ transform: rotate(0deg); }}
-    100% {{ transform: rotate(360deg); }}
-  }}
-  
-  /* 极小精细呼吸闪烁星芒 */
-  .cyber-star {{
-    position: absolute;
-    top: -2px; right: -2px;
-    font-size: 10px; /* 极细小 */
-    color: #ffffff;
-    text-shadow: 0 0 8px #ff5e84, 0 0 3px #ffffff;
-    z-index: 3;
-    animation: star-pulse 2s ease-in-out infinite;
-    pointer-events: none;
-    user-select: none;
-  }}
-  @keyframes star-pulse {{
-    0%, 100% {{ opacity: 0.25; transform: scale(0.85); }}
-    50% {{ opacity: 1; transform: scale(1.15); }}
-  }}
-
   .nav-icon {{
     position: relative;
-    z-index: 2; /* 确保不被波点底层遮挡，保持可点 */
+    z-index: 1; /* 确保不被波点底层遮挡，保持可点 */
     width: 42px; height: 42px;
     border-radius: 50%; /* 圆形按钮 */
     display: flex; align-items: center; justify-content: center;
@@ -1134,26 +1087,114 @@ def chat_page():
     z-index: 0;
   }}
   
-  /* 顶部 Header 头像容器与样式 */
-  #header .avatar-wrapper {{
-    width: 50px; height: 50px; /* 稍微放大预留星轨虚线空间 */
-  }}
-  #header-avatar {{
+  /* 头像发光舱 (Avatar Wrapper) - 实现镜像碎星与深度呼吸发光 */
+  .avatar-wrapper {{
     position: relative;
-    z-index: 2;
-    width: 40px; height: 40px;
+    width: 38px; height: 38px;
+    flex-shrink: 0;
+    margin-top: 0;
+    border-radius: 50%;
+  }}
+  .msg-avatar-img, #header-avatar {{
+    width: 100%; height: 100%;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid #ffffff; /* 纯白高光内圆环 */
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.45);
+    display: block;
+    border: 1.8px solid #ffffff;
+    position: relative;
+    z-index: 2;
   }}
-  #header .orbit-ring {{
-    width: 46px; height: 46px;
+  
+  /* 深度呼吸起伏动效与粉/黑弥散霓虹光晕 */
+  .avatar-wrapper.charon-avatar {{
+    animation: cyber-pulse-charon 3.2s infinite ease-in-out;
+  }}
+  .avatar-wrapper.user-avatar {{
+    animation: cyber-pulse-user 3.2s infinite ease-in-out;
+  }}
+  
+  @keyframes cyber-pulse-charon {{
+    0% {{
+      transform: scale(1);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.85);
+    }}
+    50% {{
+      transform: scale(1.05);
+      box-shadow: 0 0 24px rgba(0, 0, 0, 0.95), 0 0 36px rgba(15, 10, 20, 0.9);
+    }}
+    100% {{
+      transform: scale(1);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.85);
+    }}
+  }}
+  @keyframes cyber-pulse-user {{
+    0% {{
+      transform: scale(1);
+      box-shadow: 0 0 8px rgba(229, 153, 169, 0.65);
+    }}
+    50% {{
+      transform: scale(1.05);
+      box-shadow: 0 0 24px rgba(229, 153, 169, 0.95), 0 0 36px rgba(255, 94, 132, 0.8);
+    }}
+    100% {{
+      transform: scale(1);
+      box-shadow: 0 0 8px rgba(229, 153, 169, 0.65);
+    }}
+  }}
+  
+  /* 环绕的白色发光碎星 */
+  .decor-star {{
+    position: absolute;
+    color: #ffffff;
+    pointer-events: none;
+    z-index: 3;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.95);
+    animation: star-breath 3.2s infinite ease-in-out;
+  }}
+  @keyframes star-breath {{
+    0% {{ opacity: 0.45; transform: scale(0.85); }}
+    50% {{ opacity: 1; transform: scale(1.25); }}
+    100% {{ opacity: 0.45; transform: scale(0.85); }}
+  }}
+  
+  /* 碎星镜像对齐控制 */
+  .charon-avatar .main-star {{
+    top: -8px; right: -4px;
+    font-size: 14px;
+    color: #ffeef1; /* 契合黑色渐变条的微粉星芒 */
+    text-shadow: 0 0 8px rgba(255, 238, 241, 0.9);
+  }}
+  .charon-avatar .sub-star-1 {{
+    top: -3px; left: -9px;
+    font-size: 8px;
+  }}
+  .charon-avatar .sub-star-2 {{
+    bottom: -4px; left: -7px;
+    font-size: 9px;
+  }}
+  
+  .user-avatar .main-star {{
+    top: -8px; left: -4px;
+    font-size: 14px;
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.95);
+  }}
+  .user-avatar .sub-star-1 {{
+    top: -3px; right: -9px;
+    font-size: 8px;
+  }}
+  .user-avatar .sub-star-2 {{
+    bottom: -4px; right: -7px;
+    font-size: 9px;
+  }}
+  
+  #header-avatar-wrapper {{
+    width: 44px; height: 44px;
   }}
   
   #header-text {{ 
     position: relative;
-    z-index: 2;
+    z-index: 1;
     min-width: 0; 
   }}
   #header .brand {{
@@ -1203,7 +1244,7 @@ def chat_page():
   /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
   .header-signature {{
     position: relative;
-    z-index: 2;
+    z-index: 1;
     font-family: "Dancing Script", "Brush Script MT", cursive;
     font-size: 22px; /* 签名体 */
     color: rgba(255, 255, 255, 0.92);
@@ -1237,24 +1278,6 @@ def chat_page():
   .msg-row.charon {{
     align-self: flex-start;
   }}
-  
-  /* 消息区头像包裹结构样式 */
-  .msg-row .avatar-wrapper {{
-    width: 44px; height: 44px;
-  }}
-  .msg-avatar {{
-    position: relative;
-    z-index: 2;
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 1.5px solid #ffffff;
-    box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
-  }}
-  .msg-row .orbit-ring {{
-    width: 39px; height: 39px;
-  }}
-  
   .msg-col {{
     display: flex;
     flex-direction: column;
@@ -1564,27 +1587,21 @@ def chat_page():
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (圆包装修饰) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 -->
   <div id="nav">
-    <div class="avatar-wrapper">
-      <div class="orbit-ring"></div>
-      <a class="nav-icon" href="/" title="首页">✦</a>
-      <span class="cyber-star">✦</span>
-    </div>
-    <div class="avatar-wrapper">
-      <div class="orbit-ring"></div>
-      <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
-      <span class="cyber-star">✦</span>
-    </div>
+    <a class="nav-icon" href="/" title="首页">✦</a>
+    <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <div class="avatar-wrapper">
-        <div class="orbit-ring"></div>
+      <!-- 顶部 Header 头像应用 Charon 侧专属深黑色呼吸发光舱与碎星 -->
+      <div id="header-avatar-wrapper" class="avatar-wrapper charon-avatar">
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
-        <span class="cyber-star">✦</span>
+        <span class="decor-star main-star">✦</span>
+        <span class="decor-star sub-star-1">✧</span>
+        <span class="decor-star sub-star-2">✦</span>
       </div>
       <div id="header-text">
         <div class="brand">CHARON</div>
@@ -1648,24 +1665,31 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
 
-  // 消息区头像加入星轨圆环精细化包裹包装
+  // 使用精细的 avatar-wrapper 代替裸 img 标签实现环绕星芒
   const avatarWrapper = document.createElement('div');
-  avatarWrapper.className = 'avatar-wrapper';
-  
-  const orbitRing = document.createElement('div');
-  orbitRing.className = 'orbit-ring';
-  avatarWrapper.appendChild(orbitRing);
+  avatarWrapper.className = 'avatar-wrapper ' + (role === 'user' ? 'user-avatar' : 'charon-avatar');
 
-  const avatar = document.createElement('img');
-  avatar.className = 'msg-avatar';
-  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
-  avatarWrapper.appendChild(avatar);
-  
-  const star = document.createElement('span');
-  star.className = 'cyber-star';
-  star.textContent = '✦';
-  avatarWrapper.appendChild(star);
-  
+  const avatarImg = document.createElement('img');
+  avatarImg.className = 'msg-avatar-img';
+  avatarImg.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
+  avatarWrapper.appendChild(avatarImg);
+
+  // 镜像碎星节点生成
+  const mainStar = document.createElement('span');
+  mainStar.className = 'decor-star main-star';
+  mainStar.textContent = '✦';
+  avatarWrapper.appendChild(mainStar);
+
+  const subStar1 = document.createElement('span');
+  subStar1.className = 'decor-star sub-star-1';
+  subStar1.textContent = '✧';
+  avatarWrapper.appendChild(subStar1);
+
+  const subStar2 = document.createElement('span');
+  subStar2.className = 'decor-star sub-star-2';
+  subStar2.textContent = '✦';
+  avatarWrapper.appendChild(subStar2);
+
   row.appendChild(avatarWrapper);
 
   const col = document.createElement('div');
@@ -1860,4 +1884,130 @@ async function loadStatus() {{
       html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
     }}
     if (data.last_thought) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+    }}
+    if (data.window_summary) {{
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+    }}
+    panelBody.innerHTML = html;
+  }} catch (e) {{
+    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
+  }}
+}}
+
+async function sendMessage() {{
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  const nowIso = new Date().toISOString();
+  const userRow = renderMsgRow('user', text, nowIso, false);
+  messagesEl.appendChild(userRow);
+  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
+  messagesEl.appendChild(pendingRow);
+  scrollToBottom();
+
+  const pendingBubble = pendingRow.querySelector('.bubble');
+
+  try {{
+    const res = await fetch(apiUrl('/api/chat-send'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ message: text }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      pendingBubble.textContent = data.reply;
+      pendingBubble.classList.remove('pending');
+      
+      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
+      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
+      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      
+      // 动态将渲染出来的泡泡重置并正确绑定事件
+      const newUserCol = userRow.querySelector('.msg-col');
+      const newCharonCol = pendingRow.querySelector('.msg-col');
+      
+      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      
+    }} else {{
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+loadStatus();
+</script>
+</body>
+</html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
