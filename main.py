@@ -474,7 +474,7 @@ def send_bark(title, content, icon=None, sound=None):
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
-    mood_line = f"\n\n快此刻的状态：{mood_context}" if mood_context else ""
+    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
     window_summary = load_window_summary()
     summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -1093,7 +1093,7 @@ def chat_page():
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid #ffffff; /* 恢复白色发光圆环 */
+    border: 2.5px solid #ffffff; /* 恢复白色发光圆环 */
     box-shadow: 0 0 12px rgba(255, 255, 255, 0.6); /* 恢复发光效果 */
   }}
   #header-text {{ 
@@ -1222,17 +1222,22 @@ def chat_page():
     cursor: pointer;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 马卡龙甜美暮粉渐变 */
+    background: linear-gradient(135deg, rgba(229, 153, 169, 0.75), rgba(207, 125, 144, 0.75)); /* 磨砂粉色玻璃毛玻璃特效 */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1.5px solid rgba(255, 255, 255, 0.4); /* 玻璃反光边缘 */
     color: #ffffff;
     border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
+    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.15);
   }}
   .bubble.charon {{
-    background: rgba(255, 255, 255, 0.55);
-    border: none; /* 彻底取消气泡边框 */
+    background: rgba(255, 255, 255, 0.3); /* 降低白度，增加透明度 */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2); /* 淡淡的高光反射 */
     color: #6b5460;
     border-radius: 4px 18px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.03);
   }}
   .bubble.pending {{ opacity: 0.5; }}
 
@@ -1270,7 +1275,6 @@ def chat_page():
     border-right: 1px solid rgba(255, 255, 255, 0.15);
   }}
 
-  /* ---- 输入栏 ---- */
   #input-bar {{
     display: flex;
     gap: 10px;
