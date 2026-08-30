@@ -957,125 +957,174 @@ def chat_page():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Charon</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
 <style>
   * {{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }}
   html, body {{
     margin: 0; padding: 0; height: 100%;
-    /* 网格径向渐变，调浅调亮为晨曦迷雾般的柔和马卡龙粉 */
-    background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
-    background-attachment: fixed;
-    font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550; /* 恢复至初始雅致深紫灰 */
+    background: #f3dde4;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    color: #5a4550;
   }}
   #app {{
     display: flex;
     height: 100vh; height: 100dvh;
-    padding: 14px;
-    gap: 14px;
+    padding: 10px;
+    gap: 10px;
   }}
 
-  /* ---- 左侧玻璃舱导航栏（移除高光白线边框，增强透明度） ---- */
+  /* ---- 波点纹理基础类：黑→莓紫→白→莓紫→黑 竖直对称渐变（用于左侧导航栏） ---- */
+  .dots-vertical {{
+    position: relative;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.55) 1.1px, transparent 1.1px);
+    background-size: 9px 9px;
+    background-position: 0 0;
+  }}
+  .dots-vertical::before {{
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg,
+      #1a1418 0%, #7a3d54 22%, #e8b8cc 42%,
+      #fbeef3 50%, #e8b8cc 58%, #7a3d54 78%, #1a1418 100%);
+    z-index: -1;
+    border-radius: inherit;
+  }}
+
+  /* 水平版：黑（带浅点）从左向右渐变透明，用于header */
+  .dots-horizontal {{
+    position: relative;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1px);
+    background-size: 8px 8px;
+  }}
+  .dots-horizontal::before {{
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, #0d0a0d 0%, #241a20 40%, rgba(36,26,32,0.35) 75%, transparent 100%);
+    z-index: -1;
+  }}
+
+  /* 面板用：粉白细波点，铺在浅色底上 */
+  .dots-panel {{
+    position: relative;
+    background-image: radial-gradient(circle, rgba(150,80,105,0.3) 1px, transparent 1px);
+    background-size: 9px 9px;
+  }}
+  .dots-panel::before {{
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(160deg, #fdf3f0, #f6d9e3);
+    z-index: -1;
+    border-radius: inherit;
+  }}
+
+  /* ---- 左侧导航栏 ---- */
   #nav {{
-    width: 60px;
+    width: 56px;
     flex-shrink: 0;
+    border-radius: 22px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
-    padding: 24px 0;
-    background: rgba(255, 255, 255, 0.16); /* 调低白度至0.16，增强底色透光感 */
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
-    border-radius: 24px;
-    border: none; /* 彻底去除边缘白色线框 */
-    box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
+    gap: 14px;
+    padding: 18px 0;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.18);
   }}
   .nav-icon {{
-    width: 42px; height: 42px;
-    border-radius: 14px;
+    width: 38px; height: 38px;
+    border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.35);
-    color: #a66275;
-    font-size: 19px;
+    background: rgba(255,255,255,0.88);
+    color: #a85d78;
+    font-size: 16px;
     text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transition: transform 0.15s ease;
   }}
-  .nav-icon:hover {{
-    background: rgba(255, 255, 255, 0.65);
-    transform: translateY(-2px);
-    color: #8c4b5d;
-  }}
-  .nav-icon:active {{ transform: translateY(0) scale(0.95); }}
+  .nav-icon:active {{ transform: scale(0.92); }}
 
-  /* ---- 中间玻璃舱对话区（移除高光边框） ---- */
+  /* ---- 中间对话区 ---- */
   #main {{
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.16); /* 降低白度以增强通透感 */
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
-    border-radius: 28px;
-    border: none; /* 彻底去除边缘白色线框 */
-    box-shadow: 0 12px 40px rgba(184, 118, 138, 0.10);
+    background: linear-gradient(160deg, #fdf3f0, #f8e5eb);
+    border-radius: 22px;
     overflow: hidden;
+    box-shadow: 0 12px 40px rgba(150,90,110,0.18);
   }}
   #header {{
-    padding: 20px 24px 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    flex-shrink: 0;
+    position: relative;
+    height: 86px;
     display: flex;
     align-items: center;
     gap: 14px;
+    padding: 0 20px;
+    flex-shrink: 0;
+    overflow: hidden;
   }}
+  .header-content {{ position: relative; display: flex; align-items: center; gap: 14px; z-index: 1; }}
   #header-avatar {{
     width: 44px; height: 44px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    border: 2px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 4px 12px rgba(184, 118, 138, 0.15);
+    border: 2px solid rgba(255,255,255,0.3);
   }}
-  #header-text {{ min-width: 0; }}
+  #header-text {{ min-width: 0; position: relative; z-index: 1; }}
   #header .brand {{
-    font-family: "Georgia", "Songti SC", serif;
-    font-size: 26px;
-    font-style: italic;
+    font-family: Georgia, "Songti SC", serif;
+    font-size: 27px;
     letter-spacing: 3px;
-    color: #a66275;
-    font-weight: 500;
-    line-height: 1.2;
-    text-transform: uppercase;
+    font-weight: 700;
+    color: #d4a8bc;
+    text-shadow:
+      0 1px 0 rgba(0,0,0,0.6),
+      0 -1px 0 rgba(255,255,255,0.15),
+      0 2px 4px rgba(0,0,0,0.5);
+    -webkit-text-stroke: 0.4px rgba(80,40,55,0.4);
+    line-height: 1.25;
   }}
   #header .sub {{
     font-size: 11px;
-    color: #b08d98;
-    letter-spacing: 1px;
+    color: #e0c4d0;
     margin-top: 3px;
     display: flex;
     align-items: center;
     gap: 6px;
   }}
+  .status-badge {{
+    background: rgba(255,255,255,0.22);
+    padding: 2px 9px;
+    border-radius: 7px;
+    color: #fbeef3;
+    backdrop-filter: blur(4px);
+  }}
   .status-dot {{
     width: 6px; height: 6px;
     border-radius: 50%;
-    background: #84cc9a;
+    background: #7fd9a8;
+    box-shadow: 0 0 6px rgba(127,217,168,0.7);
     flex-shrink: 0;
-    box-shadow: 0 0 8px #84cc9a;
   }}
-  .status-dot.low {{ 
-    background: #c3a1ad; 
-    box-shadow: 0 0 8px #c3a1ad;
+  .status-dot.low {{
+    background: #d99bb0;
+    box-shadow: 0 0 6px rgba(217,155,176,0.7);
   }}
+  .header-signature {{
+    position: absolute;
+    bottom: 9px; right: 20px;
+    font-family: "Brush Script MT", cursive;
+    font-style: italic;
+    font-size: 18px;
+    color: rgba(255,255,255,0.55);
+    z-index: 1;
+  }}
+
   #messages {{
     flex: 1;
     overflow-y: auto;
-    padding: 22px 24px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -1085,27 +1134,21 @@ def chat_page():
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    max-width: 88%;
+    max-width: 84%;
+    position: relative;
   }}
-  .msg-row.user {{
-    align-self: flex-end;
-    flex-direction: row-reverse;
-  }}
-  .msg-row.charon {{
-    align-self: flex-start;
-  }}
+  .msg-row.user {{ align-self: flex-end; flex-direction: row-reverse; }}
+  .msg-row.charon {{ align-self: flex-start; }}
   .msg-avatar {{
-    width: 36px; height: 36px;
+    width: 32px; height: 32px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    margin-top: 0;
-    border: 1.5px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
+    border: 1.5px solid rgba(255,255,255,0.85);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
   }}
-  
-  /* 移除 width: 100%，恢复宽度自适应以修复时间戳右对齐问题 */
   .msg-col {{
+    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -1114,239 +1157,198 @@ def chat_page():
   .msg-row.charon .msg-col {{ align-items: flex-start; }}
   .msg-time {{
     font-size: 10px;
-    color: #b08d98;
+    color: #b98a9a;
     margin: 4px 4px 0;
   }}
   .bubble {{
-    position: relative;
-    padding: 12px 18px;
-    line-height: 1.6;
+    padding: 11px 16px;
+    line-height: 1.55;
     font-size: 15px;
     word-wrap: break-word;
     white-space: pre-wrap;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: pointer;
+    transition: transform 0.1s ease, filter 0.1s ease;
   }}
   .bubble.user {{
-    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 调浅更温柔自然的粉色渐变 */
-    color: #ffffff;
-    border-radius: 18px 4px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
+    background: linear-gradient(135deg, #d4738f, #b85575);
+    color: #fff;
+    border-radius: 18px 4px 18px 18px;
+    box-shadow: 0 4px 14px rgba(184,96,118,0.28);
   }}
   .bubble.charon {{
-    background: rgba(255, 255, 255, 0.55);
-    border: none; /* 完全移除 Charon 气泡边框 */
-    color: #6b5460; /* 恢复至原版优雅冷粉灰色 */
-    border-radius: 4px 18px 18px 18px; 
-    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
+    background: rgba(255,255,255,0.78);
+    color: #6b5460;
+    border-radius: 4px 18px 18px 18px;
+    box-shadow: 0 3px 10px rgba(150,90,110,0.1);
   }}
   .bubble.pending {{ opacity: 0.5; }}
-  .msg-delete {{
-    opacity: 0;
-    font-size: 11px;
-    color: #b08d98;
-    background: none;
-    border: none;
-    padding: 2px 4px;
+  .bubble.pressed {{ transform: scale(0.97); filter: brightness(0.94); }}
+  .bubble.recalled {{ opacity: 0.45; font-style: italic; }}
+
+  /* 长按弹出的菜单，替代原来悬停撤回按钮 */
+  .ctx-menu {{
+    position: absolute;
+    bottom: calc(100% + 6px);
+    background: rgba(28,22,26,0.94);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 6px;
+    display: none;
+    gap: 2px;
+    z-index: 20;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }}
+  .msg-row.user .ctx-menu {{ right: 0; }}
+  .msg-row.charon .ctx-menu {{ left: 42px; }}
+  .ctx-menu.show {{ display: flex; }}
+  .ctx-menu button {{
+    background: none; border: none;
+    color: #f0e4ea;
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    white-space: nowrap;
   }}
-  .msg-row:hover .msg-delete {{ opacity: 1; }}
-  .msg-delete:hover {{ color: #cf7d90; }}
-  
-  /* 时间戳控制行（移除 100% 宽度，利用父容器 align-items 自动吸附左右两侧，靠拢头像） */
-  .msg-time-row {{
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }}
+  .ctx-menu button:active {{ background: rgba(255,255,255,0.14); }}
+  .ctx-menu button.danger {{ color: #e88fa8; }}
 
   #input-bar {{
     display: flex;
-    gap: 10px;
-    padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    gap: 8px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
     flex-shrink: 0;
   }}
   #input-bar textarea {{
     flex: 1;
     resize: none;
-    border-radius: 16px;
-    border: none; /* 移除外边框 */
-    background: rgba(255, 255, 255, 0.25); /* 提升透明玻璃质感 */
+    border-radius: 14px;
+    border: 1px solid rgba(150,90,110,0.15);
+    background: rgba(255,255,255,0.7);
     color: #5a4550;
-    padding: 11px 16px;
+    padding: 10px 14px;
     font-size: 15px;
     font-family: inherit;
     max-height: 100px;
     outline: none;
-    transition: background 0.2s ease;
   }}
-  #input-bar textarea:focus {{
-    background: rgba(255, 255, 255, 0.45);
-  }}
-  #input-bar textarea::placeholder {{ color: #b08d98; }}
+  #input-bar textarea::placeholder {{ color: #c9aab3; }}
   #input-bar button {{
     border: none;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 同步调整发送按钮色 */
+    border-radius: 14px;
+    background: linear-gradient(135deg, #d4738f, #b85575);
     color: #fff;
-    padding: 0 22px;
+    padding: 0 20px;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.2);
-    transition: all 0.2s ease;
+    box-shadow: 0 3px 10px rgba(184,96,118,0.35);
   }}
-  #input-bar button:hover {{
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.3);
-  }}
-  #input-bar button:active {{
-    transform: translateY(0);
-  }}
-  #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; cursor: default; }}
+  #input-bar button:disabled {{ opacity: 0.4; box-shadow: none; }}
   #empty-hint {{
-    color: #b08d98;
+    color: #c9aab3;
     font-size: 13px;
     text-align: center;
     margin-top: 40px;
   }}
 
-  /* ---- 右侧玻璃舱状态面板（移除白线边框，增强透光度） ---- */
+  /* ---- 右侧状态面板：粉白波点纹理 ---- */
   #panel {{
-    width: 210px;
+    width: 200px;
     flex-shrink: 0;
     display: none;
     flex-direction: column;
-    gap: 16px;
-    padding: 22px 18px;
-    background: rgba(255, 255, 255, 0.16); /* 调低白度以增强通透度 */
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
-    border-radius: 24px;
-    border: none; /* 彻底去除边缘白色线框 */
-    box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
+    gap: 12px;
+    padding: 20px 16px;
+    border-radius: 22px;
     overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(150,90,110,0.15);
   }}
   @media (min-width: 720px) {{
     #panel {{ display: flex; }}
   }}
   .panel-title {{
-    font-family: "Georgia", "Songti SC", serif;
-    font-size: 14px;
-    letter-spacing: 3px;
-    color: #a66275;
-    margin-bottom: 6px;
+    font-family: Georgia, "Songti SC", serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: #a85d78;
+    margin-bottom: 4px;
     text-transform: uppercase;
     font-weight: bold;
   }}
-  .stat-block {{ margin-bottom: 12px; }}
+  .stat-block {{ margin-bottom: 4px; }}
   .stat-label {{
     font-size: 11px;
-    color: #b08d98;
-    margin-bottom: 4px;
+    color: #8a5568;
+    margin-bottom: 5px;
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
   }}
-  
-  /* 情绪值进度条：完美复刻参考图（2px 极简扁平细直轨样式，无圆角） */
   .stat-bar-track {{
-    height: 2px; 
-    border-radius: 0; /* 彻底去除圆角，使其为凌厉纯平细轨 */
-    background: rgba(90, 69, 80, 0.1); 
+    height: 4px;
+    background: rgba(150,80,105,0.15);
     overflow: hidden;
-    width: 100%;
   }}
   .stat-bar-fill {{
     height: 100%;
-    border-radius: 0;
-    background: #cf7d90; /* 纯色玫瑰粉指示条 */
+    background: linear-gradient(90deg, #d4738f, #b85575);
     transition: width 0.4s ease;
   }}
-  .stat-value {{
+  .stat-value {{ font-size: 12px; color: #6a4558; }}
+  .period-tag, .checking-tag, .lucky-tag {{
     font-size: 11px;
-    color: #b08d98;
-  }}
-  .period-tag {{
-    font-size: 11px;
-    color: #a66275;
-    background: rgba(255, 255, 255, 0.4);
-    border: none;
+    color: #7a5568;
+    background: rgba(255,255,255,0.5);
     border-radius: 10px;
     padding: 8px 10px;
     line-height: 1.5;
   }}
-  .checking-tag {{
-    font-size: 11px;
-    color: #7d5a68;
-    background: rgba(255, 255, 255, 0.4);
-    border: none;
-    border-radius: 10px;
-    padding: 8px 10px;
-    line-height: 1.5;
-  }}
-  .lucky-tag {{
-    font-size: 11px;
-    color: #b86076;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.35));
-    border: none;
-    border-radius: 10px;
-    padding: 8px 10px;
-    line-height: 1.5;
-  }}
-  
-  /* “心里话”板块：完美恢复原版倾斜字体、颜色、气泡阴影与白透磨砂无框设计 */
-  .thought-card {{
+  .thought-card, .summary-card {{
     font-size: 12px;
-    color: #7a5a65; /* 彻底恢复原版深粉玫瑰灰字体颜色 */
-    background: rgba(255, 255, 255, 0.45); 
-    border: none; /* 移除外边框 */
-    border-radius: 14px;
-    padding: 12px 14px;
+    color: #6a4558;
+    background: rgba(255,255,255,0.5);
+    border-radius: 10px;
+    padding: 10px 12px;
     line-height: 1.6;
-    font-style: italic; /* 彻底恢复原版经典优雅倾斜体 */
-    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05); /* 柔和阴影 */
-  }}
-  .summary-card {{
-    font-size: 11px;
-    color: #6e505f;
-    background: rgba(255, 255, 255, 0.3);
-    border: none;
-    border-radius: 12px;
-    padding: 9px 11px;
-    line-height: 1.6;
+    font-style: italic;
   }}
   .today-count {{
-    font-size: 24px;
-    color: #b86076;
-    font-family: "Georgia", serif;
+    font-size: 22px;
+    color: #b8768a;
+    font-family: Georgia, serif;
     font-weight: 600;
   }}
   .today-count-unit {{
     font-size: 11px;
-    color: #b08d98;
+    color: #8a5568;
     margin-left: 3px;
   }}
   .panel-empty {{
     font-size: 11px;
-    color: #b08d98;
+    color: #8a5568;
   }}
 </style>
 </head>
 <body>
 <div id="app">
 
-  <div id="nav">
-    <a class="nav-icon" href="/" title="首页">✦</a>
+  <div id="nav" class="dots-vertical">
+    <a class="nav-icon" href="/" title="首页">⌂</a>
     <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
   </div>
 
   <div id="main">
-    <div id="header">
-      <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
-      <div id="header-text">
-        <div class="brand">CHARON</div>
-        <div class="sub"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></div>
+    <div id="header" class="dots-horizontal">
+      <div class="header-content">
+        <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
+        <div id="header-text">
+          <div class="brand">CHARON</div>
+          <div class="sub"><span class="status-dot" id="status-dot"></span><span class="status-badge" id="status-label">加载中…</span></div>
+        </div>
       </div>
+      <div class="header-signature">@Seraphina</div>
     </div>
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
@@ -1355,7 +1357,7 @@ def chat_page():
     </div>
   </div>
 
-  <div id="panel">
+  <div id="panel" class="dots-panel">
     <div class="panel-title">PULSE</div>
     <div id="panel-body"><div class="panel-empty">加载中…</div></div>
   </div>
@@ -1386,6 +1388,40 @@ function formatTime(isoStr) {{
   return h + ':' + m;
 }}
 
+function escapeHtml(str) {{
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}}
+
+/* 长按弹出菜单：复制 + 撤回，两边消息都能撤回 */
+function bindLongPress(bubbleEl, menuEl) {{
+  let pressTimer = null;
+  const start = () => {{
+    bubbleEl.classList.add('pressed');
+    pressTimer = setTimeout(() => {{
+      document.querySelectorAll('.ctx-menu.show').forEach(m => m.classList.remove('show'));
+      menuEl.classList.add('show');
+      bubbleEl.classList.remove('pressed');
+    }}, 420);
+  }};
+  const cancel = () => {{
+    clearTimeout(pressTimer);
+    bubbleEl.classList.remove('pressed');
+  }};
+  bubbleEl.addEventListener('mousedown', start);
+  bubbleEl.addEventListener('mouseup', cancel);
+  bubbleEl.addEventListener('mouseleave', cancel);
+  bubbleEl.addEventListener('touchstart', start, {{ passive: true }});
+  bubbleEl.addEventListener('touchend', cancel);
+}}
+
+document.addEventListener('click', (e) => {{
+  if (!e.target.closest('.ctx-menu') && !e.target.closest('.bubble')) {{
+    document.querySelectorAll('.ctx-menu.show').forEach(m => m.classList.remove('show'));
+  }}
+}});
+
 function renderMsgRow(role, content, createdAt, pending, msgId) {{
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
@@ -1404,29 +1440,37 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   bubble.textContent = content;
   col.appendChild(bubble);
 
-  const timeRow = document.createElement('div');
-  timeRow.className = 'msg-time-row';
-
-  const timeEl = document.createElement('span');
+  const timeEl = document.createElement('div');
   timeEl.className = 'msg-time';
   timeEl.textContent = formatTime(createdAt);
-  timeRow.appendChild(timeEl);
+  col.appendChild(timeEl);
 
-  if (msgId) {{
-    const delBtn = document.createElement('button');
-    delBtn.className = 'msg-delete';
-    delBtn.textContent = '撤回';
-    delBtn.addEventListener('click', () => deleteMessage(msgId, row));
-    timeRow.appendChild(delBtn);
-  }}
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu';
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = '复制';
+  copyBtn.addEventListener('click', () => {{
+    navigator.clipboard?.writeText(bubble.textContent).catch(() => {{}});
+    menu.classList.remove('show');
+  }});
+  menu.appendChild(copyBtn);
+  const recallBtn = document.createElement('button');
+  recallBtn.className = 'danger';
+  recallBtn.textContent = '撤回';
+  recallBtn.addEventListener('click', () => {{
+    if (row.dataset.msgId) recallMessage(row.dataset.msgId, row, bubble);
+    menu.classList.remove('show');
+  }});
+  menu.appendChild(recallBtn);
+  col.appendChild(menu);
 
-  col.appendChild(timeRow);
+  bindLongPress(bubble, menu);
+
   row.appendChild(col);
   return row;
 }}
 
-async function deleteMessage(msgId, rowEl) {{
-  if (!confirm('删掉这条消息？')) return;
+async function recallMessage(msgId, rowEl, bubbleEl) {{
   try {{
     const res = await fetch(apiUrl('/api/chat-delete'), {{
       method: 'POST',
@@ -1435,24 +1479,14 @@ async function deleteMessage(msgId, rowEl) {{
     }});
     const data = await res.json();
     if (data.ok) {{
-      rowEl.remove();
+      bubbleEl.textContent = '（已撤回）';
+      bubbleEl.classList.add('recalled');
     }} else {{
-      alert('删除失败：' + (data.error || '未知错误'));
+      alert('撤回失败：' + (data.error || '未知错误'));
     }}
   }} catch (e) {{
-    alert('网络错误，没删成');
+    alert('网络错误，没撤回成');
   }}
-}}
-
-function addDeleteButton(rowEl, msgId) {{
-  if (!msgId) return;
-  const timeRow = rowEl.querySelector('.msg-time-row');
-  if (!timeRow || timeRow.querySelector('.msg-delete')) return;
-  const delBtn = document.createElement('button');
-  delBtn.className = 'msg-delete';
-  delBtn.textContent = '撤回';
-  delBtn.addEventListener('click', () => deleteMessage(msgId, rowEl));
-  timeRow.appendChild(delBtn);
 }}
 
 function scrollToBottom() {{
@@ -1485,12 +1519,6 @@ function formatHours(h) {{
   return h.toFixed(1) + ' 小时前';
 }}
 
-function escapeHtml(str) {{
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}}
-
 async function loadStatus() {{
   try {{
     const res = await fetch(apiUrl('/api/chat-status'));
@@ -1501,7 +1529,6 @@ async function loadStatus() {{
       return;
     }}
 
-    // 更新header状态文字和状态点
     statusLabel.textContent = data.status_label || '在线';
     statusDot.className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
@@ -1529,10 +1556,10 @@ async function loadStatus() {{
       html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
     }}
     if (data.last_thought) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:10px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
     }}
     if (data.window_summary) {{
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:10px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
     }}
     panelBody.innerHTML = html;
   }} catch (e) {{
@@ -1568,8 +1595,6 @@ async function sendMessage() {{
       pendingBubble.classList.remove('pending');
       if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
       if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
-      addDeleteButton(userRow, data.user_msg_id);
-      addDeleteButton(pendingRow, data.charon_msg_id);
     }} else {{
       pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
       pendingBubble.classList.remove('pending');
