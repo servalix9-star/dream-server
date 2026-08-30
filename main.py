@@ -721,7 +721,7 @@ def miss_you():
     instant_msg = random.choice(INSTANT_CATCH_MESSAGES)
     send_bark("Charon", instant_msg, icon=ICON_LUCKY)
 
-    # 记一笔事件，方便后续也能收藏正常消息生成时看到这个动态
+    # 记一笔事件，方便后续也能在网页里发一句话给Charon，让TA真正接住这句话并回应。
     events = load_events()
     events.append({
         "type": "miss_you",
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -993,48 +993,82 @@ def chat_page():
     margin-top: 0;
   }}
 
-  /* 1. 外层霓虹旋转虚线环（雷达旋转） */
+  /* 流星轨道 1 (外圈 - 顺时针流星) */
   .avatar-wrap::before {{
     content: '';
     position: absolute;
     top: -4px; left: -4px; right: -4px; bottom: -4px;
     border-radius: 50%;
-    border: 1.2px dashed rgba(255, 94, 132, 0.45); /* 蜜桃粉色霓虹虚线 */
-    box-shadow: 0 0 8px rgba(255, 94, 132, 0.4);
-    animation: rotate-halo 12s linear infinite; /* 雷达扫描旋转效果 */
-    z-index: 0;
+    border: 1px solid transparent;
     pointer-events: none;
+    z-index: 0;
   }}
-  
-  /* 2. 内层高光实色环 */
+
+  /* 流星轨道 2 (内圈 - 逆时针流星) */
   .avatar-wrap::after {{
     content: '';
     position: absolute;
     top: -1.5px; left: -1.5px; right: -1.5px; bottom: -1.5px;
     border-radius: 50%;
-    border: 1.5px solid #ffffff; /* 内层高亮白细线 */
-    box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+    border: 1px solid transparent;
+    pointer-events: none;
     z-index: 0;
-    pointer-events: none;
   }}
 
-  /* 3. 悬浮呼吸星芒 ✦ */
-  .star-accent {{
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    z-index: 2; /* 置于头像上面 */
-    color: #ffffff;
-    font-size: 11px;
-    text-shadow: 0 0 8px rgba(255, 255, 255, 1), 0 0 14px #ff5e84;
-    animation: blink-star 2.5s ease-in-out infinite; /* 缓慢明暗呼吸灯效果 */
-    pointer-events: none;
-    user-select: none;
+  /* --- 角色色彩分化 --- */
+  
+  /* Charon 侧（左 / AI）：幽邃冷魅的电光紫与银白流星 */
+  .avatar-wrap.charon-theme::before {{
+    border-top: 1.2px solid #9b5de5;
+    border-left: 1.2px solid rgba(155, 93, 229, 0.2);
+    animation: rotate-clockwise 4s linear infinite;
+  }}
+  .avatar-wrap.charon-theme::after {{
+    border-bottom: 1.2px solid #ffffff;
+    border-right: 1.2px solid rgba(255, 255, 255, 0.25);
+    animation: rotate-counter-clockwise 3s linear infinite;
+  }}
+  .avatar-wrap.charon-theme .star-accent {{
+    text-shadow: 0 0 4px #ffffff, 0 0 10px #9b5de5, 0 0 20px #8a42ff;
   }}
 
-  @keyframes rotate-halo {{
+  /* User 侧（右 / 用户）：甜美温柔的蜜桃粉与柔金流星 */
+  .avatar-wrap.user-theme::before {{
+    border-top: 1.2px solid #ff5e84;
+    border-left: 1.2px solid rgba(255, 94, 132, 0.2);
+    animation: rotate-clockwise 4.5s linear infinite;
+  }}
+  .avatar-wrap.user-theme::after {{
+    border-bottom: 1.2px solid #ffffff;
+    border-right: 1.2px solid rgba(255, 229, 236, 0.3);
+    animation: rotate-counter-clockwise 3.5s linear infinite;
+  }}
+  .avatar-wrap.user-theme .star-accent {{
+    text-shadow: 0 0 4px #ffffff, 0 0 10px #ff5e84, 0 0 20px #ff2a7d;
+  }}
+
+  /* 旋转动画定义 */
+  @keyframes rotate-clockwise {{
     0% {{ transform: rotate(0deg); }}
     100% {{ transform: rotate(360deg); }}
+  }}
+
+  @keyframes rotate-counter-clockwise {{
+    0% {{ transform: rotate(360deg); }}
+    100% {{ transform: rotate(0deg); }}
+  }}
+
+  /* 悬浮强对比呼吸星芒 ✦ */
+  .star-accent {{
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    z-index: 2; /* 置于头像上面 */
+    color: #ffffff;
+    font-size: 15px; /* 进一步放大星芒 */
+    animation: blink-star 2s ease-in-out infinite; /* 缓慢明暗呼吸灯效果 */
+    pointer-events: none;
+    user-select: none;
   }}
 
   @keyframes blink-star {{
@@ -1566,7 +1600,7 @@ def chat_page():
   <!-- 1. 左侧波点玻璃舱导航栏 -->
   <div id="nav">
     <!-- 包裹层支持双重发光旋转光圈与悬浮星芒 -->
-    <div class="avatar-wrap msg-style" style="margin-bottom: 12px; cursor: pointer;" onclick="location.href='/'">
+    <div class="avatar-wrap msg-style user-theme" style="margin-bottom: 12px; cursor: pointer;" onclick="location.href='/'">
       <img class="msg-avatar" src="https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jpg" alt="Home">
       <span class="star-accent">✦</span>
     </div>
@@ -1577,7 +1611,7 @@ def chat_page():
   <div id="main">
     <div id="header">
       <!-- 大头像双重霓虹旋转光圈与发光星芒 -->
-      <div class="avatar-wrap header-style">
+      <div class="avatar-wrap header-style charon-theme">
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
         <span class="star-accent">✦</span>
       </div>
@@ -1643,9 +1677,9 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
 
-  // 使用外层 avatar-wrap 包装头像
+  // 使用外层 avatar-wrap 包装头像，并智能区分角色配色
   const avatarWrap = document.createElement('div');
-  avatarWrap.className = 'avatar-wrap msg-style';
+  avatarWrap.className = 'avatar-wrap msg-style ' + (role === 'user' ? 'user-theme' : 'charon-theme');
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
