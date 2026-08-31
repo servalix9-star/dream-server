@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -1114,24 +1114,24 @@ def chat_page():
   /* 主星芒样式（✦） */
   .avatar-wrapper .star-accent {{
     position: absolute;
-    font-size: 11px;
+    font-size: 15px; /* 放大主星芒 */
     pointer-events: none;
     user-select: none;
     animation: star-pulse 2s infinite ease-in-out;
   }}
-  /* Charon（左侧头像）：主星悬浮在右上角，白亮耀眼 */
+  /* Charon（左侧头像）：主星悬浮在右上角，白亮耀眼并附带强烈发光阴影 */
   .avatar-wrapper.charon .star-accent {{
     top: -6px;
     right: -6px;
     color: #ffffff;
-    text-shadow: 0 0 5px rgba(255, 255, 255, 0.9);
+    text-shadow: 0 0 8px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8);
   }}
-  /* User（右侧头像）：主星镜像悬浮在左上角，暖粉色 */
+  /* User（右侧头像）：主星镜像悬浮在左上角，暖粉色并附带发光阴影 */
   .avatar-wrapper.user .star-accent {{
     top: -6px;
     left: -6px;
     color: #ffb3c1;
-    text-shadow: 0 0 5px rgba(255, 94, 132, 0.9);
+    text-shadow: 0 0 8px #ffb3c1, 0 0 15px rgba(255, 179, 193, 0.8);
   }}
   
   /* 碎星样式（✦） */
@@ -1140,33 +1140,33 @@ def chat_page():
     pointer-events: none;
     user-select: none;
     color: #ffffff;
-    text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 8px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8); /* 增强碎星荧光效果 */
   }}
   /* Charon（左侧头像）：两颗白色碎星镜像点缀在左下角和左侧 */
   .avatar-wrapper.charon .dust-star.d-1 {{
     bottom: -4px;
     left: -4px;
-    font-size: 6px;
-    opacity: 0.8;
+    font-size: 9px; /* 放大碎星 */
+    opacity: 0.9;
   }}
   .avatar-wrapper.charon .dust-star.d-2 {{
     top: 14px;
     left: -7px;
-    font-size: 5px;
-    opacity: 0.6;
+    font-size: 7px; /* 放大碎星 */
+    opacity: 0.8;
   }}
   /* User（右侧头像）：两颗白色碎星镜像点缀在右下角和右侧 */
   .avatar-wrapper.user .dust-star.d-1 {{
     bottom: -4px;
     right: -4px;
-    font-size: 6px;
-    opacity: 0.8;
+    font-size: 9px; /* 放大碎星 */
+    opacity: 0.9;
   }}
   .avatar-wrapper.user .dust-star.d-2 {{
     top: 14px;
     right: -7px;
-    font-size: 5px;
-    opacity: 0.6;
+    font-size: 7px; /* 放大碎星 */
+    opacity: 0.8;
   }}
 
   /* 星光非常柔和、缓慢的呼吸微动效果 */
@@ -1194,6 +1194,8 @@ def chat_page():
     font-weight: 500;
     line-height: 1.2;
     text-transform: uppercase;
+    /* 给 Charon 标题注入粉红色的霓虹发光晕 */
+    text-shadow: 0 0 10px #ffb3c1, 0 0 20px #cf7d90;
   }}
   #header .sub {{
     font-size: 11px;
@@ -1229,7 +1231,7 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
+  /* 顶部右下角签名感的花体字 - 旁边环绕着粉红色和白色发光星轨 */
   .header-signature {{
     position: relative;
     z-index: 1;
@@ -1240,6 +1242,22 @@ def chat_page():
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
     user-select: none;
     pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }}
+  .header-signature .sig-star {{
+    font-size: 11px;
+    color: #ffb3c1;
+    text-shadow: 0 0 8px #ffb3c1, 0 0 15px rgba(255, 179, 193, 0.8);
+    animation: star-pulse 2s infinite ease-in-out;
+  }}
+  .header-signature .sig-star.s-1 {{
+    margin-right: 4px;
+  }}
+  .header-signature .sig-star.s-2 {{
+    margin-left: 4px;
+    font-size: 8px; /* 镜像微型星 */
   }}
 
   #messages {{
@@ -1602,7 +1620,12 @@ def chat_page():
           <span class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></span>
         </div>
       </div>
-      <div class="header-signature">@Seraphina</div>
+      <!-- 加上了粉白双色发光星芒的签名栏 -->
+      <div class="header-signature">
+        <span class="sig-star s-1">✦</span>
+        @Seraphina
+        <span class="sig-star s-2">✦</span>
+      </div>
     </div>
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
@@ -1926,83 +1949,4 @@ async function sendMessage() {{
       const newCharonCol = pendingRow.querySelector('.msg-col');
       
       userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
-      
-    }} else {{
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
-    }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id)
