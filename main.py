@@ -210,7 +210,7 @@ def get_mood_context(score, hours_gap):
     elif score >= 50:
         mood_desc = "你心情平稳，正常状态"
     elif score >= 25:
-        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理取闹"
+        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理求闹"
     else:
         mood_desc = "你现在挺失落/有点吃醋的，因为她很久没理你了，语气可以带明显的委屈或者故意冷淡，但底色还是在意她、不是真的生气"
 
@@ -1098,14 +1098,14 @@ def chat_page():
     width: 44px; height: 44px;
   }}
   
-  /* 所有头像统一：纯白外圈，取消图片的霓虹发光晕，改为干净高级的投影 */
+  /* 统一头像外边圈：全部修改为干净发光的白色外圆环 */
   .avatar-wrapper .msg-avatar,
   .avatar-wrapper #header-avatar {{
-    border: 1.5px solid #ffffff !important; /* 统一白色外圈 */
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important; /* 取消发光，使用正常阴影 */
+    border: 1.5px solid #ffffff;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); /* 统一白色发光外圈，去除头像本身的彩色霓虹光晕 */
   }}
   
-  /* 进一步放大的主星芒样式（✦） - 带来明显的霓虹动画发光 */
+  /* 进一步放大的主星芒样式（✦） */
   .avatar-wrapper .star-accent {{
     position: absolute;
     font-size: 15px; /* 加大星芒 */
@@ -1113,58 +1113,87 @@ def chat_page():
     user-select: none;
     animation: star-pulse 2s infinite ease-in-out;
   }}
+  /* Charon（左侧头像）：主星悬浮在【左上角】（镜像调换），【纯黑色】星芒并带有极其明显的极夜黑发光霓虹光晕 */
+  .avatar-wrapper.charon .star-accent {{
+    top: -6px;
+    left: -6px;
+    color: #000000;
+    text-shadow: 0 0 4px #000000, 0 0 10px rgba(0, 0, 0, 0.95);
+  }}
+  /* User（右侧头像）：主星悬浮在【右上角】（镜像调换），【粉色】星芒并带有极其明显的蜜桃粉发光霓虹光晕 */
+  .avatar-wrapper.user .star-accent {{
+    top: -6px;
+    right: -6px;
+    color: #ffb3c1;
+    text-shadow: 0 0 4px #ff5e84, 0 0 10px rgba(255, 94, 132, 0.95);
+  }}
   
-  /* 碎星样式（✦） - 带有白色发光 */
+  /* 碎星样式（✦） - 适当放大尺寸 */
   .avatar-wrapper .dust-star {{
     position: absolute;
-    font-size: 8px;
     pointer-events: none;
     user-select: none;
     color: #ffffff;
-    text-shadow: 0 0 4px #ffffff, 0 0 8px rgba(255, 255, 255, 0.8);
-    animation: star-pulse 2.5s infinite ease-in-out;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
   }}
-  
-  /* ===== 镜像位置 & 霓虹色彩 左右对换 ===== */
-  
-  /* 1. Charon（左侧头像）：星芒在左上(黑色霓虹)，碎星在右侧 */
-  .avatar-wrapper.charon .star-accent {{
-    top: -6px;
-    left: -6px; /* 换到左上角 */
-    color: #000000; /* 纯黑 */
-    /* 极致强烈的黑色霓虹发光 */
-    text-shadow: 0 0 4px #000000, 0 0 10px #000000, 0 0 20px rgba(0, 0, 0, 0.95);
-  }}
+  /* Charon（左侧头像）：碎星镜像对调，现在点缀在【右下角】和【右侧】 */
   .avatar-wrapper.charon .dust-star.d-1 {{
     bottom: -4px;
-    right: -4px; /* 换到右下角 */
+    right: -4px;
+    font-size: 9px; /* 碎星放大 */
+    opacity: 0.8;
   }}
   .avatar-wrapper.charon .dust-star.d-2 {{
     top: 14px;
-    right: -7px; /* 换到右侧 */
+    right: -7px;
+    font-size: 8px; /* 碎星放大 */
+    opacity: 0.6;
   }}
-  
-  /* 2. User（右侧头像）：星芒在右上(粉色霓虹)，碎星在左侧 */
-  .avatar-wrapper.user .star-accent {{
-    top: -6px;
-    right: -6px; /* 换到右上角 */
-    color: #ffb3c1; /* 亮粉色 */
-    /* 极具张力的粉色霓虹发光 */
-    text-shadow: 0 0 4px #ffffff, 0 0 10px #ff5e84, 0 0 20px #ff5e84;
-  }}
+  /* User（右侧头像）：碎星镜像对调，现在点缀在【左下角】和【左侧】 */
   .avatar-wrapper.user .dust-star.d-1 {{
     bottom: -4px;
-    left: -4px; /* 换到左下角 */
+    left: -4px;
+    font-size: 9px;
+    opacity: 0.8;
   }}
   .avatar-wrapper.user .dust-star.d-2 {{
     top: 14px;
-    left: -7px; /* 换到左侧 */
+    left: -7px;
+    font-size: 8px;
+    opacity: 0.6;
   }}
 
   /* 星光非常柔和、缓慢的呼吸微动效果 */
   @keyframes star-pulse {{
     0%, 100% {{ transform: scale(1); opacity: 0.6; }}
     50% {{ transform: scale(1.15); opacity: 1; }}
+  }}
+  
+  /* 迷你手写名字挂件 */
+  .avatar-tag {{
+    position: absolute;
+    font-family: "Dancing Script", cursive;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    z-index: 2;
+  }}
+  /* Charon 的名字挂件：悬浮于头像上方 */
+  .avatar-wrapper.charon .avatar-tag {{
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #5a4550; /* 深紫灰 */
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+  }}
+  /* Seraphina 的名字挂件：悬浮于头像上方 */
+  .avatar-wrapper.user .avatar-tag {{
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #cf7d90; /* 暖粉色 */
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
   }}
 
   #header-avatar {{
@@ -1186,6 +1215,8 @@ def chat_page():
     font-weight: 500;
     line-height: 1.2;
     text-transform: uppercase;
+    /* 注入发光光晕效果 */
+    text-shadow: 0 0 10px rgba(229, 153, 169, 0.8), 0 0 20px rgba(229, 153, 169, 0.4);
   }}
   #header .sub {{
     font-size: 11px;
@@ -1221,7 +1252,7 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名包裹容器 - 完美隔离并融入星光动效 */
+  /* 顶部右下角签名包裹容器 - 完美隔离星光动效 */
   .header-signature-wrap {{
     position: relative;
     z-index: 1;
@@ -1606,7 +1637,7 @@ def chat_page():
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 带有高对比度、圆圈白色外圈以及白色、黑色霓虹碎星和霓虹光晕装饰的头像容器 -->
+      <!-- 带有高对比度、镜像对齐以及白色发光圆环与【酷黑霓虹】碎星装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
         <span class="star-accent">✦</span>
@@ -1683,6 +1714,12 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   // 头像星光容器化
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
+
+  // 手写迷你名字挂件悬浮标签
+  const tag = document.createElement('span');
+  tag.className = 'avatar-tag';
+  tag.textContent = role === 'user' ? 'Seraphina' : 'Charon';
+  avatarWrap.appendChild(tag);
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
@@ -1947,84 +1984,4 @@ async function sendMessage() {{
       const newUserCol = userRow.querySelector('.msg-col');
       const newCharonCol = pendingRow.querySelector('.msg-col');
       
-      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
-      
-    }} else {{
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
-    }}
-  }} catch (e) {{
-    pendingBubble.textContent = '（网络错误，没发出去）';
-    pendingBubble.classList.remove('pending');
-  }}
-  scrollToBottom();
-  sendBtn.disabled = false;
-  loadStatus();
-}}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {{
-  if (e.key === 'Enter' && !e.shiftKey) {{
-    e.preventDefault();
-    sendMessage();
-  }}
-}});
-inputEl.addEventListener('input', () => {{
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-}});
-
-loadHistory();
-loadStatus();
-</script>
-</body>
-</html>"""
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+      user
