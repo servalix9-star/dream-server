@@ -26,14 +26,41 @@ PERIOD_FILE = data_path("period.json")
 CHAT_HISTORY_FILE = data_path("chat_history.json")
 MOOD_FILE = data_path("mood.json")
 SUMMARY_FILE = data_path("window_summary.json")
+MODEL_CONFIG_FILE = data_path("model_config.json")
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 # 网页聊天的访问口令，不设置的话 /chat 页面直接放行（不建议生产环境这样用）
 CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
 
-# DeepSeek 用 OpenAI 兼容接口，deepseek-chat 是当前主力模型（对应 V4-Flash）
-DEEPSEEK_MODEL = "deepseek-chat"
+# DeepSeek 已在 2026-07-24 停用 deepseek-chat / deepseek-reasoner 这两个旧模型名，
+# 现在可选的是 deepseek-v4-flash（对话，高性价比）和 deepseek-v4-pro（深度推理，更贵）。
+# V4 默认开启思考模式，调用时统一关闭（thinking: disabled），保持直接作答、
+# 且 temperature 等参数继续生效的行为——思考模式下这些参数会被静默忽略。
+AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"]
+DEFAULT_MODEL = "deepseek-v4-flash"
+
+
+def get_current_model():
+    """读取当前选用的模型，存在 MODEL_CONFIG_FILE 里，没配置过就用默认值。
+    存服务端而不是浏览器本地，这样换设备打开聊天页选择依然一致。"""
+    if os.path.exists(MODEL_CONFIG_FILE):
+        try:
+            with open(MODEL_CONFIG_FILE, "r") as f:
+                data = json.load(f)
+                model = data.get("model")
+                if model in AVAILABLE_MODELS:
+                    return model
+        except (json.JSONDecodeError, OSError):
+            pass
+    return DEFAULT_MODEL
+
+
+def set_current_model(model):
+    if model not in AVAILABLE_MODELS:
+        raise ValueError(f"不支持的模型: {model}")
+    with open(MODEL_CONFIG_FILE, "w") as f:
+        json.dump({"model": model}, f)
 
 # 防抖：同一个来源短时间内连续触发（比如连开几次天气App）只真正跑一次
 DEBOUNCE_SECONDS = 300  # 5分钟
@@ -616,9 +643,10 @@ def run_once():
             "Content-Type": "application/json"
         },
         json={
-            "model": DEEPSEEK_MODEL,
+            "model": get_current_model(),
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 1.2
+            "temperature": 1.2,
+            "thinking": {"type": "disabled"}
         },
         timeout=30
     )
@@ -673,9 +701,10 @@ def call_deepseek(prompt):
             "Content-Type": "application/json"
         },
         json={
-            "model": DEEPSEEK_MODEL,
+            "model": get_current_model(),
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 1.2
+            "temperature": 1.2,
+            "thinking": {"type": "disabled"}
         },
         timeout=30
     )
@@ -786,8 +815,38 @@ def chat_status():
         "last_thought": last_thought or None,
         "last_was_lucky": last_was_lucky,
         "window_summary": window_summary or None,
-        "today_interaction_count": today_count
+        "today_interaction_count": today_count,
+        "current_model": get_current_model()
     })
+
+
+@app.route("/api/chat-model", methods=["GET"])
+def get_chat_model():
+    """给网页的模型选择器用：返回当前用的模型 + 全部可选模型列表。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    return jsonify({
+        "ok": True,
+        "current_model": get_current_model(),
+        "available_models": AVAILABLE_MODELS
+    })
+
+
+@app.route("/api/chat-model", methods=["POST"])
+def set_chat_model():
+    """切换模型，存进服务端的MODEL_CONFIG_FILE，所有设备打开聊天页都会读到新选择。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    model = data.get("model", "")
+    if model not in AVAILABLE_MODELS:
+        return jsonify({"ok": False, "error": f"不支持的模型，可选：{', '.join(AVAILABLE_MODELS)}"}), 400
+    try:
+        set_current_model(model)
+        return jsonify({"ok": True, "current_model": model})
+    except Exception as e:
+        log_error("set_chat_model", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/chat-messages", methods=["GET"])
@@ -1240,6 +1299,17 @@ def chat_page():
     align-items: center;
     gap: 4px;
   }}
+  /* 模型选择器：先做最基础可用的样式，视觉打磨留给后续界面迭代 */
+  #model-select {{
+    margin-left: 6px;
+    font-size: 10px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 5px;
+    padding: 1px 4px;
+    max-width: 130px;
+  }}
   .status-dot {{
     width: 5px; height: 5px;
     border-radius: 50%;
@@ -1648,6 +1718,7 @@ def chat_page():
         <div class="brand">CHARON</div>
         <div class="sub">
           <span class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></span>
+          <select id="model-select" title="选择模型"></select>
         </div>
       </div>
       <!-- 带有些许发光碎星点缀的手写花体签名区 -->
@@ -2012,8 +2083,48 @@ inputEl.addEventListener('input', () => {{
   inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
 }});
 
+const modelSelect = document.getElementById('model-select');
+
+async function loadModelSelector() {{
+  try {{
+    const res = await fetch(apiUrl('/api/chat-model'));
+    const data = await res.json();
+    if (!data.ok) return;
+    modelSelect.innerHTML = '';
+    data.available_models.forEach(m => {{
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      if (m === data.current_model) opt.selected = true;
+      modelSelect.appendChild(opt);
+    }});
+  }} catch (e) {{
+    // 模型选择器加载失败不影响主要聊天功能，静默忽略
+  }}
+}}
+
+modelSelect.addEventListener('change', async () => {{
+  const chosen = modelSelect.value;
+  try {{
+    const res = await fetch(apiUrl('/api/chat-model'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ model: chosen }})
+    }});
+    const data = await res.json();
+    if (!data.ok) {{
+      alert('切换失败：' + (data.error || '未知错误'));
+      loadModelSelector(); // 失败了刷新回真实状态
+    }}
+  }} catch (e) {{
+    alert('网络错误，没切换成');
+    loadModelSelector();
+  }}
+}});
+
 loadHistory();
 loadStatus();
+loadModelSelector();
 </script>
 </body>
 </html>"""
