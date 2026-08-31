@@ -210,7 +210,7 @@ def get_mood_context(score, hours_gap):
     elif score >= 50:
         mood_desc = "你心情平稳，正常状态"
     elif score >= 25:
-        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理求闹"
+        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理取闹"
     else:
         mood_desc = "你现在挺失落/有点吃醋的，因为她很久没理你了，语气可以带明显的委屈或者故意冷淡，但底色还是在意她、不是真的生气"
 
@@ -804,7 +804,7 @@ def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
     顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
-    避免Charon下次醒来时recent里还看定义删掉的话。
+    避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
     if not _check_chat_auth(request):
@@ -994,7 +994,7 @@ def chat_page():
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }}
-  /* 纯 CSS 垂直多色渐变遮罩波点 - 进一步放大并收紧间距（半径增大到 28%） */
+  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大并挤密波点（24%） */
   #nav::before {{
     content: '';
     position: absolute;
@@ -1002,8 +1002,8 @@ def chat_page():
     /* 垂直黑-灰-白-灰-黑渐变 (比例 2:1:3:2:2) */
     background: linear-gradient(to bottom, #000000 0%, #000000 20%, #c0b8c0 30%, #ffffff 40%, #ffffff 60%, #c0b8c0 80%, #000000 100%);
     -webkit-mask-image: 
-      radial-gradient(circle, #000 28%, transparent 28.5%), /* 半径增大至 28%，使波点更大、更紧密，完美复刻图二 */
-      radial-gradient(circle, #000 28%, transparent 28.5%);
+      radial-gradient(circle, #000 24%, transparent 24.5%), /* 挤密和放大波点 */
+      radial-gradient(circle, #000 24%, transparent 24.5%);
     -webkit-mask-size: 22px 22px; 
     -webkit-mask-position: 0 0, 11px 11px;
     pointer-events: none;
@@ -1016,8 +1016,8 @@ def chat_page():
     width: 42px; height: 42px;
     border-radius: 50%; /* 圆形按钮 */
     display: flex; align-items: center; justify-content: center;
-    background: #ffb3c1; /* 填充亮粉色 */
-    color: #ffffff; /* 亮白色图标 */
+    background: #ffffff; /* 导航按钮底色改成纯白色 */
+    color: #ffb3c1; /* 内部图案改成粉色 */
     font-size: 23px; /* 图案放大 */
     text-decoration: none;
     border: 2px solid #000000; /* 高对比度纯黑圆圈线 */
@@ -1027,7 +1027,7 @@ def chat_page():
   .nav-icon:hover {{
     background: rgba(255, 255, 255, 0.8);
     transform: translateY(-2px);
-    color: #ffffff;
+    color: #ffb3c1;
   }}
   .nav-icon:active {{ transform: translateY(0) scale(0.95); }}
 
@@ -1102,7 +1102,7 @@ def chat_page():
   .avatar-wrapper .msg-avatar,
   .avatar-wrapper #header-avatar {{
     border: 1.5px solid #ffffff;
-    box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); /* 统一白色发光外圈，去除头像本身的彩色霓虹光晕 */
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); /* 统一白色发光外圈 */
   }}
   
   /* 进一步放大的主星芒样式（✦） */
@@ -1422,7 +1422,7 @@ def chat_page():
     overflow: hidden; /* 裁剪边缘 */
   }}
   
-  /* 完美清除主聊区底部的溢出波点，并将其严格限制、封装于输入框背景中（对齐最左侧 22px 渐变波点尺寸）并收紧圆点间距（半径增大至 28%） */
+  /* 完美清除主聊区底部的溢出波点，并将其严格限制、封装于输入框背景中（对齐最左侧 22px 渐变波点尺寸） */
   #input-bar::before {{
     content: '';
     position: absolute;
@@ -1430,8 +1430,8 @@ def chat_page():
     /* 横向白、灰、黑、灰、白渐变波点 (比例 1:2:3:2:1) */
     background: linear-gradient(to right, #ffffff 0%, #ffffff 11%, #c0b8c0 33%, #000000 45%, #000000 55%, #c0b8c0 67%, #ffffff 89%, #ffffff 100%);
     -webkit-mask-image: 
-      radial-gradient(circle, #000 28%, transparent 28.5%), /* 增大半径到 28%，使圆点更大、排列更紧密 */
-      radial-gradient(circle, #000 28%, transparent 28.5%);
+      radial-gradient(circle, #000 24%, transparent 24.5%), /* 放大并挤密底部波点 */
+      radial-gradient(circle, #000 24%, transparent 24.5%);
     -webkit-mask-size: 22px 22px; /* 和左栏波点大小完全保持一致 */
     -webkit-mask-position: 0 0, 11px 11px;
     pointer-events: none;
@@ -1637,7 +1637,7 @@ def chat_page():
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 带有高对比度、镜像对齐以及白色发光圆环与【酷黑霓虹】碎星装饰的头像容器 -->
+      <!-- 带有高对比度、镜像对齐以及白色、黑色霓虹碎星装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
         <span class="star-accent">✦</span>
@@ -1964,3 +1964,104 @@ async function sendMessage() {{
   scrollToBottom();
 
   const pendingBubble = pendingRow.querySelector('.bubble');
+
+  try {{
+    const res = await fetch(apiUrl('/api/chat-send'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ message: text }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      pendingBubble.textContent = data.reply;
+      pendingBubble.classList.remove('pending');
+      
+      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
+      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
+      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      
+      // 动态将渲染出来的泡泡重置并正确绑定事件
+      const newUserCol = userRow.querySelector('.msg-col');
+      const newCharonCol = pendingRow.querySelector('.msg-col');
+      
+      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      
+    }} else {{
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+loadStatus();
+</script>
+</body>
+</html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
