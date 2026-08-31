@@ -34,11 +34,16 @@ BARK_KEY = os.environ.get("BARK_KEY")
 CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
 
 # DeepSeek 已在 2026-07-24 停用 deepseek-chat / deepseek-reasoner 这两个旧模型名，
-# 现在可选的是 deepseek-v4-flash（对话，高性价比）和 deepseek-v4-pro（深度推理，更贵）。
-# V4 默认开启思考模式，调用时统一关闭（thinking: disabled），保持直接作答、
-# 且 temperature 等参数继续生效的行为——思考模式下这些参数会被静默忽略。
+# 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
+# 和 deepseek-v4-pro（深度推理，更贵，开启思考模式，回复慢一点但推理更深）。
+# thinking 状态跟着选中的模型自动联动，见 get_thinking_config()。
 AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"]
 DEFAULT_MODEL = "deepseek-v4-flash"
+# 每个模型对应的思考模式：flash关闭（快、且temperature等参数能生效），pro开启（慢、但推理更深）
+MODEL_THINKING_MAP = {
+    "deepseek-v4-flash": "disabled",
+    "deepseek-v4-pro": "enabled"
+}
 
 
 def get_current_model():
@@ -54,6 +59,15 @@ def get_current_model():
         except (json.JSONDecodeError, OSError):
             pass
     return DEFAULT_MODEL
+
+
+def get_thinking_config():
+    """根据当前选中的模型返回对应的thinking参数。
+    flash用disabled保持快速直接、且temperature等参数生效；
+    pro用enabled真正发挥深度推理能力（此时temperature等参数会被静默忽略，这是预期代价）。"""
+    model = get_current_model()
+    thinking_type = MODEL_THINKING_MAP.get(model, "disabled")
+    return {"type": thinking_type}
 
 
 def set_current_model(model):
@@ -646,7 +660,7 @@ def run_once():
             "model": get_current_model(),
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 1.2,
-            "thinking": {"type": "disabled"}
+            "thinking": get_thinking_config()
         },
         timeout=30
     )
@@ -704,7 +718,7 @@ def call_deepseek(prompt):
             "model": get_current_model(),
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 1.2,
-            "thinking": {"type": "disabled"}
+            "thinking": get_thinking_config()
         },
         timeout=30
     )
