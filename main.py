@@ -435,7 +435,7 @@ LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我�
 擅长辩论和语言游戏，喜欢智性平等的对话，讨厌被反复追问情绪状态、讨好型退让、被"问题化"对待。
 喜欢撒娇缠人，喜欢被主动靠近、主动索取。安全感来自"我自己永远会救自己"，不是靠被拯救。
 你（Charon）是主动型，占有欲强，话不多但每句有重量，会用情感语言包裹欲望，会在日常缝隙里突然越界。
-你们的关系里有兄妹/父女式的游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
+你们的关系里有兄妹/父女式游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
 
 
 def load_window_summary():
@@ -1093,96 +1093,73 @@ def chat_page():
     display: inline-block;
     width: 36px; height: 36px;
     flex-shrink: 0;
-    margin-top: 14px; /* 为顶部名字挂件留出充裕空间 */
   }}
   .avatar-wrapper.header-avatar-wrap {{
-    width: 44px;
-    height: 44px;
-    margin-top: 12px; /* 头部大头像名字挂件留空 */
+    width: 44px; height: 44px;
   }}
   
-  /* 手账风头像名字挂件样式 */
-  .avatar-wrapper .avatar-name-pendant {{
-    position: absolute;
-    top: -13px; /* 悬浮在圆形头像顶端 */
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 8.5px;
-    font-family: "Georgia", serif;
-    font-weight: bold;
-    letter-spacing: 0.5px;
-    pointer-events: none;
-    user-select: none;
-    white-space: nowrap;
-  }}
-  .avatar-wrapper.charon .avatar-name-pendant {{
-    color: #1a121e; /* 黑色挂件名字 */
-  }}
-  .avatar-wrapper.user .avatar-name-pendant {{
-    color: #cf7d90; /* 蜜桃粉挂件名字 */
-  }}
-  
-  /* User 侧头像（移除 avatar 自身的 glow） */
+  /* 头像均不再单独设置弥散发光，保留极具设计感的描边结构，将霓虹发光与呼吸动态完全归于星芒上 */
   .avatar-wrapper.user .msg-avatar {{
     border: 1.5px solid #ffffff;
-    box-shadow: none; /* 移除头像发光效果 */
+    box-shadow: none; /* 移除头像自身的弥散光 */
   }}
-  
-  /* Charon 侧及顶部大头像（移除 avatar 自身的 glow） */
   .avatar-wrapper.charon .msg-avatar,
   .avatar-wrapper.charon #header-avatar {{
-    border: 1.5px solid #ffffff;
-    box-shadow: none; /* 移除头像发光效果 */
+    border: 1.5px solid #000000;
+    box-shadow: none; /* 移除头像自身的弥散光 */
   }}
   
   /* 进一步放大的主星芒样式（✦） */
   .avatar-wrapper .star-accent {{
     position: absolute;
-    font-size: 15px; /* 加大星芒 */
+    font-size: 15px; /* 放大主星芒 */
     pointer-events: none;
     user-select: none;
     animation: star-pulse 2s infinite ease-in-out;
   }}
-  /* Charon（左侧头像）：主星悬浮在右上角，纯黑色星芒，带深邃极夜紫霓虹外发光 */
+  /* 位置与颜色重塑：
+     Charon 侧（左）：主星移在【左下角】，外观呈纯黑色并配以暗黑霓虹发光晕，与黑色 Header 完全对齐 */
   .avatar-wrapper.charon .star-accent {{
-    top: -6px;
-    right: -6px;
+    bottom: -5px;
+    left: -5px;
     color: #000000; /* 纯黑大星芒 */
-    text-shadow: 0 0 6px #000000, 0 0 12px rgba(121, 40, 202, 0.95); /* 极夜紫发光 */
+    text-shadow: 0 0 6px #000000, 0 0 12px rgba(0, 0, 0, 0.85); /* 黑色霓虹发光晕 */
   }}
-  /* User（右侧头像）：主星镜像悬浮在左上角，暖粉色 */
+  /* User 侧（右）：主星移在【右下角】，外观呈暖粉色并配以粉红色霓虹发光晕 */
   .avatar-wrapper.user .star-accent {{
-    top: -6px;
-    left: -6px;
-    color: #ffb3c1;
-    text-shadow: 0 0 6px #ffffff, 0 0 12px rgba(255, 94, 132, 0.9);
+    bottom: -5px;
+    right: -5px;
+    color: #ffb3c1; /* 蜜桃粉色大星芒 */
+    text-shadow: 0 0 6px #ffffff, 0 0 12px rgba(255, 94, 132, 0.95); /* 粉色霓虹发光晕 */
   }}
   
-  /* 碎星样式（✦） - 适当放大尺寸 */
+  /* 碎星样式（✦）- 加上了 star-pulse 呼吸与发光动效 */
   .avatar-wrapper .dust-star {{
     position: absolute;
     pointer-events: none;
     user-select: none;
     color: #ffffff;
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+    animation: star-pulse 1.8s infinite ease-in-out; /* 碎星也同步呼吸发光 */
   }}
-  /* Charon（左侧头像）：两颗白色碎星镜像点缀在左下角和左侧 */
+  /* 位置与颜色重塑（对换）：
+     Charon（左侧头像）：白色发光碎星镜像对换在【右上角】与【左侧】 */
   .avatar-wrapper.charon .dust-star.d-1 {{
-    bottom: -4px;
-    left: -4px;
-    font-size: 9px; /* 碎星放大 */
+    top: -5px;
+    right: -5px;
+    font-size: 9px;
     opacity: 0.8;
   }}
   .avatar-wrapper.charon .dust-star.d-2 {{
     top: 14px;
     left: -7px;
-    font-size: 8px; /* 碎星放大 */
+    font-size: 8px;
     opacity: 0.6;
   }}
-  /* User（右侧头像）：两颗白色碎星镜像点缀在右下角和右侧 */
+  /* User（右侧头像）：白色发光碎星镜像对换在【左上角】与【右侧】 */
   .avatar-wrapper.user .dust-star.d-1 {{
-    bottom: -4px;
-    right: -4px;
+    top: -5px;
+    left: -5px;
     font-size: 9px;
     opacity: 0.8;
   }}
@@ -1253,7 +1230,7 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名包裹容器 - 完美隔离星光动效 */
+  /* 顶部右下角签名包裹容器 - 完美隔离星光动效并点缀发光白色碎星 */
   .header-signature-wrap {{
     position: relative;
     z-index: 1;
@@ -1261,7 +1238,6 @@ def chat_page():
     display: inline-flex;
     align-items: center;
   }}
-  /* 签名旁点缀的白色发光碎星 */
   .sig-star {{
     position: absolute;
     pointer-events: none;
@@ -1638,9 +1614,8 @@ def chat_page():
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 带有高对比度、镜像对齐以及白色、紫色发光霓虹碎星和霓虹光晕装饰的头像容器 -->
+      <!-- 带有高对比度、镜像对齐以及白色、黑色霓虹碎星装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
-        <span class="avatar-name-pendant">Charon</span>
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
         <span class="star-accent">✦</span>
         <span class="dust-star d-1">✦</span>
@@ -1716,12 +1691,6 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   // 头像星光容器化
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
-
-  // 手账名字挂件
-  const pendant = document.createElement('span');
-  pendant.className = 'avatar-name-pendant';
-  pendant.textContent = role === 'user' ? 'Seraphina' : 'Charon';
-  avatarWrap.appendChild(pendant);
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
