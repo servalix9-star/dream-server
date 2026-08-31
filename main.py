@@ -1101,72 +1101,72 @@ def chat_page():
   /* User 侧头像（蜜桃粉霓虹发光晕） */
   .avatar-wrapper.user .msg-avatar {{
     border: 1.5px solid #ffffff;
-    box-shadow: 0 0 10px rgba(255, 94, 132, 0.85); /* 弥散粉色霓虹光晕 */
+    box-shadow: 0 0 14px rgba(255, 94, 132, 0.95); /* 加亮弥散粉色霓虹光晕 */
   }}
   
-  /* Charon 侧及顶部大头像（极夜黑霓虹发光晕） */
+  /* Charon 侧及顶部大头像（极夜紫发光霓虹晕） */
   .avatar-wrapper.charon .msg-avatar,
   .avatar-wrapper.charon #header-avatar {{
-    border: 1.5px solid #000000;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.95); /* 弥散黑色霓虹光晕 */
+    border: 1.5px solid #ffffff;
+    box-shadow: 0 0 14px rgba(121, 40, 202, 0.9); /* 纯粹梦幻的深邃极夜紫发光光晕 */
   }}
   
-  /* 主星芒样式（✦） */
+  /* 进一步放大的主星芒样式（✦） */
   .avatar-wrapper .star-accent {{
     position: absolute;
-    font-size: 15px; /* 放大主星芒 */
+    font-size: 15px; /* 加大星芒 */
     pointer-events: none;
     user-select: none;
     animation: star-pulse 2s infinite ease-in-out;
   }}
-  /* Charon（左侧头像）：主星悬浮在右上角，白亮耀眼并附带强烈发光阴影 */
+  /* Charon（左侧头像）：主星悬浮在右上角，白亮耀眼，带粉边霓虹阴影 */
   .avatar-wrapper.charon .star-accent {{
     top: -6px;
     right: -6px;
     color: #ffffff;
-    text-shadow: 0 0 8px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 6px #ffffff, 0 0 12px rgba(255, 42, 116, 0.8);
   }}
-  /* User（右侧头像）：主星镜像悬浮在左上角，暖粉色并附带发光阴影 */
+  /* User（右侧头像）：主星镜像悬浮在左上角，暖粉色 */
   .avatar-wrapper.user .star-accent {{
     top: -6px;
     left: -6px;
     color: #ffb3c1;
-    text-shadow: 0 0 8px #ffb3c1, 0 0 15px rgba(255, 179, 193, 0.8);
+    text-shadow: 0 0 6px #ffffff, 0 0 12px rgba(255, 94, 132, 0.9);
   }}
   
-  /* 碎星样式（✦） */
+  /* 碎星样式（✦） - 适当放大尺寸 */
   .avatar-wrapper .dust-star {{
     position: absolute;
     pointer-events: none;
     user-select: none;
     color: #ffffff;
-    text-shadow: 0 0 8px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8); /* 增强碎星荧光效果 */
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
   }}
   /* Charon（左侧头像）：两颗白色碎星镜像点缀在左下角和左侧 */
   .avatar-wrapper.charon .dust-star.d-1 {{
     bottom: -4px;
     left: -4px;
-    font-size: 9px; /* 放大碎星 */
-    opacity: 0.9;
+    font-size: 9px; /* 碎星放大 */
+    opacity: 0.8;
   }}
   .avatar-wrapper.charon .dust-star.d-2 {{
     top: 14px;
     left: -7px;
-    font-size: 7px; /* 放大碎星 */
-    opacity: 0.8;
+    font-size: 8px; /* 碎星放大 */
+    opacity: 0.6;
   }}
   /* User（右侧头像）：两颗白色碎星镜像点缀在右下角和右侧 */
   .avatar-wrapper.user .dust-star.d-1 {{
     bottom: -4px;
     right: -4px;
-    font-size: 9px; /* 放大碎星 */
-    opacity: 0.9;
+    font-size: 9px;
+    opacity: 0.8;
   }}
   .avatar-wrapper.user .dust-star.d-2 {{
     top: 14px;
     right: -7px;
-    font-size: 7px; /* 放大碎星 */
-    opacity: 0.8;
+    font-size: 8px;
+    opacity: 0.6;
   }}
 
   /* 星光非常柔和、缓慢的呼吸微动效果 */
@@ -1194,8 +1194,6 @@ def chat_page():
     font-weight: 500;
     line-height: 1.2;
     text-transform: uppercase;
-    /* 给 Charon 标题注入粉红色的霓虹发光晕 */
-    text-shadow: 0 0 10px #ffb3c1, 0 0 20px #cf7d90;
   }}
   #header .sub {{
     font-size: 11px;
@@ -1231,33 +1229,42 @@ def chat_page():
     box-shadow: 0 0 6px #c3a1ad;
   }}
   
-  /* 顶部右下角签名感的花体字 - 旁边环绕着粉红色和白色发光星轨 */
-  .header-signature {{
+  /* 顶部右下角签名包裹容器 - 完美隔离星光动效 */
+  .header-signature-wrap {{
     position: relative;
     z-index: 1;
+    margin-left: auto; /* 靠右对齐 */
+    display: inline-flex;
+    align-items: center;
+  }}
+  /* 签名旁点缀的白色小星芒 */
+  .sig-star {{
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+  }}
+  .sig-star.s-1 {{
+    top: -4px;
+    left: -10px;
+    font-size: 8px;
+    animation: star-pulse 2.5s infinite ease-in-out;
+  }}
+  .sig-star.s-2 {{
+    bottom: -4px;
+    right: -10px;
+    font-size: 10px;
+    animation: star-pulse 1.8s infinite ease-in-out;
+  }}
+  /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
+  .header-signature {{
     font-family: "Dancing Script", "Brush Script MT", cursive;
     font-size: 22px; /* 签名体 */
     color: rgba(255, 255, 255, 0.92);
-    margin-left: auto; /* 靠右对齐 */
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
     user-select: none;
     pointer-events: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }}
-  .header-signature .sig-star {{
-    font-size: 11px;
-    color: #ffb3c1;
-    text-shadow: 0 0 8px #ffb3c1, 0 0 15px rgba(255, 179, 193, 0.8);
-    animation: star-pulse 2s infinite ease-in-out;
-  }}
-  .header-signature .sig-star.s-1 {{
-    margin-right: 4px;
-  }}
-  .header-signature .sig-star.s-2 {{
-    margin-left: 4px;
-    font-size: 8px; /* 镜像微型星 */
   }}
 
   #messages {{
@@ -1607,7 +1614,7 @@ def chat_page():
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 带有高对比度、镜像对齐以及白色、黑色霓虹碎星装饰的头像容器 -->
+      <!-- 带有高对比度、镜像对齐以及白色、紫色发光霓虹碎星和霓虹光晕装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
         <span class="star-accent">✦</span>
@@ -1620,11 +1627,11 @@ def chat_page():
           <span class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></span>
         </div>
       </div>
-      <!-- 加上了粉白双色发光星芒的签名栏 -->
-      <div class="header-signature">
+      <!-- 带有些许发光碎星点缀的手写花体签名区 -->
+      <div class="header-signature-wrap">
         <span class="sig-star s-1">✦</span>
-        @Seraphina
         <span class="sig-star s-2">✦</span>
+        <div class="header-signature">@Seraphina</div>
       </div>
     </div>
     <div id="messages"><div id="empty-hint">加载中…</div></div>
@@ -1949,4 +1956,83 @@ async function sendMessage() {{
       const newCharonCol = pendingRow.querySelector('.msg-col');
       
       userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id)
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      
+    }} else {{
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+loadStatus();
+</script>
+</body>
+</html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
