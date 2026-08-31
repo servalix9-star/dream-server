@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -564,7 +564,7 @@ def parse_reason_message(raw_text):
     """解析DeepSeek返回的 {reason, message} JSON。
     做了容错：万一模型没按格式来（比如混进代码块标记），退化成把全部内容当message，reason留空。"""
     text = raw_text.strip()
-    # 去掉了可能的代码块包裹
+    # 去掉可能的代码块包裹
     if text.startswith("```"):
         text = text.strip("`")
         if text.startswith("json"):
@@ -803,7 +803,7 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配）。
     只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
+    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
@@ -979,89 +979,6 @@ def chat_page():
     z-index: 2;
   }}
 
-  /* ---- 完美镜像对称的头像外舱 (包含星芒和白色碎星环绕) ---- */
-  .avatar-wrapper {{
-    position: relative;
-    display: inline-block;
-    flex-shrink: 0;
-  }}
-
-  /* 
-     左侧头像/Charon/Header 装饰：
-     - 星芒定位在左上角 (✦)
-     - 白色碎星定位在左下角 (* ✧)
-     - 歌特纯黑弥散光晕 (Goth Shadow)
-  */
-  .msg-row.charon .avatar-wrapper, .header-avatar-wrapper {{
-    /* 镜像左侧黑色深邃弥散光晕 */
-    box-shadow: 0 0 14px rgba(0, 0, 0, 0.85);
-    border-radius: 50%;
-  }}
-  .msg-row.charon .avatar-wrapper::before, .header-avatar-wrapper::before {{
-    content: '✦';
-    position: absolute;
-    top: -6px;
-    left: -6px; /* 镜像左上角 */
-    color: #ff5e84; /* 明显的荧光粉星芒 */
-    font-size: 14px;
-    text-shadow: 0 0 10px #ff5e84;
-    animation: star-pulse 2s infinite ease-in-out;
-    z-index: 2;
-  }}
-  .msg-row.charon .avatar-wrapper::after, .header-avatar-wrapper::after {{
-    content: '*  ✧'; /* 镜像左下角白色碎星 */
-    position: absolute;
-    bottom: -2px;
-    left: -10px;
-    color: #ffffff;
-    font-size: 10px;
-    text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
-    opacity: 0.85;
-    white-space: pre;
-    z-index: 2;
-  }}
-
-  /* 
-     右侧头像/User 装饰：
-     - 星芒定位在右上角 (✦)
-     - 白色碎星定位在右下角 (✧ *)
-     - 蜜桃粉色霓虹弥散光晕 (Neon Glow)
-  */
-  .msg-row.user .avatar-wrapper {{
-    /* 蜜桃粉色弥散霓虹光晕 */
-    box-shadow: 0 0 14px rgba(255, 94, 132, 0.75);
-    border-radius: 50%;
-  }}
-  .msg-row.user .avatar-wrapper::before {{
-    content: '✦';
-    position: absolute;
-    top: -6px;
-    right: -6px; /* 镜像右上角 */
-    color: #ff5e84; /* 明显的荧光粉星芒 */
-    font-size: 14px;
-    text-shadow: 0 0 10px #ff5e84;
-    animation: star-pulse 2s infinite ease-in-out;
-    z-index: 2;
-  }}
-  .msg-row.user .avatar-wrapper::after {{
-    content: '✧  *'; /* 镜像右下角白色碎星 */
-    position: absolute;
-    bottom: -2px;
-    right: -10px;
-    color: #ffffff;
-    font-size: 10px;
-    text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
-    opacity: 0.85;
-    white-space: pre;
-    z-index: 2;
-  }}
-
-  /* 星芒呼吸放大效果 (隔离设计，不影响导航栏) */
-  @keyframes star-pulse {{
-    0%, 100% {{ transform: scale(1); opacity: 0.8; }}
-    50% {{ transform: scale(1.2); opacity: 1; text-shadow: 0 0 12px #ff5e84; }}
-  }}
-
   /* ---- 左侧波点玻璃舱导航栏 ---- */
   #nav {{
     width: 60px;
@@ -1169,15 +1086,99 @@ def chat_page():
     pointer-events: none;
     z-index: 0;
   }}
-  #header-avatar {{
+  
+  /* 头像外层容器 - 承载精致星光效果，与左侧栏完全物理隔离 */
+  .avatar-wrapper {{
     position: relative;
-    z-index: 1;
+    display: inline-block;
+    width: 36px; height: 36px;
+    flex-shrink: 0;
+  }}
+  .avatar-wrapper.header-avatar-wrap {{
     width: 44px; height: 44px;
+  }}
+  
+  /* User 侧头像（蜜桃粉霓虹发光晕） */
+  .avatar-wrapper.user .msg-avatar {{
+    border: 1.5px solid #ffffff;
+    box-shadow: 0 0 10px rgba(255, 94, 132, 0.85); /* 弥散粉色霓虹光晕 */
+  }}
+  
+  /* Charon 侧及顶部大头像（极夜黑霓虹发光晕） */
+  .avatar-wrapper.charon .msg-avatar,
+  .avatar-wrapper.charon #header-avatar {{
+    border: 1.5px solid #000000;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.95); /* 弥散黑色霓虹光晕 */
+  }}
+  
+  /* 主星芒样式（✦） */
+  .avatar-wrapper .star-accent {{
+    position: absolute;
+    font-size: 11px;
+    pointer-events: none;
+    user-select: none;
+    animation: star-pulse 2s infinite ease-in-out;
+  }}
+  /* Charon（左侧头像）：主星悬浮在右上角，白亮耀眼 */
+  .avatar-wrapper.charon .star-accent {{
+    top: -6px;
+    right: -6px;
+    color: #ffffff;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.9);
+  }}
+  /* User（右侧头像）：主星镜像悬浮在左上角，暖粉色 */
+  .avatar-wrapper.user .star-accent {{
+    top: -6px;
+    left: -6px;
+    color: #ffb3c1;
+    text-shadow: 0 0 5px rgba(255, 94, 132, 0.9);
+  }}
+  
+  /* 碎星样式（✦） */
+  .avatar-wrapper .dust-star {{
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+    color: #ffffff;
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+  }}
+  /* Charon（左侧头像）：两颗白色碎星镜像点缀在左下角和左侧 */
+  .avatar-wrapper.charon .dust-star.d-1 {{
+    bottom: -4px;
+    left: -4px;
+    font-size: 6px;
+    opacity: 0.8;
+  }}
+  .avatar-wrapper.charon .dust-star.d-2 {{
+    top: 14px;
+    left: -7px;
+    font-size: 5px;
+    opacity: 0.6;
+  }}
+  /* User（右侧头像）：两颗白色碎星镜像点缀在右下角和右侧 */
+  .avatar-wrapper.user .dust-star.d-1 {{
+    bottom: -4px;
+    right: -4px;
+    font-size: 6px;
+    opacity: 0.8;
+  }}
+  .avatar-wrapper.user .dust-star.d-2 {{
+    top: 14px;
+    right: -7px;
+    font-size: 5px;
+    opacity: 0.6;
+  }}
+
+  /* 星光非常柔和、缓慢的呼吸微动效果 */
+  @keyframes star-pulse {{
+    0%, 100% {{ transform: scale(1); opacity: 0.6; }}
+    50% {{ transform: scale(1.15); opacity: 1; }}
+  }}
+
+  #header-avatar {{
+    width: 100%; height: 100%;
     border-radius: 50%;
     object-fit: cover;
-    flex-shrink: 0;
-    border: 2.5px solid #ffffff; /* 恢复白色发光圆环 */
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.6); /* 恢复发光效果 */
   }}
   #header-text {{ 
     position: relative;
@@ -1266,13 +1267,9 @@ def chat_page():
     align-self: flex-start;
   }}
   .msg-avatar {{
-    width: 36px; height: 36px;
+    width: 100%; height: 100%;
     border-radius: 50%;
     object-fit: cover;
-    flex-shrink: 0;
-    margin-top: 0;
-    border: 1.5px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 3px 8px rgba(184, 118, 138, 0.12);
   }}
   .msg-col {{
     display: flex;
@@ -1585,10 +1582,6 @@ def chat_page():
 
   <!-- 1. 左侧波点玻璃舱导航栏 -->
   <div id="nav">
-    <!-- 包裹舱 -->
-    <div class="avatar-wrapper header-avatar-wrapper" style="margin-bottom: 12px; display: none;">
-      <!-- 仅用于占位和CSS结构统一 -->
-    </div>
     <a class="nav-icon" href="/" title="首页">✦</a>
     <a class="nav-icon" href="{diary_url}" title="日记">✎</a>
   </div>
@@ -1596,9 +1589,12 @@ def chat_page():
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 镜像对齐：Charon 头像包裹舱（左上星芒、左下碎星、黑色光晕） -->
-      <div class="avatar-wrapper header-avatar-wrapper">
+      <!-- 带有高对比度、镜像对齐以及白色、黑色霓虹碎星装饰的头像容器 -->
+      <div class="avatar-wrapper header-avatar-wrap charon">
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
+        <span class="star-accent">✦</span>
+        <span class="dust-star d-1">✦</span>
+        <span class="dust-star d-2">✦</span>
       </div>
       <div id="header-text">
         <div class="brand">CHARON</div>
@@ -1618,4 +1614,395 @@ def chat_page():
   <!-- 3. 右侧状态面板 -->
   <div id="panel">
     <div class="panel-child panel-title">PULSE</div>
-    <div id="panel-body" class="panel-child"><div class="panel-empt
+    <div id="panel-body" class="panel-child"><div class="panel-empty">加载中…</div></div>
+  </div>
+
+</div>
+
+<!-- 微信悬浮微信菜单元素 -->
+<div id="bubble-menu"></div>
+
+<script>
+const CODE = {json.dumps(code_param)};
+const AVATAR_CHARON = {json.dumps(CHAT_AVATAR_CHARON)};
+const AVATAR_USER = {json.dumps(CHAT_AVATAR_USER)};
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send-btn');
+const panelBody = document.getElementById('panel-body');
+const statusDot = document.getElementById('status-dot');
+const statusLabel = document.getElementById('status-label');
+const contextMenu = document.getElementById('bubble-menu');
+
+// 长按/右键菜单相关的触发状态记录
+let pressTimer;
+let currentActiveMsgId = null;
+let currentActiveRowEl = null;
+
+function apiUrl(path) {{
+  const sep = path.includes('?') ? '&' : '?';
+  return CODE ? `${{path}}${{sep}}code=${{encodeURIComponent(CODE)}}` : path;
+}}
+
+function formatTime(isoStr) {{
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return h + ':' + m;
+}}
+
+function renderMsgRow(role, content, createdAt, pending, msgId) {{
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
+  if (msgId) row.dataset.msgId = msgId;
+
+  // 头像星光容器化
+  const avatarWrap = document.createElement('div');
+  avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
+
+  const avatar = document.createElement('img');
+  avatar.className = 'msg-avatar';
+  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
+  avatarWrap.appendChild(avatar);
+
+  // 主星芒 (✦)
+  const star = document.createElement('span');
+  star.className = 'star-accent';
+  star.textContent = '✦';
+  avatarWrap.appendChild(star);
+
+  // 镜像碎星 1 (✦)
+  const d1 = document.createElement('span');
+  d1.className = 'dust-star d-1';
+  d1.textContent = '✦';
+  avatarWrap.appendChild(d1);
+
+  // 镜像碎星 2 (✦)
+  const d2 = document.createElement('span');
+  d2.className = 'dust-star d-2';
+  d2.textContent = '✦';
+  avatarWrap.appendChild(d2);
+
+  row.appendChild(avatarWrap);
+
+  const col = document.createElement('div');
+  col.className = 'msg-col';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'charon') + (pending ? ' pending' : '');
+  bubble.textContent = content;
+  col.appendChild(bubble);
+
+  const timeRow = document.createElement('div');
+  timeRow.className = 'msg-time-row';
+
+  const timeEl = document.createElement('span');
+  timeEl.className = 'msg-time';
+  timeEl.textContent = formatTime(createdAt);
+  timeRow.appendChild(timeEl);
+
+  col.appendChild(timeRow);
+  row.appendChild(col);
+
+  // 微信悬浮微信菜单触发机制 (电脑端右键，移动端长按)
+  const bindContextMenu = (e) => {{
+    e.preventDefault();
+    currentActiveMsgId = msgId;
+    currentActiveRowEl = row;
+    showWeChatMenu(bubble, msgId, content);
+  }};
+
+  bubble.addEventListener('contextmenu', bindContextMenu);
+  
+  bubble.addEventListener('touchstart', (e) => {{
+    // 600ms 定时器检测长按
+    pressTimer = setTimeout(() => {{
+      currentActiveMsgId = msgId;
+      currentActiveRowEl = row;
+      showWeChatMenu(bubble, msgId, content);
+    }}, 600);
+  }}, {{ passive: true }});
+  
+  bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
+  bubble.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
+  return row;
+}}
+
+// 显示仿微信长按菜单浮窗
+function showWeChatMenu(targetBubble, msgId, textContent) {{
+  const rect = targetBubble.getBoundingClientRect();
+  contextMenu.style.display = 'flex';
+  
+  // 清理旧按钮
+  contextMenu.innerHTML = '';
+  
+  // 复制按钮
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'menu-btn';
+  copyBtn.textContent = '复制';
+  copyBtn.onclick = () => {{
+    navigator.clipboard.writeText(textContent).then(() => {{
+      hideWeChatMenu();
+    }}).catch(() => {{
+      alert('复制失败，请手动选择复制');
+    }});
+  }};
+  contextMenu.appendChild(copyBtn);
+  
+  // 仅在存在 ID (即已发出的消息) 时显示撤回按钮
+  if (msgId) {{
+    const recallBtn = document.createElement('button');
+    recallBtn.className = 'menu-btn';
+    recallBtn.textContent = '撤回';
+    recallBtn.onclick = () => {{
+      if (currentActiveRowEl) {{
+        deleteMessage(msgId, currentActiveRowEl);
+      }}
+      hideWeChatMenu();
+    }};
+    contextMenu.appendChild(recallBtn);
+  }}
+
+  // 动态定位计算
+  const menuWidth = contextMenu.offsetWidth || 120;
+  const menuHeight = contextMenu.offsetHeight || 34;
+  
+  // 水平居中对齐气泡，垂直置于气泡之上，留出 8px 间距
+  contextMenu.style.left = (rect.left + rect.width / 2 - menuWidth / 2 + window.scrollX) + 'px';
+  contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
+}}
+
+function hideWeChatMenu() {{
+  contextMenu.style.display = 'none';
+}}
+
+// 监听屏幕全局点击事件，随时收起浮窗
+document.addEventListener('click', (e) => {{
+  if (!e.target.classList.contains('bubble') && !e.target.classList.contains('menu-btn')) {{
+    hideWeChatMenu();
+  }}
+}});
+
+async function deleteMessage(msgId, rowEl) {{
+  if (!confirm('确定要撤回这条消息吗？')) return;
+  try {{
+    const res = await fetch(apiUrl('/api/chat-delete'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ id: msgId }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      rowEl.remove();
+      loadStatus(); // 更新互动的统计次数和心里话面板
+    }} else {{
+      alert('撤回失败：' + (data.error || '未知错误'));
+    }}
+  }} catch (e) {{
+    alert('网络错误，无法撤回');
+  }}
+}}
+
+function scrollToBottom() {{
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}}
+
+async function loadHistory() {{
+  try {{
+    const res = await fetch(apiUrl('/api/chat-messages'));
+    const data = await res.json();
+    messagesEl.innerHTML = '';
+    if (!data.ok) {{
+      messagesEl.innerHTML = '<div id="empty-hint">加载失败：' + (data.error || '未知错误') + '</div>';
+      return;
+    }}
+    if (!data.messages || data.messages.length === 0) {{
+      messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>';
+      return;
+    }}
+    data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id)));
+    scrollToBottom();
+  }} catch (e) {{
+    messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>';
+  }}
+}}
+
+function formatHours(h) {{
+  if (h === null || h === undefined) return '还没互动过';
+  if (h < 1) return Math.round(h * 60) + ' 分钟前';
+  return h.toFixed(1) + ' 小时前';
+}}
+
+function escapeHtml(str) {{
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}}
+
+async function loadStatus() {{
+  try {{
+    const res = await fetch(apiUrl('/api/chat-status'));
+    const data = await res.json();
+    if (!data.ok) {{
+      panelBody.innerHTML = '<div class="panel-empty">加载失败</div>';
+      statusLabel.textContent = '未知';
+      return;
+    }}
+
+    // 更新 header 的状态标签
+    statusLabel.textContent = data.status_label || '在线';
+    statusDot.className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
+
+    const moodPct = Math.max(0, Math.min(100, data.mood_score));
+    let html = '';
+    html += '<div class="stat-block">';
+    html += '<div class="stat-label"><span>情绪值</span><span class="stat-value">' + data.mood_score + '/100</span></div>';
+    html += '<div class="stat-bar-track"><div class="stat-bar-fill" style="width:' + moodPct + '%"></div></div>';
+    html += '</div>';
+    html += '<div class="stat-block">';
+    html += '<div class="stat-label"><span>上次互动</span><span class="stat-value">' + formatHours(data.hours_since_last_event) + '</span></div>';
+    html += '</div>';
+    html += '<div class="stat-block">';
+    html += '<div class="stat-label"><span>今日互动</span></div>';
+    html += '<div><span class="today-count">' + data.today_interaction_count + '</span><span class="today-count-unit">次</span></div>';
+    html += '</div>';
+    if (data.period_context) {{
+      html += '<div class="stat-block"><div class="period-tag">' + escapeHtml(data.period_context) + '</div></div>';
+    }}
+    if (data.is_checking_in) {{
+      html += '<div class="stat-block"><div class="checking-tag">好一阵没理TA了…</div></div>';
+    }}
+    if (data.last_was_lucky) {{
+      html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
+    }}
+    if (data.last_thought) {{
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+    }}
+    if (data.window_summary) {{
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+    }}
+    panelBody.innerHTML = html;
+  }} catch (e) {{
+    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
+  }}
+}}
+
+async function sendMessage() {{
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  const nowIso = new Date().toISOString();
+  const userRow = renderMsgRow('user', text, nowIso, false);
+  messagesEl.appendChild(userRow);
+  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
+  messagesEl.appendChild(pendingRow);
+  scrollToBottom();
+
+  const pendingBubble = pendingRow.querySelector('.bubble');
+
+  try {{
+    const res = await fetch(apiUrl('/api/chat-send'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ message: text }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      pendingBubble.textContent = data.reply;
+      pendingBubble.classList.remove('pending');
+      
+      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
+      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
+      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      
+      // 动态将渲染出来的泡泡重置并正确绑定事件
+      const newUserCol = userRow.querySelector('.msg-col');
+      const newCharonCol = pendingRow.querySelector('.msg-col');
+      
+      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      
+    }} else {{
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }}
+  }} catch (e) {{
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }}
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter' && !e.shiftKey) {{
+    e.preventDefault();
+    sendMessage();
+  }}
+}});
+inputEl.addEventListener('input', () => {{
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+}});
+
+loadHistory();
+loadStatus();
+</script>
+</body>
+</html>"""
+
+
+@app.route("/list-models", methods=["GET"])
+def list_models():
+    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
+    return jsonify({
+        "ok": True,
+        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
+        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
+    })
+
+
+@app.route("/test-trigger", methods=["GET"])
+def test_trigger():
+    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
+    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
+    source = request.args.get("source", "default")
+
+    with _debounce_lock:
+        now = time.time()
+        last = _last_trigger_at.get(source, 0)
+        if now - last < DEBOUNCE_SECONDS:
+            wait_left = int(DEBOUNCE_SECONDS - (now - last))
+            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
+        _last_trigger_at[source] = now
+
+    try:
+        msg = run_once()
+        return jsonify({"ok": True, "skipped": False, "msg": msg})
+    except Exception as e:
+        log_error("test_trigger", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def keepalive():
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            log_error("keepalive", e)
+        time.sleep(3300)
+
+
+if __name__ == "__main__":
+    t = threading.Thread(target=keepalive, daemon=True)
+    t.start()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
