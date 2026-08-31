@@ -1093,22 +1093,46 @@ def chat_page():
     display: inline-block;
     width: 36px; height: 36px;
     flex-shrink: 0;
+    margin-top: 14px; /* 为顶部名字挂件留出充裕空间 */
   }}
   .avatar-wrapper.header-avatar-wrap {{
-    width: 44px; height: 44px;
+    width: 44px;
+    height: 44px;
+    margin-top: 12px; /* 头部大头像名字挂件留空 */
   }}
   
-  /* User 侧头像（蜜桃粉霓虹发光晕） */
+  /* 手账风头像名字挂件样式 */
+  .avatar-wrapper .avatar-name-pendant {{
+    position: absolute;
+    top: -13px; /* 悬浮在圆形头像顶端 */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 8.5px;
+    font-family: "Georgia", serif;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+  }}
+  .avatar-wrapper.charon .avatar-name-pendant {{
+    color: #1a121e; /* 黑色挂件名字 */
+  }}
+  .avatar-wrapper.user .avatar-name-pendant {{
+    color: #cf7d90; /* 蜜桃粉挂件名字 */
+  }}
+  
+  /* User 侧头像（移除 avatar 自身的 glow） */
   .avatar-wrapper.user .msg-avatar {{
     border: 1.5px solid #ffffff;
-    box-shadow: 0 0 14px rgba(255, 94, 132, 0.95); /* 加亮弥散粉色霓虹光晕 */
+    box-shadow: none; /* 移除头像发光效果 */
   }}
   
-  /* Charon 侧及顶部大头像（极夜紫发光霓虹晕） */
+  /* Charon 侧及顶部大头像（移除 avatar 自身的 glow） */
   .avatar-wrapper.charon .msg-avatar,
   .avatar-wrapper.charon #header-avatar {{
     border: 1.5px solid #ffffff;
-    box-shadow: 0 0 14px rgba(121, 40, 202, 0.9); /* 纯粹梦幻的深邃极夜紫发光光晕 */
+    box-shadow: none; /* 移除头像发光效果 */
   }}
   
   /* 进一步放大的主星芒样式（✦） */
@@ -1119,12 +1143,12 @@ def chat_page():
     user-select: none;
     animation: star-pulse 2s infinite ease-in-out;
   }}
-  /* Charon（左侧头像）：主星悬浮在右上角，白亮耀眼，带粉边霓虹阴影 */
+  /* Charon（左侧头像）：主星悬浮在右上角，纯黑色星芒，带深邃极夜紫霓虹外发光 */
   .avatar-wrapper.charon .star-accent {{
     top: -6px;
     right: -6px;
-    color: #ffffff;
-    text-shadow: 0 0 6px #ffffff, 0 0 12px rgba(255, 42, 116, 0.8);
+    color: #000000; /* 纯黑大星芒 */
+    text-shadow: 0 0 6px #000000, 0 0 12px rgba(121, 40, 202, 0.95); /* 极夜紫发光 */
   }}
   /* User（右侧头像）：主星镜像悬浮在左上角，暖粉色 */
   .avatar-wrapper.user .star-accent {{
@@ -1237,7 +1261,7 @@ def chat_page():
     display: inline-flex;
     align-items: center;
   }}
-  /* 签名旁点缀的白色小星芒 */
+  /* 签名旁点缀的白色发光碎星 */
   .sig-star {{
     position: absolute;
     pointer-events: none;
@@ -1616,6 +1640,7 @@ def chat_page():
     <div id="header">
       <!-- 带有高对比度、镜像对齐以及白色、紫色发光霓虹碎星和霓虹光晕装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
+        <span class="avatar-name-pendant">Charon</span>
         <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
         <span class="star-accent">✦</span>
         <span class="dust-star d-1">✦</span>
@@ -1691,6 +1716,12 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   // 头像星光容器化
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
+
+  // 手账名字挂件
+  const pendant = document.createElement('span');
+  pendant.className = 'avatar-name-pendant';
+  pendant.textContent = role === 'user' ? 'Seraphina' : 'Charon';
+  avatarWrap.appendChild(pendant);
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
@@ -1995,44 +2026,4 @@ def list_models():
     """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
     return jsonify({
         "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
-
-
-@app.route("/test-trigger", methods=["GET"])
-def test_trigger():
-    """手动/快捷指令触发一次。带防抖：同一来源5分钟内重复触发会被跳过。
-    来源用 query 参数 ?source=xxx 区分，不传的话所有调用共用一个防抖桶。"""
-    source = request.args.get("source", "default")
-
-    with _debounce_lock:
-        now = time.time()
-        last = _last_trigger_at.get(source, 0)
-        if now - last < DEBOUNCE_SECONDS:
-            wait_left = int(DEBOUNCE_SECONDS - (now - last))
-            return jsonify({"ok": True, "skipped": True, "reason": f"防抖中，{wait_left}秒后才会真正触发"})
-        _last_trigger_at[source] = now
-
-    try:
-        msg = run_once()
-        return jsonify({"ok": True, "skipped": False, "msg": msg})
-    except Exception as e:
-        log_error("test_trigger", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def keepalive():
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log_error("keepalive", e)
-        time.sleep(3300)
-
-
-if __name__ == "__main__":
-    t = threading.Thread(target=keepalive, daemon=True)
-    t.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+        "usable
