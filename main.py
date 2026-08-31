@@ -498,7 +498,7 @@ def build_missyou_prompt(time_context):
 
 {LONG_TERM_MEMORY}
 
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她句。
+现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
 
 语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
 
@@ -538,9 +538,9 @@ she 刚刚说："{user_message}"
 
 def get_time_context(hour):
     if 0 <= hour < 6:
-        return "深夜，你可能还没睡"
+        return "深夜, 你可能还没睡"
     elif 6 <= hour < 9:
-        return "早上，你刚起床或者还没起"
+        return "早上, 你刚起床或者还没起"
     elif 9 <= hour < 16:
         return "白天"
     elif 16 <= hour < 19:
@@ -806,7 +806,7 @@ def chat_delete():
     顺手尝试从events.json里删掉内容和时间都对得上的那条同步记录，
     避免Charon下次醒来时recent里还看得到已经删掉的话。
     注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
-    不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
+    not 绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -881,7 +881,7 @@ def chat_send():
         save_events(events)
         recover_mood(MOOD_RECOVERY_PER_EVENT)
 
-        // 生成Charon的回应，带上历史让语气能接得上
+        # 生成Charon的回应，带上历史让语气能接得上
         hour = datetime.now().hour
         time_context = get_time_context(hour)
         hours_gap = get_time_since_last_event()
@@ -1087,172 +1087,134 @@ def chat_page():
     z-index: 0;
   }}
   
-  /* 头像发光舱 (Avatar Wrapper) - 实现镜像碎星与深度呼吸发光 */
+  /* ---- 精致星芒呼吸舱头像系统 (带深度呼吸起伏动效与镜像碎星光晕) ---- */
   .avatar-wrapper {{
     position: relative;
-    width: 38px; height: 38px;
+    display: inline-block;
     flex-shrink: 0;
-    margin-top: 0;
-    border-radius: 50%;
+    animation: float-breath 4s ease-in-out infinite; /* 深度纵向呼吸起伏动效 */
   }}
-  .msg-avatar-img, #header-avatar {{
-    width: 100%; height: 100%;
+  
+  /* 深度起伏悬浮动效 */
+  @keyframes float-breath {{
+    0% {{ transform: translateY(0); }}
+    50% {{ transform: translateY(-4px); }}
+    100% {{ transform: translateY(0); }}
+  }}
+  
+  /* 气泡呼吸霓虹发光动效 */
+  @keyframes ring-glow {{
+    0% {{ box-shadow: 0 0 6px currentColor, inset 0 0 4px currentColor; opacity: 0.5; }}
+    50% {{ box-shadow: 0 0 16px currentColor, inset 0 0 8px currentColor; opacity: 0.9; }}
+    100% {{ box-shadow: 0 0 6px currentColor, inset 0 0 4px currentColor; opacity: 0.5; }}
+  }}
+  
+  /* 核心星芒呼吸跳跃动效 */
+  @keyframes star-pulse {{
+    0% {{ transform: scale(0.85); opacity: 0.6; text-shadow: 0 0 4px currentColor; }}
+    50% {{ transform: scale(1.18); opacity: 1; text-shadow: 0 0 14px currentColor, 0 0 24px currentColor; }}
+    100% {{ transform: scale(0.85); opacity: 0.6; text-shadow: 0 0 4px currentColor; }}
+  }}
+
+  /* 双同心环 */
+  .halo-ring {{
+    position: absolute;
+    top: -3px; left: -3px; right: -3px; bottom: -3px;
+    border-radius: 50%;
+    border: 1.2px solid currentColor;
+    pointer-events: none;
+    z-index: 2;
+    animation: ring-glow 4s ease-in-out infinite;
+  }}
+  .halo-ring-outer {{
+    position: absolute;
+    top: -6px; left: -6px; right: -6px; bottom: -6px;
+    border-radius: 50%;
+    border: 1px dashed currentColor;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.35;
+  }}
+
+  /* 头像照片主体 */
+  .avatar-img {{
+    display: block;
+    width: 36px; height: 36px;
     border-radius: 50%;
     object-fit: cover;
-    display: block;
-    border: 1.8px solid #ffffff;
-    position: relative;
-    z-index: 2;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
   }}
   
-  /* 深度呼吸起伏动效与粉/黑弥散霓虹光晕 */
-  .avatar-wrapper.charon-avatar {{
-    animation: cyber-pulse-charon 3.2s infinite ease-in-out;
+  /* Header 大头像特制尺寸与呼吸容器 */
+  .avatar-wrapper.header-avatar-wrap {{
+    width: 44px; height: 44px;
+    animation: float-breath 4.5s ease-in-out infinite;
   }}
-  .avatar-wrapper.user-avatar {{
-    animation: cyber-pulse-user 3.2s infinite ease-in-out;
+  .avatar-wrapper.header-avatar-wrap .avatar-img {{
+    width: 44px; height: 44px;
+    border: 2px solid #ffffff; /* 恢复纯白色发光圆环 */
   }}
-  
-  @keyframes cyber-pulse-charon {{
-    0% {{
-      transform: scale(1);
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.85);
-    }}
-    50% {{
-      transform: scale(1.05);
-      box-shadow: 0 0 24px rgba(0, 0, 0, 0.95), 0 0 36px rgba(15, 10, 20, 0.9);
-    }}
-    100% {{
-      transform: scale(1);
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.85);
-    }}
+  .avatar-wrapper.header-avatar-wrap .halo-ring {{
+    top: -4px; left: -4px; right: -4px; bottom: -4px;
   }}
-  @keyframes cyber-pulse-user {{
-    0% {{
-      transform: scale(1);
-      box-shadow: 0 0 8px rgba(229, 153, 169, 0.65);
-    }}
-    50% {{
-      transform: scale(1.05);
-      box-shadow: 0 0 24px rgba(229, 153, 169, 0.95), 0 0 36px rgba(255, 94, 132, 0.8);
-    }}
-    100% {{
-      transform: scale(1);
-      box-shadow: 0 0 8px rgba(229, 153, 169, 0.65);
-    }}
+  .avatar-wrapper.header-avatar-wrap .halo-ring-outer {{
+    top: -8px; left: -8px; right: -8px; bottom: -8px;
   }}
-  
-  /* 环绕的白色发光碎星 */
-  .decor-star {{
+
+  /* 核心大星芒 */
+  .cyber-star {{
     position: absolute;
-    color: #ffffff;
+    z-index: 3;
+    font-size: 14px;
+    pointer-events: none;
+    color: currentColor;
+    animation: star-pulse 3s ease-in-out infinite;
+  }}
+
+  /* 白色碎星容器 */
+  .sparkles {{
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
     pointer-events: none;
     z-index: 3;
-    text-shadow: 0 0 6px rgba(255, 255, 255, 0.95);
-    animation: star-breath 3.2s infinite ease-in-out;
   }}
-  @keyframes star-breath {{
-    0% {{ opacity: 0.45; transform: scale(0.85); }}
-    50% {{ opacity: 1; transform: scale(1.25); }}
-    100% {{ opacity: 0.45; transform: scale(0.85); }}
+  .sparkle {{
+    position: absolute;
+    font-size: 6px;
+    color: #ffffff !important; /* 碎星强行规定为纯白色 */
+    text-shadow: 0 0 4px #ffffff;
+    opacity: 0.8;
   }}
+
+  /* ================== MIRRORING (Charon 侧 vs User 侧) ================== */
   
-  /* 碎星镜像对齐控制 */
-  .charon-avatar .main-star {{
-    top: -8px; right: -4px;
-    font-size: 14px;
-    color: #ffeef1; /* 契合黑色渐变条的微粉星芒 */
-    text-shadow: 0 0 8px rgba(255, 238, 241, 0.9);
+  /* Charon 侧（AI/左边）：极深墨色/纯黑光晕，大星芒在左上，碎星在左侧 */
+  .avatar-wrapper.charon {{
+    color: #000000; /* 控制 currentColor 的色彩映射为纯黑 */
+    filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.85));
   }}
-  .charon-avatar .sub-star-1 {{
-    top: -3px; left: -9px;
-    font-size: 8px;
+  .avatar-wrapper.charon .cyber-star {{
+    top: -7px; left: -7px; /* 镜像：星芒坐落于左上方 */
   }}
-  .charon-avatar .sub-star-2 {{
-    bottom: -4px; left: -7px;
-    font-size: 9px;
+  /* 碎星镜像分布：左边、左下方 */
+  .avatar-wrapper.charon .sparkle:nth-child(1) {{ top: -5px; left: 14px; }}
+  .avatar-wrapper.charon .sparkle:nth-child(2) {{ bottom: 3px; left: -7px; }}
+  .avatar-wrapper.charon .sparkle:nth-child(3) {{ top: 22px; left: -11px; }}
+
+  /* User 侧（用户/右边）：霓虹蜜桃粉光晕，大星芒在右上，碎星在右侧 */
+  .avatar-wrapper.user {{
+    color: #ff5e84; /* 控制 currentColor 的色彩映射为霓虹粉 */
+    filter: drop-shadow(0 0 6px rgba(255, 94, 132, 0.75));
   }}
-  
-  .user-avatar .main-star {{
-    top: -8px; left: -4px;
-    font-size: 14px;
-    color: #ffffff;
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.95);
+  .avatar-wrapper.user .cyber-star {{
+    top: -7px; right: -7px; /* 镜像：星芒坐落于右上方 */
   }}
-  .user-avatar .sub-star-1 {{
-    top: -3px; right: -9px;
-    font-size: 8px;
-  }}
-  .user-avatar .sub-star-2 {{
-    bottom: -4px; right: -7px;
-    font-size: 9px;
-  }}
-  
-  #header-avatar-wrapper {{
-    width: 44px; height: 44px;
-  }}
-  
-  #header-text {{ 
-    position: relative;
-    z-index: 1;
-    min-width: 0; 
-  }}
-  #header .brand {{
-    font-family: "Georgia", "Songti SC", serif;
-    font-size: 26px;
-    font-style: italic;
-    letter-spacing: 3px;
-    color: #e599a9; /* 玫瑰粉色搭配 */
-    font-weight: 500;
-    line-height: 1.2;
-    text-transform: uppercase;
-  }}
-  #header .sub {{
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.7);
-    letter-spacing: 1px;
-    margin-top: 3px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }}
-  
-  /* 带有半透明白色背景框的在线状态 */
-  .status-badge {{
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    padding: 1px 7px;
-    border-radius: 5px;
-    font-size: 10px;
-    color: #ffffff;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }}
-  .status-dot {{
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: #84cc9a;
-    display: inline-block;
-    box-shadow: 0 0 6px #84cc9a;
-  }}
-  .status-dot.low {{ 
-    background: #c3a1ad; 
-    box-shadow: 0 0 6px #c3a1ad;
-  }}
-  
-  /* 顶部右下角签名感的花体字 - 移除旋转倾斜，保持平直 */
-  .header-signature {{
-    position: relative;
-    z-index: 1;
-    font-family: "Dancing Script", "Brush Script MT", cursive;
-    font-size: 22px; /* 签名体 */
-    color: rgba(255, 255, 255, 0.92);
-    margin-left: auto; /* 靠右对齐 */
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
-    user-select: none;
-    pointer-events: none;
-  }}
+  /* 碎星镜像分布：右边、右下方 */
+  .avatar-wrapper.user .sparkle:nth-child(1) {{ top: -5px; right: 14px; }}
+  .avatar-wrapper.user .sparkle:nth-child(2) {{ bottom: 3px; right: -7px; }}
+  .avatar-wrapper.user .sparkle:nth-child(3) {{ top: 22px; right: -11px; }}
+
+  /* ===================================================================== */
 
   #messages {{
     position: relative;
@@ -1268,7 +1230,7 @@ def chat_page():
   .msg-row {{
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 12px; /* 略微拉开一点，给发光的呼吸舱头像腾出空间 */
     max-width: 88%;
   }}
   .msg-row.user {{
@@ -1596,12 +1558,17 @@ def chat_page():
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 顶部 Header 头像应用 Charon 侧专属深黑色呼吸发光舱与碎星 -->
-      <div id="header-avatar-wrapper" class="avatar-wrapper charon-avatar">
-        <img id="header-avatar" src="{CHAT_AVATAR_CHARON}" alt="Charon">
-        <span class="decor-star main-star">✦</span>
-        <span class="decor-star sub-star-1">✧</span>
-        <span class="decor-star sub-star-2">✦</span>
+      <!-- 顶栏大头像：星芒呼吸舱包装 -->
+      <div class="avatar-wrapper header-avatar-wrap charon">
+        <div class="halo-ring"></div>
+        <div class="halo-ring-outer"></div>
+        <img class="avatar-img" src="{CHAT_AVATAR_CHARON}" alt="Charon">
+        <div class="cyber-star">✦</div>
+        <div class="sparkles">
+          <span class="sparkle">✦</span>
+          <span class="sparkle">✦</span>
+          <span class="sparkle">✦</span>
+        </div>
       </div>
       <div id="header-text">
         <div class="brand">CHARON</div>
@@ -1665,31 +1632,38 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
 
-  // 使用精细的 avatar-wrapper 代替裸 img 标签实现环绕星芒
+  // 头像星芒呼吸舱重构
   const avatarWrapper = document.createElement('div');
-  avatarWrapper.className = 'avatar-wrapper ' + (role === 'user' ? 'user-avatar' : 'charon-avatar');
-
-  const avatarImg = document.createElement('img');
-  avatarImg.className = 'msg-avatar-img';
-  avatarImg.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
-  avatarWrapper.appendChild(avatarImg);
-
-  // 镜像碎星节点生成
-  const mainStar = document.createElement('span');
-  mainStar.className = 'decor-star main-star';
-  mainStar.textContent = '✦';
-  avatarWrapper.appendChild(mainStar);
-
-  const subStar1 = document.createElement('span');
-  subStar1.className = 'decor-star sub-star-1';
-  subStar1.textContent = '✧';
-  avatarWrapper.appendChild(subStar1);
-
-  const subStar2 = document.createElement('span');
-  subStar2.className = 'decor-star sub-star-2';
-  subStar2.textContent = '✦';
-  avatarWrapper.appendChild(subStar2);
-
+  avatarWrapper.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
+  
+  const ring1 = document.createElement('div');
+  ring1.className = 'halo-ring';
+  const ring2 = document.createElement('div');
+  ring2.className = 'halo-ring-outer';
+  
+  const avatar = document.createElement('img');
+  avatar.className = 'avatar-img';
+  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
+  
+  const star = document.createElement('div');
+  star.className = 'cyber-star';
+  star.textContent = '✦';
+  
+  const sparkles = document.createElement('div');
+  sparkles.className = 'sparkles';
+  for(let i=0; i<3; i++) {{
+    const sp = document.createElement('span');
+    sp.className = 'sparkle';
+    sp.textContent = '✦';
+    sparkles.appendChild(sp);
+  }}
+  
+  avatarWrapper.appendChild(ring1);
+  avatarWrapper.appendChild(ring2);
+  avatarWrapper.appendChild(avatar);
+  avatarWrapper.appendChild(star);
+  avatarWrapper.appendChild(sparkles);
+  
   row.appendChild(avatarWrapper);
 
   const col = document.createElement('div');
