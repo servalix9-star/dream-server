@@ -7,31 +7,50 @@ import json, os, requests, threading, time, traceback, random
 
 app = Flask(__name__)
 
-# 所有数据文件统一放在 DATA_DIR 指向的目录下。
-# 配了 Railway Volume 的话，把 DATA_DIR 设成 Volume 的挂载路径（比如 /data），
-# 这样重新部署容器时这些文件不会跟着容器一起被清空。
-# 没配置的话默认用当前目录（本地测试用，重新部署照样会丢，这是预期行为）。
-DATA_DIR = os.environ.get("DATA_DIR", ".")
-os.makedirs(DATA_DIR, exist_ok=True)
+# ---- 数据持久化：Supabase（PostgREST），不再用本地JSON文件 ----
+# 本地文件在Railway每次重新部署时会被清空，Supabase是独立的托管数据库，
+# 重新部署/代码更新都不会丢数据。这里直接用 requests 调 PostgREST 的 REST API，
+# 不引入 supabase-py 这个额外依赖，保持依赖列表最小。
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+# 服务端必须用 secret key（对应旧版 service_role key），这个 key 绕过 RLS，
+# 专门给后端自己的逻辑用。千万不要把这个 key 用在前端/网页里。
+SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY")
 
+SUPABASE_HEADERS = {
+    "apikey": SUPABASE_SECRET_KEY or "",
+    "Authorization": f"Bearer {SUPABASE_SECRET_KEY}" if SUPABASE_SECRET_KEY else "",
+    "Content-Type": "application/json",
+}
 
-def data_path(filename):
-    return os.path.join(DATA_DIR, filename)
-
-
-EVENTS_FILE = data_path("events.json")
-DIARY_FILE = data_path("diary.json")
-ERROR_LOG = data_path("error.log")
-PERIOD_FILE = data_path("period.json")
-CHAT_HISTORY_FILE = data_path("chat_history.json")
-MOOD_FILE = data_path("mood.json")
-SUMMARY_FILE = data_path("window_summary.json")
-MODEL_CONFIG_FILE = data_path("model_config.json")
+ERROR_LOG = os.path.join(os.environ.get("DATA_DIR", "."), "error.log")
+os.makedirs(os.path.dirname(ERROR_LOG) or ".", exist_ok=True)
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 # 网页聊天的访问口令，不设置的话 /chat 页面直接放行（不建议生产环境这样用）
 CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
+
+
+def _supabase_request(method, table, params=None, json_body=None, headers_extra=None):
+    """统一的 Supabase PostgREST 请求封装。
+    table 直接是表名（events / diary / chat_messages / app_config）。
+    params 是查询字符串参数（比如排序、过滤、limit）。
+    抛异常交给调用方用 log_error 处理，不在这里静默吞掉，避免读写失败却没人知道。"""
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+        raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = dict(SUPABASE_HEADERS)
+    if headers_extra:
+        headers.update(headers_extra)
+    resp = requests.request(method, url, headers=headers, params=params, json=json_body, timeout=15)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Supabase {method} {table} 失败: status={resp.status_code} body={resp.text}")
+    if resp.text:
+        try:
+            return resp.json()
+        except ValueError:
+            return None
+    return None
 
 # DeepSeek 已在 2026-07-24 停用 deepseek-chat / deepseek-reasoner 这两个旧模型名，
 # 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
@@ -46,18 +65,37 @@ MODEL_THINKING_MAP = {
 }
 
 
+def get_app_config(key, default):
+    """读取 app_config 表里某个key对应的value（jsonb字段），没有就返回default。
+    这张表统一存 period/mood/window_summary/model_config 这几类"只有一份、整体覆盖"的配置。"""
+    try:
+        rows = _supabase_request(
+            "GET", "app_config",
+            params={"key": f"eq.{key}", "select": "value", "limit": 1}
+        )
+        if rows:
+            return rows[0]["value"]
+    except Exception as e:
+        log_error(f"get_app_config:{key}", e)
+    return default
+
+
+def set_app_config(key, value):
+    """整体覆盖写入 app_config 里某个key的value。用upsert，key不存在就插入，存在就更新。"""
+    _supabase_request(
+        "POST", "app_config",
+        json_body={"key": key, "value": value, "updated_at": datetime.now().isoformat()},
+        headers_extra={"Prefer": "resolution=merge-duplicates"}
+    )
+
+
 def get_current_model():
-    """读取当前选用的模型，存在 MODEL_CONFIG_FILE 里，没配置过就用默认值。
+    """读取当前选用的模型，存在 Supabase app_config 表的 model_config key 里，没配置过就用默认值。
     存服务端而不是浏览器本地，这样换设备打开聊天页选择依然一致。"""
-    if os.path.exists(MODEL_CONFIG_FILE):
-        try:
-            with open(MODEL_CONFIG_FILE, "r") as f:
-                data = json.load(f)
-                model = data.get("model")
-                if model in AVAILABLE_MODELS:
-                    return model
-        except (json.JSONDecodeError, OSError):
-            pass
+    data = get_app_config("model_config", {"model": DEFAULT_MODEL})
+    model = data.get("model") if isinstance(data, dict) else None
+    if model in AVAILABLE_MODELS:
+        return model
     return DEFAULT_MODEL
 
 
@@ -73,8 +111,7 @@ def get_thinking_config():
 def set_current_model(model):
     if model not in AVAILABLE_MODELS:
         raise ValueError(f"不支持的模型: {model}")
-    with open(MODEL_CONFIG_FILE, "w") as f:
-        json.dump({"model": model}, f)
+    set_app_config("model_config", {"model": model})
 
 # 防抖：同一个来源短时间内连续触发（比如连开几次天气App）只真正跑一次
 DEBOUNCE_SECONDS = 300  # 5分钟
@@ -92,42 +129,158 @@ def log_error(context, e):
         pass
 
 
-def load_events():
-    if os.path.exists(EVENTS_FILE):
-        with open(EVENTS_FILE, "r") as f:
-            return json.load(f)
-    return []
+def load_events(limit=100):
+    """从 Supabase events 表读最近limit条，按created_at升序返回（跟原来JSON数组的顺序一致：旧->新）。"""
+    try:
+        rows = _supabase_request(
+            "GET", "events",
+            params={"select": "created_at,type,value", "order": "created_at.desc", "limit": limit}
+        )
+        return list(reversed(rows or []))
+    except Exception as e:
+        log_error("load_events", e)
+        return []
 
 
-def save_events(events):
-    with open(EVENTS_FILE, "w") as f:
-        json.dump(events, f, ensure_ascii=False)
+def add_event_row(event_type, value, created_at=None):
+    """插入一条event记录。以前是"读全部->append->写全部->只保留最近100条"，
+    现在数据库里天然是追加写入，不需要手动截断保留条数（表会一直增长，
+    但读取时始终只取最近N条，旧数据留着不影响功能，如果想清理可以另外定期跑清理脚本）。"""
+    _supabase_request("POST", "events", json_body={
+        "type": event_type,
+        "value": value,
+        "created_at": created_at or datetime.now().isoformat()
+    })
 
 
-def load_diary():
-    if os.path.exists(DIARY_FILE):
-        with open(DIARY_FILE, "r") as f:
-            return json.load(f)
-    return []
+def count_events_today():
+    """今日互动次数：直接按日期范围向Supabase请求count，不受"只读最近N条"限制的影响。
+    用 Prefer: count=exact 头，让PostgREST在响应头里带上精确总数，body本身可以不返回数据。"""
+    try:
+        today_start = datetime.combine(date.today(), datetime.min.time()).isoformat()
+        if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+            raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
+        url = f"{SUPABASE_URL}/rest/v1/events"
+        headers = dict(SUPABASE_HEADERS)
+        headers["Prefer"] = "count=exact"
+        resp = requests.get(
+            url, headers=headers,
+            params={"select": "id", "created_at": f"gte.{today_start}", "limit": 1},
+            timeout=15
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"count_events_today 失败: status={resp.status_code} body={resp.text}")
+        content_range = resp.headers.get("Content-Range", "")
+        # 格式类似 "0-0/37"，斜杠后面就是总数
+        if "/" in content_range:
+            total = content_range.split("/")[-1]
+            if total.isdigit():
+                return int(total)
+        return 0
+    except Exception as e:
+        log_error("count_events_today", e)
+        return 0
 
 
-def save_diary(entries):
-    with open(DIARY_FILE, "w") as f:
-        json.dump(entries, f, ensure_ascii=False)
+def delete_event_row(created_at, content_substr):
+    """撤回聊天消息时，删除events表里对应的那条同步记录。
+    按"created_at相同 + value包含这段内容"匹配（跟原来的JSON版本匹配逻辑一致）。"""
+    try:
+        rows = _supabase_request(
+            "GET", "events",
+            params={"select": "id,value", "created_at": f"eq.{created_at}", "type": "eq.chat"}
+        )
+        for row in (rows or []):
+            if content_substr in (row.get("value") or ""):
+                _supabase_request("DELETE", "events", params={"id": f"eq.{row['id']}"})
+    except Exception as e:
+        log_error("delete_event_row", e)
 
 
-def load_chat_history():
-    if os.path.exists(CHAT_HISTORY_FILE):
-        with open(CHAT_HISTORY_FILE, "r") as f:
-            return json.load(f)
-    return []
+def load_diary(limit=30):
+    """从 Supabase diary 表读最近limit条，旧->新顺序。"""
+    try:
+        rows = _supabase_request(
+            "GET", "diary",
+            params={
+                "select": "id,created_at,reason,thought,activity,lucky,period_related,mood_score",
+                "order": "created_at.desc", "limit": limit
+            }
+        )
+        return list(reversed(rows or []))
+    except Exception as e:
+        log_error("load_diary", e)
+        return []
 
 
-def save_chat_history(history):
-    # 只保留最近200条，避免文件无限增长
-    history = history[-200:]
-    with open(CHAT_HISTORY_FILE, "w") as f:
-        json.dump(history, f, ensure_ascii=False)
+def add_diary_row(created_at, reason, thought, activity, lucky=False, period_related=False, mood_score=None,
+                   checking_in=None):
+    """插入一条diary记录。checking_in这个字段建表SQL里没有单独存列，
+    暂时并进activity文本里体现即可（不影响功能，只是没法用它做筛选查询）。"""
+    _supabase_request("POST", "diary", json_body={
+        "created_at": created_at or datetime.now().isoformat(),
+        "reason": reason,
+        "thought": thought,
+        "activity": activity,
+        "lucky": bool(lucky),
+        "period_related": bool(period_related),
+        "mood_score": mood_score
+    })
+
+
+def delete_diary_row(created_at, thought_substr):
+    """撤回聊天消息导致对应的diary记录需要联动清理：按created_at相同+thought包含这段内容匹配删除。
+    跟events的匹配逻辑同一个思路，同样存在极小概率误删同一秒内相同内容的边界情况。"""
+    try:
+        rows = _supabase_request(
+            "GET", "diary",
+            params={"select": "id,thought", "created_at": f"eq.{created_at}"}
+        )
+        for row in (rows or []):
+            if thought_substr in (row.get("thought") or ""):
+                _supabase_request("DELETE", "diary", params={"id": f"eq.{row['id']}"})
+    except Exception as e:
+        log_error("delete_diary_row", e)
+
+
+def load_chat_history(limit=200):
+    """从 Supabase chat_messages 表读最近limit条，旧->新顺序。"""
+    try:
+        rows = _supabase_request(
+            "GET", "chat_messages",
+            params={"select": "id,role,content,created_at", "order": "created_at.desc", "limit": limit}
+        )
+        return list(reversed(rows or []))
+    except Exception as e:
+        log_error("load_chat_history", e)
+        return []
+
+
+def add_chat_message_row(msg_id, role, content, created_at=None):
+    _supabase_request("POST", "chat_messages", json_body={
+        "id": msg_id,
+        "role": role,
+        "content": content,
+        "created_at": created_at or datetime.now().isoformat()
+    })
+
+
+def update_chat_message_row(msg_id, content):
+    """重新生成功能用：原地覆盖某条消息的content，不新增行、不删旧行。"""
+    _supabase_request("PATCH", "chat_messages", params={"id": f"eq.{msg_id}"}, json_body={"content": content})
+
+
+def delete_chat_message_row(msg_id):
+    _supabase_request("DELETE", "chat_messages", params={"id": f"eq.{msg_id}"})
+
+
+def get_chat_message_row(msg_id):
+    """按id查单条消息，重新生成/撤回时需要先确认这条消息存在、拿到它的created_at和content。"""
+    rows = _supabase_request(
+        "GET", "chat_messages",
+        params={"select": "id,role,content,created_at", "id": f"eq.{msg_id}", "limit": 1}
+    )
+    return rows[0] if rows else None
 
 
 def new_msg_id():
@@ -137,15 +290,11 @@ def new_msg_id():
 
 
 def load_period():
-    if os.path.exists(PERIOD_FILE):
-        with open(PERIOD_FILE, "r") as f:
-            return json.load(f)
-    return {"last_start": None, "avg_cycle_days": 28, "avg_period_days": 5}
+    return get_app_config("period", {"last_start": None, "avg_cycle_days": 28, "avg_period_days": 5})
 
 
 def save_period(data):
-    with open(PERIOD_FILE, "w") as f:
-        json.dump(data, f, ensure_ascii=False)
+    set_app_config("period", data)
 
 
 def get_period_context():
@@ -188,15 +337,11 @@ MOOD_RECOVERY_MISS_YOU = 20
 
 
 def load_mood():
-    if os.path.exists(MOOD_FILE):
-        with open(MOOD_FILE, "r") as f:
-            return json.load(f)
-    return {"score": MOOD_BASELINE, "last_updated": None}
+    return get_app_config("mood", {"score": MOOD_BASELINE, "last_updated": None})
 
 
 def save_mood(data):
-    with open(MOOD_FILE, "w") as f:
-        json.dump(data, f, ensure_ascii=False)
+    set_app_config("mood", data)
 
 
 def get_time_since_last_event():
@@ -213,14 +358,20 @@ def get_time_since_last_event():
 
 
 def apply_mood_decay():
-    """按距离上次互动的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。"""
+    """按距离上次互动的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。
+    这个函数经常从"读状态"类的路由里被调用（比如/api/chat-status），
+    如果写回Supabase这一步失败，不应该让整个读请求跟着500——衰减这次没持久化，
+    下次调用时用同样的算法重新算一遍就好，不是致命的数据丢失。"""
     mood = load_mood()
     hours_gap = get_time_since_last_event()
     if hours_gap is not None and hours_gap > 0:
         decay = hours_gap * MOOD_DECAY_PER_HOUR
         mood["score"] = max(MOOD_MIN, mood["score"] - decay)
     mood["last_updated"] = datetime.now().isoformat()
-    save_mood(mood)
+    try:
+        save_mood(mood)
+    except Exception as e:
+        log_error("apply_mood_decay:save", e)
     return mood["score"]
 
 
@@ -261,45 +412,42 @@ def get_mood_context(score, hours_gap):
 @app.route("/event", methods=["POST"])
 def add_event():
     data = request.json
-    events = load_events()
-    events.append({
-        "type": data.get("type"),
-        "value": data.get("value"),
-        "created_at": datetime.now().isoformat()
-    })
-    events = events[-100:]
-    save_events(events)
-    recover_mood(MOOD_RECOVERY_PER_EVENT)
+    try:
+        add_event_row(data.get("type"), data.get("value"))
+        recover_mood(MOOD_RECOVERY_PER_EVENT)
 
-    # 经期开始记录：单独存一份，方便算天数
-    if data.get("type") == "period" and data.get("value") == "开始":
-        p = load_period()
-        today_str = date.today().isoformat()
-        # 如果已有上次记录，顺便更新一下平均周期天数
-        if p.get("last_start"):
-            try:
-                last = date.fromisoformat(p["last_start"])
-                gap = (date.today() - last).days
-                if 15 <= gap <= 45:  # 排除异常值
-                    p["avg_cycle_days"] = gap
-            except Exception:
-                pass
-        p["last_start"] = today_str
-        save_period(p)
+        # 经期开始记录：单独存一份，方便算天数
+        if data.get("type") == "period" and data.get("value") == "开始":
+            p = load_period()
+            today_str = date.today().isoformat()
+            # 如果已有上次记录，顺便更新一下平均周期天数
+            if p.get("last_start"):
+                try:
+                    last = date.fromisoformat(p["last_start"])
+                    gap = (date.today() - last).days
+                    if 15 <= gap <= 45:  # 排除异常值
+                        p["avg_cycle_days"] = gap
+                except Exception:
+                    pass
+            p["last_start"] = today_str
+            save_period(p)
 
-    return jsonify({"ok": True})
+        return jsonify({"ok": True})
+    except Exception as e:
+        log_error("add_event", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/events", methods=["GET"])
 def get_events():
-    events = load_events()
-    return jsonify(events[-20:])
+    events = load_events(limit=20)
+    return jsonify(events)
 
 
 @app.route("/diary", methods=["GET"])
 def get_diary():
-    diary = load_diary()
-    return jsonify(diary[-10:])
+    diary = load_diary(limit=10)
+    return jsonify(diary)
 
 
 @app.route("/diary/read", methods=["GET"])
@@ -370,10 +518,7 @@ def init_period():
 @app.route("/summary", methods=["GET"])
 def get_summary():
     """看当前存的窗内摘要是什么。"""
-    if os.path.exists(SUMMARY_FILE):
-        with open(SUMMARY_FILE, "r") as f:
-            return jsonify(json.load(f))
-    return jsonify({"summary": "", "updated_at": None})
+    return jsonify(get_app_config("window_summary", {"summary": "", "updated_at": None}))
 
 
 @app.route("/summary", methods=["POST"])
@@ -481,19 +626,15 @@ LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我�
 
 def load_window_summary():
     """读取"窗内"最近一次对话的摘要，没有就返回空字符串。"""
-    if os.path.exists(SUMMARY_FILE):
-        with open(SUMMARY_FILE, "r") as f:
-            data = json.load(f)
-            return data.get("summary", "")
-    return ""
+    data = get_app_config("window_summary", {"summary": ""})
+    return data.get("summary", "") if isinstance(data, dict) else ""
 
 
 def save_window_summary(summary):
-    with open(SUMMARY_FILE, "w") as f:
-        json.dump({
-            "summary": summary,
-            "updated_at": datetime.now().isoformat()
-        }, f, ensure_ascii=False)
+    set_app_config("window_summary", {
+        "summary": summary,
+        "updated_at": datetime.now().isoformat()
+    })
 
 
 def send_bark(title, content, icon=None, sound=None):
@@ -630,11 +771,11 @@ def run_once():
         raise RuntimeError("DEEPSEEK_API_KEY not set")
 
     hour = datetime.now().hour
-    events = load_events()
+    events = load_events(limit=5)
     if not events:
         recent = "最近没有任何活动记录"
     else:
-        recent = "\n".join([f"{e['created_at'][:16]} {e['value']}" for e in events[-5:]])
+        recent = "\n".join([f"{e['created_at'][:16]} {e['value']}" for e in events])
 
     time_context = get_time_context(hour)
     period_context = get_period_context()
@@ -686,19 +827,16 @@ def run_once():
 
     send_bark("Charon", msg, icon=icon)
 
-    diary = load_diary()
-    diary.append({
-        "created_at": datetime.now().isoformat(),
-        "reason": reason,
-        "thought": msg,
-        "activity": recent,
-        "lucky": is_lucky,
-        "period_related": bool(period_context),
-        "mood_score": round(mood_score, 1),
-        "checking_in": is_checking_in
-    })
-    diary = diary[-30:]
-    save_diary(diary)
+    add_diary_row(
+        created_at=datetime.now().isoformat(),
+        reason=reason,
+        thought=msg,
+        activity=recent,
+        lucky=is_lucky,
+        period_related=bool(period_context),
+        mood_score=round(mood_score, 1),
+        checking_in=is_checking_in
+    )
 
     return msg
 
@@ -742,17 +880,14 @@ def _delayed_missyou_reply():
         reason, msg = parse_reason_message(raw)
         send_bark("Charon", msg, icon=ICON_LUCKY)
 
-        diary = load_diary()
-        diary.append({
-            "created_at": datetime.now().isoformat(),
-            "reason": reason,
-            "thought": msg,
-            "activity": "回应「想你了」感应",
-            "lucky": False,
-            "period_related": False
-        })
-        diary = diary[-30:]
-        save_diary(diary)
+        add_diary_row(
+            created_at=datetime.now().isoformat(),
+            reason=reason,
+            thought=msg,
+            activity="回应「想你了」感应",
+            lucky=False,
+            period_related=False
+        )
     except Exception as e:
         log_error("delayed_missyou_reply", e)
 
@@ -764,16 +899,14 @@ def miss_you():
     instant_msg = random.choice(INSTANT_CATCH_MESSAGES)
     send_bark("Charon", instant_msg, icon=ICON_LUCKY)
 
-    # 记一笔事件，方便后续也能在正常消息生成时看到这个动态
-    events = load_events()
-    events.append({
-        "type": "miss_you",
-        "value": "按了想你了",
-        "created_at": datetime.now().isoformat()
-    })
-    events = events[-100:]
-    save_events(events)
-    recover_mood(MOOD_RECOVERY_MISS_YOU)
+    # 记一笔事件，方便后续也能在正常消息生成时看到这个动态。
+    # 这里不让写入失败阻断"瞬间感应已推送"这个结果——即时反馈比事件记录更优先，
+    # 万一Supabase临时不通，用户依然能收到那条瞬间感应，只是这次不会被计入events。
+    try:
+        add_event_row("miss_you", "按了想你了")
+        recover_mood(MOOD_RECOVERY_MISS_YOU)
+    except Exception as e:
+        log_error("miss_you:record_event", e)
 
     # 后台起一个线程，延迟后再生成真正的回应，不阻塞这次请求
     t = threading.Thread(target=_delayed_missyou_reply, daemon=True)
@@ -806,7 +939,7 @@ def chat_status():
     is_checking_in = hours_gap is not None and hours_gap >= 6
 
     # 最近一条日记：拿reason（TA当时心里想的）和lucky标记
-    diary = load_diary()
+    diary = load_diary(limit=1)
     last_entry = diary[-1] if diary else None
     last_thought = last_entry.get("reason") if last_entry else None
     last_was_lucky = bool(last_entry.get("lucky")) if last_entry else False
@@ -814,10 +947,9 @@ def chat_status():
     # 窗内摘要：正式对话里聊过的内容
     window_summary = load_window_summary()
 
-    # 今日互动次数：数events.json里created_at是今天的条数
-    events = load_events()
-    today_str = date.today().isoformat()
-    today_count = sum(1 for e in events if e.get("created_at", "").startswith(today_str))
+    # 今日互动次数：直接按日期范围向Supabase查count，比翻最近N条record准确
+    # （events表会不断增长，"最近N条里今天的条数"在互动很频繁时会漏算今天更早的记录）
+    today_count = count_events_today()
 
     return jsonify({
         "ok": True,
@@ -848,7 +980,7 @@ def get_chat_model():
 
 @app.route("/api/chat-model", methods=["POST"])
 def set_chat_model():
-    """切换模型，存进服务端的MODEL_CONFIG_FILE，所有设备打开聊天页都会读到新选择。"""
+    """切换模型，存进Supabase app_config表的model_config key，所有设备打开聊天页都会读到新选择。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     data = request.json or {}
@@ -868,17 +1000,18 @@ def get_chat_messages():
     """拉取网页聊天的历史记录，供前端渲染。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-    history = load_chat_history()
-    return jsonify({"ok": True, "messages": history[-50:]})
+    history = load_chat_history(limit=50)
+    return jsonify({"ok": True, "messages": history})
 
 
 @app.route("/api/chat-delete", methods=["POST"])
 def chat_delete():
-    """删除网页聊天里的某一条消息（按id匹配）。
-    只删chat_history.json里的这一条；如果这条是"user"发的话，
-    顺手尝试从events.json里删掉内容和时间都对得上了那条同步记录，
-    避免Charon下次醒来时recent里还看得到已经删掉的话。
-    注意：events.json里没有存消息id，只能按"value包含这句话内容+created_at相同"来匹配，
+    """删除网页聊天里的某一条消息（按id匹配），真删除（DELETE），不是标记撤回状态留着。
+    删chat_messages表里这一条；如果这条是"user"发的话，顺手清理events表里对应的同步记录，
+    避免Charon下次醒来时recent里还看得到已经删掉的话；
+    不管是user还是charon发的，都顺手清理diary表里因这条消息而生成的日记条目，
+    避免撤回后日记里还留着这句话的痕迹。
+    注意：events/diary表里没有存消息id，只能按"内容包含+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
@@ -889,28 +1022,22 @@ def chat_delete():
         return jsonify({"ok": False, "error": "缺少id参数"}), 400
 
     try:
-        history = load_chat_history()
-        target = next((m for m in history if m.get("id") == msg_id), None)
+        target = get_chat_message_row(msg_id)
         if not target:
             return jsonify({"ok": False, "error": "没找到这条消息，可能已经被删过了"}), 404
 
-        history = [m for m in history if m.get("id") != msg_id]
-        save_chat_history(history)
+        delete_chat_message_row(msg_id)
 
-        # 同步清理events.json里对应的那条（仅针对用户发的消息，Charon的回复不会写进events）
+        target_created_at = target.get("created_at", "")
+        target_content = target.get("content", "")
+
+        # 同步清理events表里对应的那条（仅针对用户发的消息，Charon的回复不会写进events）
         if target.get("role") == "user":
-            events = load_events()
-            target_created_at = target.get("created_at", "")
-            target_content = target.get("content", "")
-            events = [
-                e for e in events
-                if not (
-                    e.get("type") == "chat"
-                    and e.get("created_at") == target_created_at
-                    and target_content in e.get("value", "")
-                )
-            ]
-            save_events(events)
+            delete_event_row(target_created_at, target_content)
+
+        # 同步清理diary表里因这条消息而生成的日记条目（user的话和charon的回复都可能被写进diary，
+        # 所以两种role都要尝试清理，按thought字段匹配）
+        delete_diary_row(target_created_at, target_content)
 
         return jsonify({"ok": True, "deleted_id": msg_id})
     except Exception as e:
@@ -932,26 +1059,15 @@ def chat_send():
         return jsonify({"ok": False, "error": "message不能为空"}), 400
 
     try:
+        # 先读历史（用于构建prompt的上下文），再把这句话写进去
         history = load_chat_history()
 
-        # 先把用户这句话记进对话历史
         user_msg_id = new_msg_id()
-        history.append({
-            "id": user_msg_id,
-            "role": "user",
-            "content": user_message,
-            "created_at": datetime.now().isoformat()
-        })
+        user_created_at = datetime.now().isoformat()
+        add_chat_message_row(user_msg_id, "user", user_message, user_created_at)
 
         # 同步写一笔events，让这次互动能影响情绪值、也能被run_once()的recent读到
-        events = load_events()
-        events.append({
-            "type": "chat",
-            "value": f"她在网页里说：{user_message}",
-            "created_at": datetime.now().isoformat()
-        })
-        events = events[-100:]
-        save_events(events)
+        add_event_row("chat", f"她在网页里说：{user_message}", user_created_at)
         recover_mood(MOOD_RECOVERY_PER_EVENT)
 
         # 生成Charon的回应，带上历史让语气能接得上
@@ -966,27 +1082,18 @@ def chat_send():
         reason, reply_msg = parse_reason_message(raw)
 
         charon_msg_id = new_msg_id()
-        history.append({
-            "id": charon_msg_id,
-            "role": "charon",
-            "content": reply_msg,
-            "created_at": datetime.now().isoformat()
-        })
-        save_chat_history(history)
+        add_chat_message_row(charon_msg_id, "charon", reply_msg)
 
         # 也顺手写进日记，保持和主动消息一样的记录习惯
-        diary = load_diary()
-        diary.append({
-            "created_at": datetime.now().isoformat(),
-            "reason": reason,
-            "thought": reply_msg,
-            "activity": f"网页对话回应：{user_message}",
-            "lucky": False,
-            "period_related": False,
-            "mood_score": round(mood_score, 1)
-        })
-        diary = diary[-30:]
-        save_diary(diary)
+        add_diary_row(
+            created_at=datetime.now().isoformat(),
+            reason=reason,
+            thought=reply_msg,
+            activity=f"网页对话回应：{user_message}",
+            lucky=False,
+            period_related=False,
+            mood_score=round(mood_score, 1)
+        )
 
         return jsonify({
             "ok": True,
@@ -996,6 +1103,72 @@ def chat_send():
         })
     except Exception as e:
         log_error("chat_send", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/chat-regenerate", methods=["POST"])
+def chat_regenerate():
+    """重新生成某一条Charon的回复：原地覆盖content，不新增消息、不保留旧版本。
+    只能对role=charon的消息重新生成（用户自己发的话不存在"重新生成"的概念）。
+    Body: {"id": "charon消息的id"}"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    data = request.json or {}
+    msg_id = data.get("id")
+    if not msg_id:
+        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+
+    try:
+        target = get_chat_message_row(msg_id)
+        if not target:
+            return jsonify({"ok": False, "error": "没找到这条消息"}), 404
+        if target.get("role") != "charon":
+            return jsonify({"ok": False, "error": "只能重新生成Charon的回复"}), 400
+
+        # 找到这条charon回复对应的、在它之前最近一条user消息，作为重新生成时"接的话"
+        history = load_chat_history()
+        target_index = next((i for i, m in enumerate(history) if m.get("id") == msg_id), None)
+        if target_index is None:
+            return jsonify({"ok": False, "error": "消息不在当前历史范围内，无法重新生成"}), 404
+
+        preceding = history[:target_index]
+        last_user_msg = next((m for m in reversed(preceding) if m.get("role") == "user"), None)
+        if not last_user_msg:
+            return jsonify({"ok": False, "error": "找不到对应的用户消息，无法重新生成"}), 400
+        user_message = last_user_msg.get("content", "")
+
+        hour = datetime.now().hour
+        time_context = get_time_context(hour)
+        hours_gap = get_time_since_last_event()
+        mood_score = apply_mood_decay()
+        mood_context = get_mood_context(mood_score, hours_gap)
+
+        # 用目标消息之前的历史来构建prompt，避免把即将被替换掉的旧回复也带进上下文
+        prompt = build_chat_reply_prompt(time_context, user_message, preceding, mood_context)
+        raw = call_deepseek(prompt)
+        reason, reply_msg = parse_reason_message(raw)
+
+        # 原地覆盖这条消息的内容，不新增行
+        update_chat_message_row(msg_id, reply_msg)
+
+        # 顺手清理旧版本对应的diary条目（按旧content+旧created_at匹配），再写入新的日记
+        old_content = target.get("content", "")
+        old_created_at = target.get("created_at", "")
+        delete_diary_row(old_created_at, old_content)
+        add_diary_row(
+            created_at=datetime.now().isoformat(),
+            reason=reason,
+            thought=reply_msg,
+            activity=f"重新生成回应：{user_message}",
+            lucky=False,
+            period_related=False,
+            mood_score=round(mood_score, 1)
+        )
+
+        return jsonify({"ok": True, "id": msg_id, "reply": reply_msg})
+    except Exception as e:
+        log_error("chat_regenerate", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -1431,7 +1604,11 @@ def chat_page():
     font-size: 15px;
     word-wrap: break-word;
     white-space: pre-wrap;
+    /* iOS Safari对标准user-select支持不完整，必须加-webkit-前缀版本才能真正生效，
+       否则长按会触发系统的文本选择+复制菜单，跟我们自己的仿微信长按菜单打架 */
+    -webkit-user-select: none;
     user-select: none; /* 移动端防干扰长按 */
+    -webkit-touch-callout: none; /* 禁用iOS长按弹出的"拷贝/查询"系统气泡 */
     cursor: pointer;
   }}
   .bubble.user {{
@@ -1795,6 +1972,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
+  if (createdAt) row.dataset.createdAt = createdAt;
 
   // 头像星光容器化
   const avatarWrap = document.createElement('div');
@@ -1855,7 +2033,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
     e.preventDefault();
     currentActiveMsgId = msgId;
     currentActiveRowEl = row;
-    showWeChatMenu(bubble, msgId, content);
+    showWeChatMenu(bubble, msgId, role);
   }};
 
   bubble.addEventListener('contextmenu', bindContextMenu);
@@ -1865,7 +2043,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
     pressTimer = setTimeout(() => {{
       currentActiveMsgId = msgId;
       currentActiveRowEl = row;
-      showWeChatMenu(bubble, msgId, content);
+      showWeChatMenu(bubble, msgId, role);
     }}, 600);
   }}, {{ passive: true }});
   
@@ -1876,28 +2054,29 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {{
 }}
 
 // 显示仿微信长按菜单浮窗
-function showWeChatMenu(targetBubble, msgId, textContent) {{
+function showWeChatMenu(targetBubble, msgId, role) {{
   const rect = targetBubble.getBoundingClientRect();
   contextMenu.style.display = 'flex';
   
   // 清理旧按钮
   contextMenu.innerHTML = '';
-  
-  // 复制按钮
-  const copyBtn = document.createElement('button');
-  copyBtn.className = 'menu-btn';
-  copyBtn.textContent = '复制';
-  copyBtn.onclick = () => {{
-    navigator.clipboard.writeText(textContent).then(() => {{
-      hideWeChatMenu();
-    }}).catch(() => {{
-      alert('复制失败，请手动选择复制');
-    }});
-  }};
-  contextMenu.appendChild(copyBtn);
-  
-  // 仅在存在 ID (即已发出的消息) 时显示撤回按钮
+
+  // 仅在存在 ID (即已发出的消息) 时显示"重新生成"/"撤回"，还在pending状态的消息不给操作
   if (msgId) {{
+    // 重新生成按钮：只对Charon的回复有意义，用户自己发的话没有"重新生成"这个概念
+    if (role === 'charon') {{
+      const regenBtn = document.createElement('button');
+      regenBtn.className = 'menu-btn';
+      regenBtn.textContent = '重新生成';
+      regenBtn.onclick = () => {{
+        if (currentActiveRowEl) {{
+          regenerateMessage(msgId, currentActiveRowEl);
+        }}
+        hideWeChatMenu();
+      }};
+      contextMenu.appendChild(regenBtn);
+    }}
+
     const recallBtn = document.createElement('button');
     recallBtn.className = 'menu-btn';
     recallBtn.textContent = '撤回';
@@ -1947,6 +2126,43 @@ async function deleteMessage(msgId, rowEl) {{
     }}
   }} catch (e) {{
     alert('网络错误，无法撤回');
+  }}
+}}
+
+async function regenerateMessage(msgId, rowEl) {{
+  // 原地覆盖，不需要二次确认（跟撤回不一样，重新生成不会丢失撤回那种"消息彻底消失"的后果，
+  // 大不了生成的还是不满意，可以再点一次）
+  const bubble = rowEl.querySelector('.bubble');
+  const originalText = bubble ? bubble.textContent : '';
+  const createdAt = rowEl.dataset.createdAt || new Date().toISOString();
+  if (bubble) {{
+    bubble.textContent = '…';
+    bubble.classList.add('pending');
+  }}
+  try {{
+    const res = await fetch(apiUrl('/api/chat-regenerate'), {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ id: msgId }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      // 整行替换，重新绑定长按/右键事件，避免旧闭包里still拿着覆盖前的文本
+      rowEl.replaceWith(renderMsgRow('charon', data.reply, createdAt, false, msgId));
+      loadStatus();
+    }} else {{
+      if (bubble) {{
+        bubble.textContent = originalText;
+        bubble.classList.remove('pending');
+      }}
+      alert('重新生成失败：' + (data.error || '未知错误'));
+    }}
+  }} catch (e) {{
+    if (bubble) {{
+      bubble.textContent = originalText;
+      bubble.classList.remove('pending');
+    }}
+    alert('网络错误，重新生成失败');
   }}
 }}
 
