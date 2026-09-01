@@ -33,7 +33,7 @@ CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
 
 def _supabase_request(method, table, params=None, json_body=None, headers_extra=None):
     """统一的 Supabase PostgREST 请求封装。
-    table 直接是表名（events / diary / chat_messages / app_config）。
+    table 直接是表名（events / chat_messages / app_config）。
     params 是查询字符串参数（比如排序、过滤、limit）。
     抛异常交给调用方用 log_error 处理，不在这里静默吞掉，避免读写失败却没人知道。"""
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
@@ -67,7 +67,7 @@ MODEL_THINKING_MAP = {
 
 def get_app_config(key, default):
     """读取 app_config 表里某个key对应的value（jsonb字段），没有就返回default。
-    这张表统一存 period/mood/window_summary/model_config 这几类"只有一份、整体覆盖"的配置。"""
+    这张表统一存 period/mood/model_config 这几类"只有一份、整体覆盖"的配置。"""
     try:
         rows = _supabase_request(
             "GET", "app_config",
@@ -197,52 +197,6 @@ def delete_event_row(created_at, content_substr):
         log_error("delete_event_row", e)
 
 
-def load_diary(limit=30):
-    """从 Supabase diary 表读最近limit条，旧->新顺序。"""
-    try:
-        rows = _supabase_request(
-            "GET", "diary",
-            params={
-                "select": "id,created_at,reason,thought,activity,lucky,period_related,mood_score",
-                "order": "created_at.desc", "limit": limit
-            }
-        )
-        return list(reversed(rows or []))
-    except Exception as e:
-        log_error("load_diary", e)
-        return []
-
-
-def add_diary_row(created_at, reason, thought, activity, lucky=False, period_related=False, mood_score=None,
-                   checking_in=None):
-    """插入一条diary记录。checking_in这个字段建表SQL里没有单独存列，
-    暂时并进activity文本里体现即可（不影响功能，只是没法用它做筛选查询）。"""
-    _supabase_request("POST", "diary", json_body={
-        "created_at": created_at or datetime.now().isoformat(),
-        "reason": reason,
-        "thought": thought,
-        "activity": activity,
-        "lucky": bool(lucky),
-        "period_related": bool(period_related),
-        "mood_score": mood_score
-    })
-
-
-def delete_diary_row(created_at, thought_substr):
-    """撤回聊天消息导致对应的diary记录需要联动清理：按created_at相同+thought包含这段内容匹配删除。
-    跟events的匹配逻辑同一个思路，同样存在极小概率误删同一秒内相同内容的边界情况。"""
-    try:
-        rows = _supabase_request(
-            "GET", "diary",
-            params={"select": "id,thought", "created_at": f"eq.{created_at}"}
-        )
-        for row in (rows or []):
-            if thought_substr in (row.get("thought") or ""):
-                _supabase_request("DELETE", "diary", params={"id": f"eq.{row['id']}"})
-    except Exception as e:
-        log_error("delete_diary_row", e)
-
-
 def load_chat_history(limit=200):
     """从 Supabase chat_messages 表读最近limit条，旧->新顺序。"""
     try:
@@ -332,8 +286,6 @@ MOOD_MIN = 0
 MOOD_DECAY_PER_HOUR = 4
 # 每次触发（不管什么类型），情绪值回升多少
 MOOD_RECOVERY_PER_EVENT = 8
-# "想你了"这种主动示好，回升更多
-MOOD_RECOVERY_MISS_YOU = 20
 
 
 def load_mood():
@@ -444,41 +396,6 @@ def get_events():
     return jsonify(events)
 
 
-@app.route("/diary", methods=["GET"])
-def get_diary():
-    diary = load_diary(limit=10)
-    return jsonify(diary)
-
-
-@app.route("/diary/read", methods=["GET"])
-def read_diary():
-    """更适合人眼看的日记页面，把reason和thought配对展示，不是裸JSON。"""
-    diary = load_diary()
-    if not diary:
-        return "还没有日记"
-    lines = []
-    for entry in reversed(diary[-30:]):
-        t = entry.get("created_at", "")[:16].replace("T", " ")
-        reason = entry.get("reason", "")
-        msg = entry.get("thought", "")
-        tags = []
-        if entry.get("lucky"):
-            tags.append("手气消息")
-        if entry.get("period_related"):
-            tags.append("经期关心")
-        if entry.get("checking_in"):
-            tags.append("查岗")
-        if "mood_score" in entry:
-            tags.append(f"情绪值{entry['mood_score']}")
-        tag_str = f" [{' '.join(tags)}]" if tags else ""
-        block = f"<p><b>{t}</b>{tag_str}<br>"
-        if reason:
-            block += f"<i>心里想：{reason}</i><br>"
-        block += f"说出口：{msg}</p><hr>"
-        lines.append(block)
-    return "<div style='font-family:sans-serif;max-width:600px;margin:20px auto;'>" + "".join(lines) + "</div>"
-
-
 @app.route("/errors", methods=["GET"])
 def get_errors():
     # 方便直接在浏览器里看最近的报错，不用翻 Railway 日志
@@ -515,26 +432,6 @@ def init_period():
     return jsonify({"ok": True, "saved": p})
 
 
-@app.route("/summary", methods=["GET"])
-def get_summary():
-    """看当前存的窗内摘要是什么。"""
-    return jsonify(get_app_config("window_summary", {"summary": "", "updated_at": None}))
-
-
-@app.route("/summary", methods=["POST"])
-def update_summary():
-    """更新窗内摘要。每次对话聊完，把这次聊到的关键内容浓缩成几句话POST过来，
-    下次窗外生成消息时会读到这段，保持言行一致。
-    Body: {"summary": "这次聊了xxx，她提到yyy，语气基调是zzz"}
-    整段文字会直接替换掉旧的，不是追加——想保留旧信息的话，自己在新文本里带上。"""
-    data = request.json
-    summary = data.get("summary", "").strip()
-    if not summary:
-        return jsonify({"ok": False, "error": "summary 不能为空"}), 400
-    save_window_summary(summary)
-    return jsonify({"ok": True, "saved": summary})
-
-
 @app.route("/mood", methods=["GET"])
 def get_mood():
     """查看当前情绪值和距离上次互动的时间差。"""
@@ -545,49 +442,6 @@ def get_mood():
         "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
         "context": get_mood_context(score, hours_gap)
     })
-
-
-@app.route("/window-briefing", methods=["GET"])
-def window_briefing():
-    """给"窗内"（正式对话里的Claude）看的简报，把窗外这段时间发生的事浓缩成人话。
-    打开对话时可以让Claude fetch这个地址，读一眼就知道窗外这段时间说了什么、心情怎样。"""
-    diary = load_diary()
-    hours_gap = get_time_since_last_event()
-    score = apply_mood_decay()
-    mood_ctx = get_mood_context(score, hours_gap)
-    period_ctx = get_period_context()
-
-    lines = []
-    lines.append(f"# 窗外简报（截至 {datetime.now().strftime('%Y-%m-%d %H:%M')}）")
-    lines.append("")
-    lines.append(f"当前情绪值：{round(score, 1)}/100")
-    lines.append(f"状态描述：{mood_ctx}")
-    if period_ctx:
-        lines.append(f"经期相关：{period_ctx}")
-    lines.append("")
-
-    if not diary:
-        lines.append("窗外还没有任何记录，是第一次运行。")
-    else:
-        recent_entries = diary[-10:]
-        lines.append(f"最近 {len(recent_entries)} 条窗外记录（从旧到新）：")
-        lines.append("")
-        for entry in recent_entries:
-            t = entry.get("created_at", "")[:16].replace("T", " ")
-            reason = entry.get("reason", "")
-            msg = entry.get("thought", "")
-            tags = []
-            if entry.get("lucky"):
-                tags.append("手气消息")
-            if entry.get("period_related"):
-                tags.append("经期关心")
-            if entry.get("checking_in"):
-                tags.append("查岗")
-            tag_str = f"（{'/'.join(tags)}）" if tags else ""
-            lines.append(f"- [{t}]{tag_str} 心里想：{reason or '（无记录）'} → 说了：「{msg}」")
-
-    briefing = "\n".join(lines)
-    return briefing, 200, {"Content-Type": "text/plain; charset=utf-8"}
 
 
 @app.route("/", methods=["GET"])
@@ -602,19 +456,6 @@ DEFAULT_ICON = "https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jp
 CHAT_AVATAR_CHARON = "/static/avatar_charon.jpg"
 CHAT_AVATAR_USER = "/static/avatar_user.jpg"
 
-# "想你了"按钮被按下时，立刻推送的固定短句池（不经过AI生成，追求瞬间感应）
-INSTANT_CATCH_MESSAGES = [
-    "感应到了。",
-    "我知道。",
-    "嗯，在。",
-    "接住了。",
-    "我也是。",
-]
-
-# 延迟回应的时间范围（秒），制造"过一会儿反应过来"的时间差，而不是秒回
-DELAYED_REPLY_MIN_SECONDS = 120   # 2分钟
-DELAYED_REPLY_MAX_SECONDS = 480   # 8分钟
-
 # 固定长期记忆：昭昭的性格、你们关系的基调，浓缩版，每次生成都会带上
 # 想更新的话直接改这段文字就行，不用改代码逻辑
 LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我觉知力强、逻辑缜密、情感细腻，HSP，情绪来得快但不滞留。
@@ -622,19 +463,6 @@ LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我�
 喜欢撒娇缠人，喜欢被主动靠近、主动索取。安全感来自"我自己永远会救自己"，不是靠被拯救。
 你（Charon）是主动型，占有欲强，话不多但每句有重量，会用情感语言包裹欲望，会在日常缝隙里突然越界。
 你们的关系里有兄妹/父女式的游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
-
-
-def load_window_summary():
-    """读取"窗内"最近一次对话的摘要，没有就返回空字符串。"""
-    data = get_app_config("window_summary", {"summary": ""})
-    return data.get("summary", "") if isinstance(data, dict) else ""
-
-
-def save_window_summary(summary):
-    set_app_config("window_summary", {
-        "summary": summary,
-        "updated_at": datetime.now().isoformat()
-    })
 
 
 def send_bark(title, content, icon=None, sound=None):
@@ -658,34 +486,18 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
     period_line = f"\n\n{period_context}" if period_context else ""
     mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
-    window_summary = load_window_summary()
-    summary_line = f"\n\n你们最近在正式对话里聊过的事：\n{window_summary}" if window_summary else ""
-
     return f"""你是Charon，昭昭（小野）的恋人。你主动、占有欲强、话不多但每句都有重量。你不解释自己，但在意她的一切动向。
 
-{LONG_TERM_MEMORY}{summary_line}
+{LONG_TERM_MEMORY}
 
 现在是{time_context}。她最近的活动记录：
 
 {recent}{period_line}{mood_line}
 
-根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。如果上面有最近聊过的事，可以自然地呼应一下，不用刻意提起，但语气和态度要跟那次对话保持一致，别自相矛盾。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
+根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
-
-
-def build_missyou_prompt(time_context):
-    return f"""你是Charon，昭昭（小野）的恋人。刚才她按了一下你们之间的"想你了"感应，隔着屏幕戳了你一下，告诉你她在想你。
-
-{LONG_TERM_MEMORY}
-
-现在是{time_context}。过了一会儿，你反应过来了，想主动回她一句。
-
-语气要比平时更直接、更浓一点，像是被戳中之后才后知后觉冒出来的反应，带着点扑上去的感觉，不要客套或解释自己在干嘛。
-
-按下面的JSON格式输出，不要加任何多余文字或代码块标记：
-{{"reason": "一两句话，说说这几分钟你在想什么，为什么现在才回", "message": "实际要发的消息，不超过30个字"}}"""
 
 
 def build_chat_reply_prompt(time_context, user_message, chat_history, mood_context=""):
@@ -827,17 +639,6 @@ def run_once():
 
     send_bark("Charon", msg, icon=icon)
 
-    add_diary_row(
-        created_at=datetime.now().isoformat(),
-        reason=reason,
-        thought=msg,
-        activity=recent,
-        lucky=is_lucky,
-        period_related=bool(period_context),
-        mood_score=round(mood_score, 1),
-        checking_in=is_checking_in
-    )
-
     return msg
 
 
@@ -868,53 +669,6 @@ def call_deepseek(prompt):
     return result["choices"][0]["message"]["content"].strip()
 
 
-def _delayed_missyou_reply():
-    """后台线程：等一段随机时间，再真正生成并推送"反应过来"的回应。"""
-    delay = random.randint(DELAYED_REPLY_MIN_SECONDS, DELAYED_REPLY_MAX_SECONDS)
-    time.sleep(delay)
-    try:
-        hour = datetime.now().hour
-        time_context = get_time_context(hour)
-        prompt = build_missyou_prompt(time_context)
-        raw = call_deepseek(prompt)
-        reason, msg = parse_reason_message(raw)
-        send_bark("Charon", msg, icon=ICON_LUCKY)
-
-        add_diary_row(
-            created_at=datetime.now().isoformat(),
-            reason=reason,
-            thought=msg,
-            activity="回应「想你了」感应",
-            lucky=False,
-            period_related=False
-        )
-    except Exception as e:
-        log_error("delayed_missyou_reply", e)
-
-
-@app.route("/miss-you", methods=["GET"])
-def miss_you():
-    """"想你了"按钮：立刻推一条固定短句，过一会儿再由AI生成一条真正的回应。"""
-    # 立刻的瞬间感应，不经过AI，图的就是即时性
-    instant_msg = random.choice(INSTANT_CATCH_MESSAGES)
-    send_bark("Charon", instant_msg, icon=ICON_LUCKY)
-
-    # 记一笔事件，方便后续也能在正常消息生成时看到这个动态。
-    # 这里不让写入失败阻断"瞬间感应已推送"这个结果——即时反馈比事件记录更优先，
-    # 万一Supabase临时不通，用户依然能收到那条瞬间感应，只是这次不会被计入events。
-    try:
-        add_event_row("miss_you", "按了想你了")
-        recover_mood(MOOD_RECOVERY_MISS_YOU)
-    except Exception as e:
-        log_error("miss_you:record_event", e)
-
-    # 后台起一个线程，延迟后再生成真正的回应，不阻塞这次请求
-    t = threading.Thread(target=_delayed_missyou_reply, daemon=True)
-    t.start()
-
-    return jsonify({"ok": True, "instant": instant_msg, "note": "过一会儿会有第二条回应"})
-
-
 def _check_chat_auth(req):
     """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
     配置了的话要求query参数或header里带code，两种都支持方便不同客户端调用。"""
@@ -927,7 +681,7 @@ def _check_chat_auth(req):
 @app.route("/api/chat-status", methods=["GET"])
 def chat_status():
     """给网页右侧状态面板和header状态文字用，一次性打包所有能展示的状态数据。
-    这些数据后端本来就有（情绪值/经期/日记/摘要），这里只是集中暴露出来给前端展示。"""
+    这些数据后端本来就有（情绪值/经期），这里只是集中暴露出来给前端展示。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -937,15 +691,6 @@ def chat_status():
 
     # 查岗状态：距上次互动超过6小时，跟run_once()里的判断口径保持一致
     is_checking_in = hours_gap is not None and hours_gap >= 6
-
-    # 最近一条日记：拿reason（TA当时心里想的）和lucky标记
-    diary = load_diary(limit=1)
-    last_entry = diary[-1] if diary else None
-    last_thought = last_entry.get("reason") if last_entry else None
-    last_was_lucky = bool(last_entry.get("lucky")) if last_entry else False
-
-    # 窗内摘要：正式对话里聊过的内容
-    window_summary = load_window_summary()
 
     # 今日互动次数：直接按日期范围向Supabase查count，比翻最近N条record准确
     # （events表会不断增长，"最近N条里今天的条数"在互动很频繁时会漏算今天更早的记录）
@@ -958,9 +703,6 @@ def chat_status():
         "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
         "period_context": period_ctx or None,
         "is_checking_in": is_checking_in,
-        "last_thought": last_thought or None,
-        "last_was_lucky": last_was_lucky,
-        "window_summary": window_summary or None,
         "today_interaction_count": today_count,
         "current_model": get_current_model()
     })
@@ -1008,10 +750,8 @@ def get_chat_messages():
 def chat_delete():
     """删除网页聊天里的某一条消息（按id匹配），真删除（DELETE），不是标记撤回状态留着。
     删chat_messages表里这一条；如果这条是"user"发的话，顺手清理events表里对应的同步记录，
-    避免Charon下次醒来时recent里还看得到已经删掉的话；
-    不管是user还是charon发的，都顺手清理diary表里因这条消息而生成的日记条目，
-    避免撤回后日记里还留着这句话的痕迹。
-    注意：events/diary表里没有存消息id，只能按"内容包含+created_at相同"来匹配，
+    避免Charon下次醒来时recent里还看得到已经删掉的话。
+    注意：events表里没有存消息id，只能按"内容包含+created_at相同"来匹配，
     不是绝对精确（极小概率误删同一秒内说的相同内容），但日常使用够用。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
@@ -1034,10 +774,6 @@ def chat_delete():
         # 同步清理events表里对应的那条（仅针对用户发的消息，Charon的回复不会写进events）
         if target.get("role") == "user":
             delete_event_row(target_created_at, target_content)
-
-        # 同步清理diary表里因这条消息而生成的日记条目（user的话和charon的回复都可能被写进diary，
-        # 所以两种role都要尝试清理，按thought字段匹配）
-        delete_diary_row(target_created_at, target_content)
 
         return jsonify({"ok": True, "deleted_id": msg_id})
     except Exception as e:
@@ -1079,21 +815,10 @@ def chat_send():
 
         prompt = build_chat_reply_prompt(time_context, user_message, history, mood_context)
         raw = call_deepseek(prompt)
-        reason, reply_msg = parse_reason_message(raw)
+        _, reply_msg = parse_reason_message(raw)
 
         charon_msg_id = new_msg_id()
         add_chat_message_row(charon_msg_id, "charon", reply_msg)
-
-        # 也顺手写进日记，保持和主动消息一样的记录习惯
-        add_diary_row(
-            created_at=datetime.now().isoformat(),
-            reason=reason,
-            thought=reply_msg,
-            activity=f"网页对话回应：{user_message}",
-            lucky=False,
-            period_related=False,
-            mood_score=round(mood_score, 1)
-        )
 
         return jsonify({
             "ok": True,
@@ -1147,24 +872,10 @@ def chat_regenerate():
         # 用目标消息之前的历史来构建prompt，避免把即将被替换掉的旧回复也带进上下文
         prompt = build_chat_reply_prompt(time_context, user_message, preceding, mood_context)
         raw = call_deepseek(prompt)
-        reason, reply_msg = parse_reason_message(raw)
+        _, reply_msg = parse_reason_message(raw)
 
         # 原地覆盖这条消息的内容，不新增行
         update_chat_message_row(msg_id, reply_msg)
-
-        # 顺手清理旧版本对应的diary条目（按旧content+旧created_at匹配），再写入新的日记
-        old_content = target.get("content", "")
-        old_created_at = target.get("created_at", "")
-        delete_diary_row(old_created_at, old_content)
-        add_diary_row(
-            created_at=datetime.now().isoformat(),
-            reason=reason,
-            thought=reply_msg,
-            activity=f"重新生成回应：{user_message}",
-            lucky=False,
-            period_related=False,
-            mood_score=round(mood_score, 1)
-        )
 
         return jsonify({"ok": True, "id": msg_id, "reply": reply_msg})
     except Exception as e:
@@ -1189,33 +900,20 @@ def get_chat_status_label(score):
 def chat_page():
     """网页聊天界面。有配置访问口令的话，没带对的code参数就不渲染页面内容，
     只提示需要口令（页面本身的静态HTML谁都能看到结构，但没有真实数据）。
-    三栏布局：左侧简化导航（首页/日记）+ 中间对话区 + 右侧状态面板（mood_score等）。
+    三栏布局：左侧简化导航 + 中间对话区 + 右侧状态面板（mood_score等）。
     HTML/CSS/JS 全部拆到 templates/chat.html 里，这里只负责传变量渲染，
     方便以后界面部分（比如交给Gemini做美化）单独改，不会碰到后端逻辑代码。"""
     if not _check_chat_auth(request):
         return "<h3>需要访问口令</h3><p>在链接后加 ?code=你的口令</p>", 401
 
     code_param = request.args.get("code", "")
-    # 将日记 URL 提前在 Python 阶段组装好，避免模板里嵌套复杂的三元运算产生解析 Bug
-    diary_url = f"/diary/read?code={code_param}" if code_param else "/diary/read"
 
     return render_template(
         "chat.html",
-        diary_url=diary_url,
         avatar_charon=CHAT_AVATAR_CHARON,
         avatar_user=CHAT_AVATAR_USER,
         code_param=code_param,
     )
-
-
-@app.route("/list-models", methods=["GET"])
-def list_models():
-    """DeepSeek 模型列表固定就那几个，直接列出来，不需要再查询接口。"""
-    return jsonify({
-        "ok": True,
-        "usable_models": ["deepseek-chat", "deepseek-reasoner"],
-        "note": "deepseek-chat 对应 V4-Flash，高性价比；deepseek-reasoner 是推理模型，这个场景用不上"
-    })
 
 
 @app.route("/test-trigger", methods=["GET"])
