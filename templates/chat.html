@@ -662,16 +662,6 @@
     padding: 8px 10px;
     line-height: 1.5;
   }
-  .lucky-tag {
-    font-size: 11px;
-    color: #b86076;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.35));
-    border: none;
-    border-radius: 10px;
-    padding: 8px 10px;
-    line-height: 1.5;
-  }
-  
   /* “心里话”板块：恢复经典斜体与原版文字色 */
   .thought-card {
     font-size: 12px;
@@ -683,15 +673,6 @@
     line-height: 1.6;
     font-style: italic; /* 彻底恢复经典斜体 */
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
-  }
-  .summary-card {
-    font-size: 11px;
-    color: #6e505f;
-    background: rgba(255, 255, 255, 0.3);
-    border: none;
-    border-radius: 12px;
-    padding: 9px 11px;
-    line-height: 1.6;
   }
   .today-count {
     font-size: 24px;
@@ -802,7 +783,6 @@
   <!-- 1. 左侧波点玻璃舱导航栏 -->
   <div id="nav">
     <a class="nav-icon" href="/" title="首页">✦</a>
-    <a class="nav-icon" href="{{ diary_url }}" title="日记">✎</a>
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
@@ -1175,15 +1155,6 @@ async function loadStatus() {
     }
     if (data.is_checking_in) {
       html += '<div class="stat-block"><div class="checking-tag">好一阵没理TA了…</div></div>';
-    }
-    if (data.last_was_lucky) {
-      html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
-    }
-    if (data.last_thought) {
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
-    }
-    if (data.window_summary) {
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
     }
     panelBody.innerHTML = html;
   } catch (e) {
