@@ -15,7 +15,7 @@
     background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550; /* 恢复至初始雅致深紫灰 */
+    color: #5a4550; /* 初始雅致深紫灰 */
   }
   #app {
     display: flex;
@@ -662,6 +662,16 @@
     padding: 8px 10px;
     line-height: 1.5;
   }
+  .lucky-tag {
+    font-size: 11px;
+    color: #b86076;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.35));
+    border: none;
+    border-radius: 10px;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }
+  
   /* “心里话”板块：恢复经典斜体与原版文字色 */
   .thought-card {
     font-size: 12px;
@@ -673,6 +683,15 @@
     line-height: 1.6;
     font-style: italic; /* 彻底恢复经典斜体 */
     box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
+  }
+  .summary-card {
+    font-size: 11px;
+    color: #6e505f;
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    border-radius: 12px;
+    padding: 9px 11px;
+    line-height: 1.6;
   }
   .today-count {
     font-size: 24px;
@@ -783,6 +802,7 @@
   <!-- 1. 左侧波点玻璃舱导航栏 -->
   <div id="nav">
     <a class="nav-icon" href="/" title="首页">✦</a>
+    <a class="nav-icon" href="{{ diary_url }}" title="日记">✎</a>
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
@@ -1156,6 +1176,15 @@ async function loadStatus() {
     if (data.is_checking_in) {
       html += '<div class="stat-block"><div class="checking-tag">好一阵没理TA了…</div></div>';
     }
+    if (data.last_was_lucky) {
+      html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
+    }
+    if (data.last_thought) {
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+    }
+    if (data.window_summary) {
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+    }
     panelBody.innerHTML = html;
   } catch (e) {
     panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
@@ -1291,4 +1320,12 @@ loadStatus();
 loadModelSelector();
 </script>
 </body>
-</html>
+</html>在templates/chat.html中完成UI实装，保持与main.py（对应main 5.py）的API对接，重点是：
+1、右侧栏情绪进度条和今日互动次数去掉，替换成“冰箱贴留言便签”和“发光小抽屉”。
+2、心里话（对应的note）卡片样式升级（恢复斜体、#7a5a65等经典要素）。
+3、点击小抽屉拉开的弹窗翻阅情书，阅读后熄灭抽屉上的呼吸星芒（调mark-read接口）。
+4、手机端Tab 2完美展示重塑后的右侧状态栏内容，Tab 3展示全新手写波点款经期一键记录器。
+5、左侧导航栏图标改成白色圆形粉图案，底色粉嫩一些。
+6、Header黑粉比例3:2，内部白色点缀波点放大右扩。
+7、完全清理主聊区底部（输入栏上方）溢出的波点。
+8、头像外发光白色圈保留，User一侧时间戳精确移动至气泡右下角。
