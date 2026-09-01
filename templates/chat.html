@@ -17,6 +17,7 @@
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
     color: #5a4550; /* 恢复至初始雅致深紫灰 */
   }
+  
   #app {
     display: flex;
     height: 100vh; height: 100dvh;
@@ -26,11 +27,79 @@
     z-index: 2;
   }
 
+  /* ==================== 手机端与电脑端自适应媒体查询 ==================== */
+  
+  /* 1. 电脑/平板大端（宽度 >= 720px）：三栏式奢华布局 */
+  @media (min-width: 720px) {
+    #nav { display: flex !important; }
+    #main { display: flex !important; }
+    #panel { display: flex !important; }
+    #panel-desk, #panel-health { display: none !important; } /* 电脑端隐藏拆分出来的单Tab */
+    #mobile-tab-bar { display: none !important; } /* 电脑端隐藏底部导航栏 */
+  }
+
+  /* 2. 手机端（宽度 < 720px）：App 级全屏单栏自适应 */
+  @media (max-width: 719px) {
+    #app {
+      flex-direction: column;
+      padding: 10px;
+      gap: 0;
+      height: 100dvh;
+    }
+    #nav, #panel {
+      display: none !important; /* 手机端隐藏左侧导航与右边栏 */
+    }
+    /* 手机端 Tab 容器基类 */
+    .tab-content {
+      display: none;
+      width: 100%;
+      height: calc(100% - 62px); /* 扣除底部导航栏的高度 */
+      border-radius: 24px;
+    }
+    .tab-content.active {
+      display: flex !important;
+      flex-direction: column;
+    }
+    /* 手机底部 App 级磨砂导航栏 */
+    #mobile-tab-bar {
+      display: flex !important;
+      height: 52px;
+      width: 100%;
+      margin-top: 10px;
+      background: rgba(255, 238, 241, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      box-shadow: 0 4px 15px rgba(184, 118, 138, 0.08);
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 10px;
+    }
+    .mobile-tab-btn {
+      background: none;
+      border: none;
+      color: #b08d98;
+      font-size: 13px;
+      font-family: inherit;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .mobile-tab-btn.active {
+      color: #ff5e84;
+      font-weight: bold;
+      transform: scale(1.05);
+    }
+  }
+
   /* ---- 左侧波点玻璃舱导航栏 ---- */
   #nav {
     width: 60px;
     flex-shrink: 0;
-    display: flex;
+    display: none; /* 默认隐藏，由媒体查询控制 */
     flex-direction: column;
     align-items: center;
     gap: 16px;
@@ -41,7 +110,7 @@
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }
-  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大并挤密波点（24%） */
+  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大到 22px 并且调整色比 */
   #nav::before {
     content: '';
     position: absolute;
@@ -82,7 +151,7 @@
   #main {
     flex: 1;
     min-width: 0;
-    display: flex;
+    display: none; /* 默认隐藏，由自适应和激活状态控制 */
     flex-direction: column;
     background: rgba(255, 255, 255, 0.35);
     backdrop-filter: blur(30px);
@@ -697,9 +766,9 @@
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
-  <div id="main">
+  <div id="main" class="sub-panel">
     <div id="header">
-      <!-- 带有高对比度、镜像对齐以及白色、黑色霓虹碎星装饰的头像容器 -->
+      <!-- 带有高对比度、镜像对齐以及白色、黑色极夜发光霓虹碎星和经典白发光圈装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
         <img id="header-avatar" src="{{ avatar_charon }}" alt="Charon">
         <span class="star-accent">✦</span>
@@ -1011,7 +1080,7 @@ async function loadStatus() {
       panelBody.innerHTML = '<div class="panel-empty">加载失败</div>';
       statusLabel.textContent = '未知';
       return;
-    }
+    }}
 
     // 更新 header 的状态标签
     statusLabel.textContent = data.status_label || '在线';
@@ -1159,3 +1228,5 @@ loadModelSelector();
 </script>
 </body>
 </html>
+
+--- END OF FILE chat.html ---
