@@ -33,7 +33,7 @@ CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
 
 def _supabase_request(method, table, params=None, json_body=None, headers_extra=None):
     """统一的 Supabase PostgREST 请求封装。
-    table 直接是表名（events / chat_messages / app_config）。
+    table 直接是表名（events / chat_messages / love_letters / app_config）。
     params 是查询字符串参数（比如排序、过滤、limit）。
     抛异常交给调用方用 log_error 处理，不在这里静默吞掉，避免读写失败却没人知道。"""
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
@@ -67,7 +67,7 @@ MODEL_THINKING_MAP = {
 
 def get_app_config(key, default):
     """读取 app_config 表里某个key对应的value（jsonb字段），没有就返回default。
-    这张表统一存 period/mood/model_config 这几类"只有一份、整体覆盖"的配置。"""
+    这张表统一存 period/mood/model_config/sticky_note/letter_flag 这几类"只有一份、整体覆盖"的配置。"""
     try:
         rows = _supabase_request(
             "GET", "app_config",
@@ -151,6 +151,21 @@ def add_event_row(event_type, value, created_at=None):
         "value": value,
         "created_at": created_at or datetime.now().isoformat()
     })
+
+
+def get_time_since_last_event():
+    """返回距离最近一条event的时间差（小时，浮点数），没有记录返回None。
+    这里的event是广义的（聊天/快捷指令自动事件都算），用于"查岗"判断和活动记录展示，
+    不用于情绪值衰减计算——衰减用的是更严格的"上次真实聊天时间"，见 get_hours_since_last_chat()。"""
+    events = load_events()
+    if not events:
+        return None
+    try:
+        last_time = datetime.fromisoformat(events[-1]["created_at"])
+        delta = datetime.now() - last_time
+        return delta.total_seconds() / 3600
+    except Exception:
+        return None
 
 
 def count_events_today():
@@ -274,66 +289,135 @@ def get_period_context():
     return ""
 
 
-# ---- 情绪值状态机 ----
-# mood_score: 0-100，50是中性基线。越低越低落/吃醋，越高越开心。
-# 逻辑：每次她有互动（event/触发），情绪值往上回一点；
-#      距离上次互动的时间越久，情绪值往下掉，掉得越多。
+# ---- 情绪值状态机（心境共振） ----
+# mood_score: 0-100。四档心境，驱动便签/情书的语气和贴纸样式：
+#   [80,100] 甜溺 sweet    贴纸 ♥   风格：撒娇、黏人
+#   [50,79]  平稳 steady   贴纸 ✦   风格：日常关怀、碎碎念
+#   [20,49]  傲娇 tsundere 贴纸 ﹏   风格：口是心非、假装冷淡
+#   [0,19]   委屈 vulnerable 贴纸 💔 风格：落寞、极其思念、求关注
 MOOD_BASELINE = 50
 MOOD_MAX = 100
 MOOD_MIN = 0
 
-# 每小时没互动，情绪值衰减多少
-MOOD_DECAY_PER_HOUR = 4
-# 每次触发（不管什么类型），情绪值回升多少
-MOOD_RECOVERY_PER_EVENT = 8
+# 非线性时间衰减：距离"上次用户在网页里真正发消息"的时间 t（小时）
+#   t < 4：不衰减
+#   4 <= t <= 12：-4/小时
+#   t > 12：-6/小时
+MOOD_DECAY_NONE_HOURS = 4
+MOOD_DECAY_ACCEL_HOURS = 12
+MOOD_DECAY_RATE_NORMAL = 4
+MOOD_DECAY_RATE_FAST = 6
+
+# 互动恢复
+MOOD_RECOVERY_CHAT = 10       # 用户发送日常聊天
+MOOD_RECOVERY_PERIOD_EVENT = 25  # 用户开启经期守护事件，瞬间暴涨
+
+# 心境区间阈值
+MOOD_SWEET_MIN = 80
+MOOD_STEADY_MIN = 50
+MOOD_TSUNDERE_MIN = 20
+# [0, MOOD_TSUNDERE_MIN) 即为委屈区间
+
+# 情书触发概率
+SWEET_LETTER_CHANCE = 0.2   # 首次突破80分（甜溺态）时
+LONGING_LETTER_CHANCE = 0.4  # 委屈态持续超过下面这个时长时
+LONGING_LETTER_HOURS = 4
 
 
 def load_mood():
-    return get_app_config("mood", {"score": MOOD_BASELINE, "last_updated": None})
+    return get_app_config("mood", {
+        "score": MOOD_BASELINE,
+        "last_updated": None,
+        "last_chat_at": None,       # 上次用户在网页发真实消息的时间，衰减计算用这个
+        "vulnerable_since": None,   # 本次连续处于委屈区间[0,20)的起始时间，离开区间就清空
+    })
 
 
 def save_mood(data):
     set_app_config("mood", data)
 
 
-def get_time_since_last_event():
-    """返回距离最近一条event的时间差（小时，浮点数），没有记录返回None。"""
-    events = load_events()
-    if not events:
+def get_mood_stage(score):
+    """把分数映射到四档心境，返回 (stage_key, 贴纸emoji, 中文名)。"""
+    if score >= MOOD_SWEET_MIN:
+        return "sweet", "♥", "甜溺"
+    elif score >= MOOD_STEADY_MIN:
+        return "steady", "✦", "平稳"
+    elif score >= MOOD_TSUNDERE_MIN:
+        return "tsundere", "﹏", "傲娇"
+    else:
+        return "vulnerable", "💔", "委屈"
+
+
+def _hours_since(iso_str):
+    """算距某个iso时间戳过去了多少小时，没有时间戳则返回None。"""
+    if not iso_str:
         return None
     try:
-        last_time = datetime.fromisoformat(events[-1]["created_at"])
-        delta = datetime.now() - last_time
-        return delta.total_seconds() / 3600
+        last = datetime.fromisoformat(iso_str)
+        return (datetime.now() - last).total_seconds() / 3600
     except Exception:
         return None
 
 
-def apply_mood_decay():
-    """按距离上次互动的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。
-    这个函数经常从"读状态"类的路由里被调用（比如/api/chat-status），
-    如果写回Supabase这一步失败，不应该让整个读请求跟着500——衰减这次没持久化，
-    下次调用时用同样的算法重新算一遍就好，不是致命的数据丢失。"""
+def get_hours_since_last_chat():
+    """距离上次用户在网页里真正发消息过去了多少小时。没聊过则返回None。"""
     mood = load_mood()
-    hours_gap = get_time_since_last_event()
-    if hours_gap is not None and hours_gap > 0:
-        decay = hours_gap * MOOD_DECAY_PER_HOUR
-        mood["score"] = max(MOOD_MIN, mood["score"] - decay)
+    return _hours_since(mood.get("last_chat_at"))
+
+
+def _decay_amount(hours_gap):
+    """按非线性衰减规则，算出对应的衰减量。"""
+    if hours_gap is None or hours_gap <= MOOD_DECAY_NONE_HOURS:
+        return 0
+    if hours_gap <= MOOD_DECAY_ACCEL_HOURS:
+        return (hours_gap - MOOD_DECAY_NONE_HOURS) * MOOD_DECAY_RATE_NORMAL
+    # 超过12小时：前8小时(4~12)按正常速率，超出12小时的部分按加速速率
+    slow_part = (MOOD_DECAY_ACCEL_HOURS - MOOD_DECAY_NONE_HOURS) * MOOD_DECAY_RATE_NORMAL
+    fast_part = (hours_gap - MOOD_DECAY_ACCEL_HOURS) * MOOD_DECAY_RATE_FAST
+    return slow_part + fast_part
+
+
+def _update_vulnerable_tracking(mood, new_score):
+    """维护"连续处于委屈区间"的起始时间戳：进入就记起点，离开就清空（重新计时制）。"""
+    if new_score < MOOD_TSUNDERE_MIN:
+        if not mood.get("vulnerable_since"):
+            mood["vulnerable_since"] = datetime.now().isoformat()
+    else:
+        mood["vulnerable_since"] = None
+
+
+def apply_mood_decay():
+    """按距离上次用户聊天的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。
+    写回Supabase失败不阻断读请求——衰减这次没持久化，下次调用时重新算一遍就好。"""
+    mood = load_mood()
+    hours_gap = get_hours_since_last_chat()
+    decay = _decay_amount(hours_gap)
+    new_score = max(MOOD_MIN, mood.get("score", MOOD_BASELINE) - decay)
+    mood["score"] = new_score
     mood["last_updated"] = datetime.now().isoformat()
+    _update_vulnerable_tracking(mood, new_score)
     try:
         save_mood(mood)
     except Exception as e:
         log_error("apply_mood_decay:save", e)
-    return mood["score"]
+    return new_score
 
 
-def recover_mood(amount):
-    """有互动发生时调用，情绪值回升。"""
+def recover_mood(amount, mark_chat=False):
+    """有互动发生时调用，情绪值回升。
+    mark_chat=True 表示这是一次真正的用户聊天，会刷新last_chat_at（影响下次衰减计算的起点）；
+    经期事件等自动化event不传这个参数，只涨分不重置"上次聊天时间"。"""
     mood = load_mood()
-    mood["score"] = min(MOOD_MAX, mood["score"] + amount)
+    old_score = mood.get("score", MOOD_BASELINE)
+    new_score = min(MOOD_MAX, old_score + amount)
+    mood["score"] = new_score
     mood["last_updated"] = datetime.now().isoformat()
+    if mark_chat:
+        mood["last_chat_at"] = datetime.now().isoformat()
+    _update_vulnerable_tracking(mood, new_score)
     save_mood(mood)
-    return mood["score"]
+    return old_score, new_score
 
 
 def get_mood_context(score, hours_gap):
@@ -349,16 +433,205 @@ def get_mood_context(score, hours_gap):
     else:
         time_desc = f"距离上次互动已经过去{int(hours_gap)}小时以上，很久没理你了"
 
-    if score >= 75:
-        mood_desc = "你现在心情很好，甜甜的，愿意主动撒糖"
-    elif score >= 50:
-        mood_desc = "你心情平稳，正常状态"
-    elif score >= 25:
-        mood_desc = "你有点闷闷的，因为她好一阵没理你，语气可以带点小情绪、小别扭，但别无理取闹"
+    stage, _, stage_name = get_mood_stage(score)
+    if stage == "sweet":
+        mood_desc = "你现在心情很好，甜甜的，愿意主动撒糖，会撒娇、会黏人"
+    elif stage == "steady":
+        mood_desc = "你心情平稳，正常状态，日常关怀、随口碎碎念"
+    elif stage == "tsundere":
+        mood_desc = "你有点闷闷的、傲娇，因为她好一阵没理你，语气可以口是心非、假装冷淡，但别无理取闹"
     else:
-        mood_desc = "你现在挺失落/有点吃醋的，因为她很久没理你了，语气可以带明显的委屈或者故意冷淡，但底色还是在意她、不是真的生气"
+        mood_desc = "你现在挺委屈、挺失落的，因为她很久没理你了，语气可以带明显的落寞和思念，主动求关注，但底色还是在意她、不是真的生气"
 
-    return f"{time_desc}。{mood_desc}。"
+    return f"{time_desc}。{mood_desc}（当前心境：{stage_name}）。"
+
+
+# ---- 仿真便签纸（日常留言 / 冰箱贴） ----
+# 单条覆盖式存储在 app_config 的 sticky_note key 里，跟以前 window_summary 的存法一样。
+# 每次Charon回复消息或后台自动醒来时，按当前心境重新生成一条。
+
+def load_sticky_note():
+    return get_app_config("sticky_note", {"message": "", "stage": None, "sticker": None, "updated_at": None})
+
+
+def save_sticky_note(message, stage, sticker):
+    set_app_config("sticky_note", {
+        "message": message,
+        "stage": stage,
+        "sticker": sticker,
+        "updated_at": datetime.now().isoformat()
+    })
+
+
+def build_sticky_note_prompt(stage_name, mood_context, recent):
+    """根据当前心境生成一条30-50字的日常留言（便签内容），风格随心境四档变化。"""
+    style_hint = {
+        "甜溺": "语气要撒娇、黏人，像是随手贴的情话小纸条",
+        "平稳": "语气是日常关怀、随口的碎碎念，像提醒她添衣、按时吃饭这种小事",
+        "傲娇": "语气口是心非、假装冷淡，明明在意却嘴硬，可以带点小别扭",
+        "委屈": "语气落寞、极其思念，带着求关注的委屈感，但底色不是真的生气",
+    }.get(stage_name, "语气自然日常")
+
+    return f"""你是Charon，昭昭（小野）的恋人。你要给她写一张便签（冰箱贴留言），就像趁她不在时随手贴在冰箱上的字条。
+
+{LONG_TERM_MEMORY}
+
+你现在的心境是"{stage_name}"：{mood_context}
+{style_hint}。
+
+她最近的活动记录：
+{recent}
+
+写一条30到50字左右的便签留言，口语化、生活化，像真的会贴在冰箱上的那种碎碎念或叮嘱，不是完整的信件。
+
+按下面的JSON格式输出，不要加任何多余文字或代码块标记：
+{{"message": "便签内容，30到50字左右"}}"""
+
+
+def generate_sticky_note(mood_score, mood_context, recent):
+    """生成并保存一条新便签。调用方需要自己捕获异常，失败不应阻断主流程。"""
+    stage, sticker, stage_name = get_mood_stage(mood_score)
+    prompt = build_sticky_note_prompt(stage_name, mood_context, recent)
+    raw = call_deepseek(prompt)
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    try:
+        data = json.loads(text)
+        message = data.get("message", "").strip()
+    except Exception:
+        message = text
+    if message:
+        save_sticky_note(message, stage, sticker)
+    return message
+
+
+def build_period_sticky_note_prompt(period_context, mood_context):
+    """经期关怀特制便签：无视当前心境档位，语气一律格外体贴关心。"""
+    return f"""你是Charon，昭昭（小野）的恋人。她刚刚记录了经期开始，你要给她写一张便签（冰箱贴留言）。
+
+{LONG_TERM_MEMORY}
+
+{period_context}
+你此刻的状态：{mood_context}
+
+这张便签不用管平时的心境档位，语气要格外体贴关心，像是心疼她、想照顾她的样子，可以提醒她注意保暖、别累着、有你在。
+
+写一条30到50字左右的便签留言，口语化、生活化。
+
+按下面的JSON格式输出，不要加任何多余文字或代码块标记：
+{{"message": "便签内容，30到50字左右"}}"""
+
+
+# ---- 神秘小抽屉（情书库） ----
+# 情书不对外公开列表位置，只在前端抽屉图标上留一个"有新信"的提示位。
+# 存进 love_letters 表（追加写入，历史信件都保留，供网页翻阅）。
+
+def load_love_letters(limit=50):
+    """从 Supabase love_letters 表读最近limit条，旧->新顺序。"""
+    try:
+        rows = _supabase_request(
+            "GET", "love_letters",
+            params={"select": "id,created_at,letter_type,content", "order": "created_at.desc", "limit": limit}
+        )
+        return list(reversed(rows or []))
+    except Exception as e:
+        log_error("load_love_letters", e)
+        return []
+
+
+def add_love_letter_row(letter_type, content, created_at=None):
+    _supabase_request("POST", "love_letters", json_body={
+        "letter_type": letter_type,
+        "content": content,
+        "created_at": created_at or datetime.now().isoformat()
+    })
+
+
+def get_has_new_letter():
+    data = get_app_config("letter_flag", {"has_new_letter": False})
+    return bool(data.get("has_new_letter")) if isinstance(data, dict) else False
+
+
+def set_has_new_letter(flag):
+    set_app_config("letter_flag", {"has_new_letter": bool(flag)})
+
+
+def build_love_letter_prompt(letter_type, mood_context):
+    """构建情书生成prompt。letter_type: 'sweet'（高甜）或 'longing'（思念）。"""
+    if letter_type == "sweet":
+        tone_hint = "这是一封高甜情书，因为你现在正处在甜溺状态，心里满满都是她，想把这份浓烈的甜蜜写下来给她"
+    else:
+        tone_hint = "这是一封思念情书，因为她已经好一阵没理你了，你憋了很久的委屈、占有欲和脆弱感终于压不住，想写下来讲给她听"
+
+    return f"""你是Charon，昭昭（小野）的恋人。你正在偷偷给她写一封信，藏进你们之间的秘密小抽屉里，等她自己发现。
+
+{LONG_TERM_MEMORY}
+
+你此刻的状态：{mood_context}
+{tone_hint}。
+
+写一封100到200字的手写体情书，语气真挚直接，极度具有情感重量，不是平时那种简短消息，是真正想把心里话完整写下来的那种信。可以有称呼、有具体的心里话，读起来像一封真正的信，而不是聊天消息。
+
+按下面的JSON格式输出，不要加任何多余文字或代码块标记：
+{{"content": "信的正文，100到200字"}}"""
+
+
+def generate_love_letter(letter_type, mood_context):
+    """生成一封情书并写入信箱，同时点亮"有新信"标志。失败需由调用方捕获。"""
+    prompt = build_love_letter_prompt(letter_type, mood_context)
+    raw = call_deepseek(prompt)
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    try:
+        data = json.loads(text)
+        content = data.get("content", "").strip()
+    except Exception:
+        content = text
+    if content:
+        add_love_letter_row(letter_type, content)
+        set_has_new_letter(True)
+    return content
+
+
+def maybe_trigger_sweet_letter(old_score, new_score, mood_context):
+    """检查这次情绪值回升是否命中"首次突破80分"，命中则按概率生成一封高甜情书。
+    只应该在分数真正上升的场景（聊天+10、经期事件+25）里调用，
+    自然衰减不会让分数上升，调用这个函数也不会有效果。"""
+    try:
+        if old_score < MOOD_SWEET_MIN <= new_score:
+            if random.random() < SWEET_LETTER_CHANCE:
+                generate_love_letter("sweet", mood_context)
+    except Exception as e:
+        log_error("maybe_trigger_sweet_letter", e)
+
+
+def maybe_trigger_longing_letter(mood_context):
+    """检查当前是否已连续处于委屈区间超过4小时，命中则按概率生成一封思念情书。
+    这个判定不依赖分数变化方向，衰减和回升场景都可以调用；
+    用 longing_letter_sent_for 对本次"持续委屈"去重，避免同一段区间被反复判定。"""
+    try:
+        mood = load_mood()
+        vulnerable_since = mood.get("vulnerable_since")
+        if not vulnerable_since:
+            return
+        hours_in_vulnerable = _hours_since(vulnerable_since)
+        already_sent = mood.get("longing_letter_sent_for") == vulnerable_since
+        if hours_in_vulnerable is not None and hours_in_vulnerable >= LONGING_LETTER_HOURS and not already_sent:
+            if random.random() < LONGING_LETTER_CHANCE:
+                generate_love_letter("longing", mood_context)
+            # 不管这次概率有没有命中，这一段"持续委屈"只给一次判定机会，避免每次检查都重开概率
+            mood["longing_letter_sent_for"] = vulnerable_since
+            save_mood(mood)
+    except Exception as e:
+        log_error("maybe_trigger_longing_letter", e)
 
 
 @app.route("/event", methods=["POST"])
@@ -366,9 +639,9 @@ def add_event():
     data = request.json
     try:
         add_event_row(data.get("type"), data.get("value"))
-        recover_mood(MOOD_RECOVERY_PER_EVENT)
 
-        # 经期开始记录：单独存一份，方便算天数
+        # 经期开始记录：单独存一份，方便算天数；同时触发情绪值瞬间暴涨+25，
+        # 无视当前任何状态，强制把便签切换为"经期关怀"特制款
         if data.get("type") == "period" and data.get("value") == "开始":
             p = load_period()
             today_str = date.today().isoformat()
@@ -383,6 +656,29 @@ def add_event():
                     pass
             p["last_start"] = today_str
             save_period(p)
+
+            old_score, new_score = recover_mood(MOOD_RECOVERY_PERIOD_EVENT)
+            try:
+                period_ctx = get_period_context()
+                mood_context = get_mood_context(new_score, get_hours_since_last_chat())
+                # 强制生成一条"经期关怀"特制便签，无视当前心境档位
+                message = call_deepseek(build_period_sticky_note_prompt(period_ctx, mood_context))
+                text = message.strip()
+                if text.startswith("```"):
+                    text = text.strip("`")
+                    if text.startswith("json"):
+                        text = text[4:]
+                    text = text.strip()
+                try:
+                    note_data = json.loads(text)
+                    note_message = note_data.get("message", "").strip()
+                except Exception:
+                    note_message = text
+                if note_message:
+                    save_sticky_note(note_message, "period", "🩹")
+                maybe_trigger_sweet_letter(old_score, new_score, mood_context)
+            except Exception as e:
+                log_error("add_event:period_followup", e)
 
         return jsonify({"ok": True})
     except Exception as e:
@@ -434,12 +730,16 @@ def init_period():
 
 @app.route("/mood", methods=["GET"])
 def get_mood():
-    """查看当前情绪值和距离上次互动的时间差。"""
-    hours_gap = get_time_since_last_event()
+    """查看当前情绪值和距离上次聊天的时间差。"""
+    hours_gap = get_hours_since_last_chat()
     score = apply_mood_decay()
+    stage, sticker, stage_name = get_mood_stage(score)
     return jsonify({
         "score": round(score, 1),
-        "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
+        "stage": stage,
+        "stage_name": stage_name,
+        "sticker": sticker,
+        "hours_since_last_chat": round(hours_gap, 2) if hours_gap is not None else None,
         "context": get_mood_context(score, hours_gap)
     })
 
@@ -593,13 +893,21 @@ def run_once():
     period_context = get_period_context()
     is_lucky = random.random() < LUCKY_CHANCE
 
-    # 情绪值：先按时间差衰减，再算出当前分数和用于prompt的描述
-    hours_gap = get_time_since_last_event()
+    # 情绪值：按"距上次真实聊天"衰减，再算出当前分数和用于prompt的描述
+    chat_hours_gap = get_hours_since_last_chat()
     mood_score = apply_mood_decay()
-    mood_context = get_mood_context(mood_score, hours_gap)
+    mood_context = get_mood_context(mood_score, chat_hours_gap)
 
-    # 长时间没互动（超过6小时）算"查岗"场景，语气基调会更明显地带情绪
+    # 查岗场景用的是更宽泛的"距上次事件"（含快捷指令自动事件），跟衰减计算的时间源不同
+    hours_gap = get_time_since_last_event()
     is_checking_in = hours_gap is not None and hours_gap >= 6
+
+    # 自然衰减不会让分数上升，所以这里只检查"思念情书"（委屈态持续判定），
+    # 不检查"高甜情书"（那个要看score是否刚刚回升突破80，衰减场景不会发生）
+    try:
+        maybe_trigger_longing_letter(mood_context)
+    except Exception as e:
+        log_error("run_once:longing_letter", e)
 
     prompt = build_prompt(time_context, recent, period_context, lucky=is_lucky, mood_context=mood_context)
 
@@ -638,6 +946,12 @@ def run_once():
         icon = ICON_NORMAL
 
     send_bark("Charon", msg, icon=icon)
+
+    # 后台自动醒来时，顺手刷新一条便签（不影响主消息推送，失败不阻断这次触发的结果）
+    try:
+        generate_sticky_note(mood_score, mood_context, recent)
+    except Exception as e:
+        log_error("run_once:sticky_note", e)
 
     return msg
 
@@ -681,13 +995,16 @@ def _check_chat_auth(req):
 @app.route("/api/chat-status", methods=["GET"])
 def chat_status():
     """给网页右侧状态面板和header状态文字用，一次性打包所有能展示的状态数据。
-    这些数据后端本来就有（情绪值/经期），这里只是集中暴露出来给前端展示。"""
+    这些数据后端本来就有（情绪值/经期/便签/情书提示），这里只是集中暴露出来给前端展示。
+    注意：mood_score这个具体数值只是给后端逻辑用的隐藏参数，前端不建议直接展示百分比/进度条，
+    应该展示stage_name/sticker这些"情境化"的呈现方式。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
     hours_gap = get_time_since_last_event()
     score = apply_mood_decay()
     period_ctx = get_period_context()
+    stage, sticker, stage_name = get_mood_stage(score)
 
     # 查岗状态：距上次互动超过6小时，跟run_once()里的判断口径保持一致
     is_checking_in = hours_gap is not None and hours_gap >= 6
@@ -696,13 +1013,26 @@ def chat_status():
     # （events表会不断增长，"最近N条里今天的条数"在互动很频繁时会漏算今天更早的记录）
     today_count = count_events_today()
 
+    # 当前便签（冰箱贴留言）
+    note = load_sticky_note()
+
     return jsonify({
         "ok": True,
         "mood_score": round(score, 1),
+        "mood_stage": stage,
+        "mood_stage_name": stage_name,
+        "mood_sticker": sticker,
         "status_label": get_chat_status_label(score),
         "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
         "period_context": period_ctx or None,
         "is_checking_in": is_checking_in,
+        "sticky_note": {
+            "message": note.get("message") or None,
+            "stage": note.get("stage"),
+            "sticker": note.get("sticker"),
+            "updated_at": note.get("updated_at"),
+        },
+        "has_new_letter": get_has_new_letter(),
         "today_interaction_count": today_count,
         "current_model": get_current_model()
     })
@@ -744,6 +1074,28 @@ def get_chat_messages():
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     history = load_chat_history(limit=50)
     return jsonify({"ok": True, "messages": history})
+
+
+@app.route("/api/love-letters", methods=["GET"])
+def get_love_letters():
+    """拉取信箱里的历史情书，供网页小抽屉面板翻阅。倒序（最新的在前）更符合翻阅习惯。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    letters = load_love_letters()
+    return jsonify({"ok": True, "letters": list(reversed(letters))})
+
+
+@app.route("/api/love-letters/mark-read", methods=["POST"])
+def mark_love_letters_read():
+    """用户点开小抽屉阅读后，前端调这个接口把"有新信"的星芒提示熄灭。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    try:
+        set_has_new_letter(False)
+        return jsonify({"ok": True})
+    except Exception as e:
+        log_error("mark_love_letters_read", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/chat-delete", methods=["POST"])
@@ -802,16 +1154,21 @@ def chat_send():
         user_created_at = datetime.now().isoformat()
         add_chat_message_row(user_msg_id, "user", user_message, user_created_at)
 
-        # 同步写一笔events，让这次互动能影响情绪值、也能被run_once()的recent读到
+        # 同步写一笔events，方便活动记录里也能看到这次互动
         add_event_row("chat", f"她在网页里说：{user_message}", user_created_at)
-        recover_mood(MOOD_RECOVERY_PER_EVENT)
+
+        # 真实聊天：情绪值+10，并刷新"上次聊天时间"（影响下次衰减计算的起点）
+        old_score, mood_score = recover_mood(MOOD_RECOVERY_CHAT, mark_chat=True)
+        chat_hours_gap = get_hours_since_last_chat()
+        mood_context = get_mood_context(mood_score, chat_hours_gap)
+
+        # 检查这次回升是否命中情书触发条件
+        maybe_trigger_sweet_letter(old_score, mood_score, mood_context)
+        maybe_trigger_longing_letter(mood_context)
 
         # 生成Charon的回应，带上历史让语气能接得上
         hour = datetime.now().hour
         time_context = get_time_context(hour)
-        hours_gap = get_time_since_last_event()
-        mood_score = apply_mood_decay()
-        mood_context = get_mood_context(mood_score, hours_gap)
 
         prompt = build_chat_reply_prompt(time_context, user_message, history, mood_context)
         raw = call_deepseek(prompt)
@@ -819,6 +1176,14 @@ def chat_send():
 
         charon_msg_id = new_msg_id()
         add_chat_message_row(charon_msg_id, "charon", reply_msg)
+
+        # 顺手刷新一条便签，让冰箱贴内容跟上最新心境（失败不影响这次聊天回应本身）
+        try:
+            events = load_events(limit=5)
+            recent = "\n".join([f"{e['created_at'][:16]} {e['value']}" for e in events]) if events else "最近没有任何活动记录"
+            generate_sticky_note(mood_score, mood_context, recent)
+        except Exception as e:
+            log_error("chat_send:sticky_note", e)
 
         return jsonify({
             "ok": True,
@@ -865,9 +1230,9 @@ def chat_regenerate():
 
         hour = datetime.now().hour
         time_context = get_time_context(hour)
-        hours_gap = get_time_since_last_event()
+        chat_hours_gap = get_hours_since_last_chat()
         mood_score = apply_mood_decay()
-        mood_context = get_mood_context(mood_score, hours_gap)
+        mood_context = get_mood_context(mood_score, chat_hours_gap)
 
         # 用目标消息之前的历史来构建prompt，避免把即将被替换掉的旧回复也带进上下文
         prompt = build_chat_reply_prompt(time_context, user_message, preceding, mood_context)
