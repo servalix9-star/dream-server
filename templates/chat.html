@@ -17,7 +17,6 @@
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
     color: #5a4550; /* 恢复至初始雅致深紫灰 */
   }
-  
   #app {
     display: flex;
     height: 100vh; height: 100dvh;
@@ -27,79 +26,19 @@
     z-index: 2;
   }
 
-  /* ==================== 手机端与电脑端自适应媒体查询 ==================== */
-  
-  /* 1. 电脑/平板大端（宽度 >= 720px）：三栏式奢华布局 */
-  @media (min-width: 720px) {
-    #nav { display: flex !important; }
-    #main { display: flex !important; }
-    #panel { display: flex !important; }
-    #panel-desk, #panel-health { display: none !important; } /* 电脑端隐藏拆分出来的单Tab */
-    #mobile-tab-bar { display: none !important; } /* 电脑端隐藏底部导航栏 */
+  /* ---- 通用 Tab 骨架控制 ---- */
+  .tab-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
   }
 
-  /* 2. 手机端（宽度 < 720px）：App 级全屏单栏自适应 */
-  @media (max-width: 719px) {
-    #app {
-      flex-direction: column;
-      padding: 10px;
-      gap: 0;
-      height: 100dvh;
-    }
-    #nav, #panel {
-      display: none !important; /* 手机端隐藏左侧导航与右边栏 */
-    }
-    /* 手机端 Tab 容器基类 */
-    .tab-content {
-      display: none;
-      width: 100%;
-      height: calc(100% - 62px); /* 扣除底部导航栏的高度 */
-      border-radius: 24px;
-    }
-    .tab-content.active {
-      display: flex !important;
-      flex-direction: column;
-    }
-    /* 手机底部 App 级磨砂导航栏 */
-    #mobile-tab-bar {
-      display: flex !important;
-      height: 52px;
-      width: 100%;
-      margin-top: 10px;
-      background: rgba(255, 238, 241, 0.7);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-radius: 16px;
-      box-shadow: 0 4px 15px rgba(184, 118, 138, 0.08);
-      align-items: center;
-      justify-content: space-around;
-      padding: 0 10px;
-    }
-    .mobile-tab-btn {
-      background: none;
-      border: none;
-      color: #b08d98;
-      font-size: 13px;
-      font-family: inherit;
-      padding: 8px 12px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .mobile-tab-btn.active {
-      color: #ff5e84;
-      font-weight: bold;
-      transform: scale(1.05);
-    }
-  }
-
-  /* ---- 左侧波点玻璃舱导航栏 ---- */
+  /* ---- 左侧波点玻璃舱导航栏 (仅桌面端显示) ---- */
   #nav {
     width: 60px;
     flex-shrink: 0;
-    display: none; /* 默认隐藏，由媒体查询控制 */
+    display: flex;
     flex-direction: column;
     align-items: center;
     gap: 16px;
@@ -149,10 +88,6 @@
 
   /* ---- 中间玻璃舱对话区 ---- */
   #main {
-    flex: 1;
-    min-width: 0;
-    display: none; /* 默认隐藏，由自适应和激活状态控制 */
-    flex-direction: column;
     background: rgba(255, 255, 255, 0.35);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
@@ -356,7 +291,7 @@
     align-items: center;
     gap: 4px;
   }
-  /* 模型选择器：先做最基础可用的样式，视觉打磨留给后续界面迭代 */
+  /* 模型选择器 */
   #model-select {
     margin-left: 6px;
     font-size: 10px;
@@ -474,11 +409,9 @@
     font-size: 15px;
     word-wrap: break-word;
     white-space: pre-wrap;
-    /* iOS Safari对标准user-select支持不完整，必须加-webkit-前缀版本才能真正生效，
-       否则长按会触发系统的文本选择+复制菜单，跟我们自己的仿微信长按菜单打架 */
     -webkit-user-select: none;
     user-select: none; /* 移动端防干扰长按 */
-    -webkit-touch-callout: none; /* 禁用iOS长按弹出的"拷贝/查询"系统气泡 */
+    -webkit-touch-callout: none; /* 禁用iOS长按系统气泡 */
     cursor: pointer;
   }
   .bubble.user {
@@ -766,7 +699,7 @@
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
-  <div id="main" class="sub-panel">
+  <div id="main">
     <div id="header">
       <!-- 带有高对比度、镜像对齐以及白色、黑色极夜发光霓虹碎星和经典白发光圈装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
@@ -1000,8 +933,7 @@ async function deleteMessage(msgId, rowEl) {
 }
 
 async function regenerateMessage(msgId, rowEl) {
-  // 原地覆盖，不需要二次确认（跟撤回不一样，重新生成不会丢失撤回那种"消息彻底消失"的后果，
-  // 大不了生成的还是不满意，可以再点一次）
+  // 原地覆盖，不需要二次确认
   const bubble = rowEl.querySelector('.bubble');
   const originalText = bubble ? bubble.textContent : '';
   const createdAt = rowEl.dataset.createdAt || new Date().toISOString();
@@ -1017,7 +949,6 @@ async function regenerateMessage(msgId, rowEl) {
     });
     const data = await res.json();
     if (data.ok) {
-      // 整行替换，重新绑定长按/右键事件，避免旧闭包里still拿着覆盖前的文本
       rowEl.replaceWith(renderMsgRow('charon', data.reply, createdAt, false, msgId));
       loadStatus();
     } else {
@@ -1080,7 +1011,7 @@ async function loadStatus() {
       panelBody.innerHTML = '<div class="panel-empty">加载失败</div>';
       statusLabel.textContent = '未知';
       return;
-    }}
+    }
 
     // 更新 header 的状态标签
     statusLabel.textContent = data.status_label || '在线';
