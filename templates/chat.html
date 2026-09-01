@@ -552,7 +552,7 @@
   #input-bar button:hover {
     background: #e599a9; /* 悬浮调深一点的温暖粉 */
     transform: translateY(-2px) scale(1.05); /* 微上升 */
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
   }
   #input-bar button:hover svg {
     transform: rotate(5deg) scale(1.1); /* 悬浮时纸飞机仰头 */
@@ -1180,4 +1180,144 @@ async function loadStatus() {
       html += '<div class="stat-block"><div class="lucky-tag">✨ 刚才是个惊喜消息</div></div>';
     }
     if (data.last_thought) {
-      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thoug
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">心里话</div><div class="thought-card">' + escapeHtml(data.last_thought) + '</div></div>';
+    }
+    if (data.window_summary) {
+      html += '<div class="stat-block"><div class="panel-title" style="margin-top:12px;">最近聊过</div><div class="summary-card">' + escapeHtml(data.window_summary) + '</div></div>';
+    }
+    panelBody.innerHTML = html;
+  } catch (e) {
+    panelBody.innerHTML = '<div class="panel-empty">网络错误</div>';
+  }
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  const nowIso = new Date().toISOString();
+  const userRow = renderMsgRow('user', text, nowIso, false);
+  messagesEl.appendChild(userRow);
+  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
+  messagesEl.appendChild(pendingRow);
+  scrollToBottom();
+
+  const pendingBubble = pendingRow.querySelector('.bubble');
+
+  try {
+    const res = await fetch(apiUrl('/api/chat-send'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      pendingBubble.textContent = data.reply;
+      pendingBubble.classList.remove('pending');
+      
+      // 更新对应的消息 ID，使用户可以长按呼出撤回菜单
+      if (data.user_msg_id) userRow.dataset.msgId = data.user_msg_id;
+      if (data.charon_msg_id) pendingRow.dataset.msgId = data.charon_msg_id;
+      
+      // 动态将渲染出来的泡泡重置并正确绑定事件
+      const newUserCol = userRow.querySelector('.msg-col');
+      const newCharonCol = pendingRow.querySelector('.msg-col');
+      
+      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      
+    } else {
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }
+  } catch (e) {
+    pendingBubble.textContent = '（网络错误，没发出去）';
+    pendingBubble.classList.remove('pending');
+  }
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+});
+
+const modelSelect = document.getElementById('model-select');
+
+async function loadModelSelector() {
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'));
+    const data = await res.json();
+    if (!data.ok) return;
+    modelSelect.innerHTML = '';
+    data.available_models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      if (m === data.current_model) opt.selected = true;
+      modelSelect.appendChild(opt);
+    });
+  } catch (e) {
+    // 模型选择器加载失败不影响主要聊天功能，静默忽略
+  }
+}
+
+modelSelect.addEventListener('change', async () => {
+  const chosen = modelSelect.value;
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: chosen })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      alert('切换失败：' + (data.error || '未知错误'));
+      loadModelSelector(); // 失败了刷新回真实状态
+    }
+  } catch (e) {
+    alert('网络错误，没切换成');
+    loadModelSelector();
+  }
+});
+
+// 手机端自适应 Tab 切换逻辑
+function switchTab(tabName) {
+  const appEl = document.getElementById('app');
+  appEl.classList.remove('tab-chat', 'tab-desk', 'tab-health');
+  appEl.classList.add('tab-' + tabName);
+
+  // 更新 Tab 按钮激活状态
+  document.querySelectorAll('.tab-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  event.currentTarget.classList.add('active');
+
+  if (tabName === 'chat') {
+    scrollToBottom();
+  }
+}
+
+// 初始化手机端默认展示聊天页
+if (window.innerWidth <= 768) {
+  document.getElementById('app').classList.add('tab-chat');
+}
+
+loadHistory();
+loadStatus();
+loadModelSelector();
+</script>
+</body>
+</html>
