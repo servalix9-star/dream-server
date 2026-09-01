@@ -41,7 +41,7 @@
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }
-  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大并挤密波点（24%） */
+  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大到 22px 并且调整色比 */
   #nav::before {
     content: '';
     position: absolute;
@@ -287,7 +287,7 @@
     align-items: center;
     gap: 4px;
   }
-  /* 模型选择器：先做最基础可用的样式，视觉打磨留给后续界面迭代 */
+  /* 模型选择器 */
   #model-select {
     margin-left: 6px;
     font-size: 10px;
@@ -699,7 +699,7 @@
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <!-- 带有高对比度、镜像对齐以及白色、黑色霓虹碎星装饰的头像容器 -->
+      <!-- 带有高对比度、镜像对齐以及白色、经典白发光圈装饰的头像容器 -->
       <div class="avatar-wrapper header-avatar-wrap charon">
         <img id="header-avatar" src="{{ avatar_charon }}" alt="Charon">
         <span class="star-accent">✦</span>
@@ -1159,3 +1159,5 @@ loadModelSelector();
 </script>
 </body>
 </html>
+
+--- END OF FILE chat.html ---
