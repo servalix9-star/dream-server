@@ -527,30 +527,29 @@
   }
   #input-bar textarea::placeholder { color: #b08d98; }
   
-  /* 精致手贴胶囊发送按钮设计 (白底、纯黑细边、粉字，悬浮反色) */
+  /* 精致无边框、蜜桃粉玫瑰渐变胶囊发送按钮 (无描边，更温柔轻盈) */
   #input-bar button {
     position: relative;
     z-index: 1;
-    border: 2px solid #000000; /* 高对比度纯黑包边线，呼应导航栏 */
+    border: none; /* 彻底移除黑色边框 */
     border-radius: 18px; /* 饱满的胶囊圆角 */
-    background: #ffffff; /* 纯洁白色背景 */
-    color: #cf7d90; /* 优雅暖粉色文字 */
+    background: linear-gradient(135deg, #e599a9, #cf7d90); /* 与 user 气泡完美呼应的玫瑰渐变 */
+    color: #ffffff; /* 纯白粗体字 */
     font-weight: bold;
-    padding: 0 20px;
+    padding: 0 22px;
     font-size: 13px;
     cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12); /* 实体物理投影 */
+    box-shadow: 0 4px 12px rgba(184, 96, 118, 0.22); /* 柔和粉色外阴影 */
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
   #input-bar button:hover {
-    background: #ffb3c1; /* 悬浮整体反色：亮粉底色 */
-    color: #ffffff;      /* 纯白文字 */
-    transform: translateY(-1px); /* 微上升 */
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+    background: linear-gradient(135deg, #f4b2c1, #e595a6); /* 悬浮调亮渐变色，极为温柔 */
+    transform: translateY(-1.5px); /* 微上升 */
+    box-shadow: 0 6px 16px rgba(184, 96, 118, 0.32);
   }
   #input-bar button:active {
     transform: translateY(0);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 3px 8px rgba(184, 96, 118, 0.15);
   }
   #input-bar button:disabled { opacity: 0.4; box-shadow: none; cursor: default; }
 
