@@ -123,20 +123,11 @@
     /* 纯黑到粉色(渐变底色拉高)的渐变条，黑、粉渐变比例为 3:2 */
     background: linear-gradient(to right, #000000 0%, #000000 52%, rgba(26, 18, 30, 0.9) 62%, #cf7d90 85%, #ffb3c1 100%);
   }
-  /* 增强白色波点颜色对比度并共同往右扩展 (65% 宽度) */
   #header::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    width: 65%; /* 伴随黑色渐变一起向右扩展 */
-    background-image:
-      radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%),
-      radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%);
-    background-size: 11px 11px; /* 内部波点放大 */
-    background-position: 0 0, 5.5px 5.5px;
-    -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
-    pointer-events: none;
-    z-index: 0;
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 65%;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%), radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%);
+    background-size: 11px 11px; background-position: 0 0, 5.5px 5.5px;
+    -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); pointer-events: none; z-index: 0;
   }
   
   .avatar-wrapper { position: relative; display: inline-block; width: 36px; height: 36px; flex-shrink: 0; }
@@ -264,47 +255,38 @@
   /* --- 仿真实物便利贴堆叠留言板 (易读自然流式排版，非滚动流) --- */
   .sticky-note-stack {
     position: relative; width: 100%; 
-    display: flex; flex-direction: column; gap: 4px; /* 维持一定的内部流式间距 */
+    display: flex; flex-direction: column; 
+    /* 取消全部 max-height 与 overflow，允许容器随便签数量自然向下延展 */
     margin-top: 15px; margin-bottom: 25px; z-index: 1;
-    /* 彻底取消 overflow 和 max-height，让其自然向下舒展 */
-    overflow: visible !important;
     padding-bottom: 10px;
   }
   .sticky-note-card {
     position: relative;
-    border-radius: 4px 14px 14px 14px; 
-    padding: 12px 12px 28px 12px; /* 压缩内边距，使卡片更精致小巧 */
-    /* 恢复最干净的实体物理投影，杜绝任何粉色光晕 */
-    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.08); 
+    border-radius: 4px 14px 14px 14px; /* 边缘圆角收紧，更精致 */
+    padding: 12px 12px 28px 12px; /* 压缩内边距，实现更小巧的尺寸 */
+    box-shadow: 2px 4px 12px rgba(184, 118, 138, 0.12); /* 柔和自然阴影 */
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
-    flex-shrink: 0; margin-top: -12px; /* 自然错落叠排负间距 */
-    /* 完全去除白色内边框（inset shadow） */
+    flex-shrink: 0; 
+    /* 核心改动：采用极小的负间距，让每张便签只会微微压住上一张的边缘，完整展示文字 */
+    margin-top: -12px; 
   }
   .sticky-note-card:first-child { margin-top: 0; }
-
-  /* 个性化底纹 - 这里仅作为兜底，主要由 JS 动态生成背景 */
-  .sticky-note-card.stage-sweet { background: #fff0f3; }
-  .sticky-note-card.stage-tsundere { background: #f5eef1; }
-  .sticky-note-card.stage-vulnerable { background: #ede3e7; }
-  .sticky-note-card.stage-period { background: #fde8eb; }
-
-  /* 悬浮交互：鼠标划过自动抽离到最上层、回正，同样使用干净的实体投影 */
+  
+  /* 悬浮交互：鼠标划过自动抽离到最上层、回正、并微微放大 */
   .sticky-note-card:hover {
     transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
     z-index: 100 !important;
-    box-shadow: 4px 8px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
   }
-  
-  /* 解除高度和截断限制，让文字自然撑开纸张 */
   .sticky-note-text {
-    font-size: 11.5px; line-height: 1.6; font-family: "Songti SC", serif; word-wrap: break-word;
+    font-size: 11.5px; /* 缩减字号 */
+    line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
   }
-  
   /* 纯正精致的荧光樱花粉星标 */
   .note-star-btn {
-    position: absolute; bottom: 6px; right: 8px; /* 紧贴右下角 */
-    background: none; border: none; font-size: 16px; /* 缩小标星尺寸 */
+    position: absolute; bottom: 4px; right: 8px; /* 紧贴右下角 */
+    background: none; border: none; font-size: 16px; /* 缩小标星 */
     cursor: pointer; opacity: 0.5; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
   }
   .note-star-btn:hover { transform: scale(1.15); }
@@ -313,7 +295,7 @@
     filter: drop-shadow(0 2px 5px rgba(255, 143, 163, 0.45));
   }
 
-  /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版对齐) --- */
+  /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版重构) --- */
   .drawer-wrapper { 
     display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px;
   }
@@ -358,8 +340,12 @@
       height: 100vh; height: 100dvh; display: block; overflow: hidden;
     }
     #nav { display: none !important; }
-    #main, #panel { display: none; width: 100% !important; height: 100% !important; margin: 0 !important; border-radius: 20px !important; }
-    #app.tab-chat #main, #app.tab-desk #panel { display: flex; }
+    /* 大屏下的月经控制台在手机端隐藏，不重复占用高度 */
+    #panel .health-wrapper { display: none !important; }
+    #main, #panel, #health-panel {
+      display: none; width: 100% !important; height: 100% !important; margin: 0 !important; border-radius: 20px !important;
+    }
+    #app.tab-chat #main, #app.tab-desk #panel, #app.tab-health #health-panel { display: flex; }
     
     #bottom-tabs {
       display: flex; position: fixed; bottom: 0; left: 0; right: 0;
@@ -440,7 +426,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (白透白底，樱花粉 SVG 指标，干净物理投影) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (恢复为白底半调透光，极细粉色 SVG 图标，实体投影) -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -493,12 +479,12 @@
     <div class="panel-child panel-title">DESK</div>
     <div id="panel-body" class="panel-child" style="display:flex; flex-direction:column; height:100%;">
         
-      <!-- 冰箱贴层叠便签堆叠容器 (自然流体排版) -->
+      <!-- 冰箱贴层叠便签堆叠容器 (自然流体排版，不再隐藏滚动) -->
       <div class="sticky-note-stack" id="sticky-container">
         <!-- JS 动态灌入层叠卡片 -->
       </div>
 
-      <!-- 秘密双抽屉 (固定在底部，重排版，4颗螺丝经典复古) -->
+      <!-- 秘密双抽屉 (固定在底部，重排版) -->
       <div class="drawer-wrapper">
         <div class="drawer-btn" id="drawer-notes-btn" onclick="openDrawerNotes()">
           <div class="drawer-btn-title">💌 NOTES DRAWER</div>
@@ -1361,4 +1347,89 @@ function renderCalendarGrid() {
           if (dateStr >= start && dateStr <= end) dayBtn.classList.add('period-active');
         } else {
           if (dateStr >= start && dateStr <= todayStr) dayBtn.classList.add('period-active');
-          if (dateStr === start) dayBtn
+          if (dateStr === start) dayBtn.classList.add('period-ongoing');
+        }
+      }
+    });
+
+    dayBtn.onclick = (e) => {
+      e.stopPropagation();
+      selectedDateStr = dateStr;
+      showDayActionPopup(dayBtn);
+    };
+    grid.appendChild(dayBtn);
+  }
+}
+
+function prevMonth() {
+  if (currentMonth === 0) { currentMonth = 11; currentYear--; fetchPeriodData(currentYear); } 
+  else { currentMonth--; renderCalendarGrid(); }
+}
+function nextMonth() {
+  if (currentMonth === 11) { currentMonth = 0; currentYear++; fetchPeriodData(currentYear); } 
+  else { currentMonth++; renderCalendarGrid(); }
+}
+
+function showDayActionPopup(dayBtn) {
+  const rect = dayBtn.getBoundingClientRect();
+  dayActionPopup.style.display = 'flex';
+  dayActionPopup.style.left = (rect.left + rect.width/2 - 65 + window.scrollX) + 'px';
+  dayActionPopup.style.top = (rect.top - 110 + window.scrollY) + 'px';
+  document.getElementById('popup-start-btn').onclick = () => savePeriodDate('start');
+  document.getElementById('popup-end-btn').onclick = () => savePeriodDate('end');
+}
+
+function hideDayActionPopup() { dayActionPopup.style.display = 'none'; }
+
+async function savePeriodDate(actionType) {
+  try {
+    const res = await fetch(apiUrl('/api/period/save'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: actionType, date: selectedDateStr })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      alert(`已成功标记：${actionType === 'start' ? '开始' : '结束'}`);
+      fetchPeriodData(currentYear); loadStatus(); hideDayActionPopup();
+    }
+  } catch (e) { alert('网络错误'); }
+}
+
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+});
+
+const modelSelect = document.getElementById('model-select');
+async function loadModelSelector() {
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'));
+    const data = await res.json();
+    if (!data.ok) return;
+    modelSelect.innerHTML = '';
+    data.available_models.forEach(m => {
+      const opt = document.createElement('option'); opt.value = m; opt.textContent = m;
+      if (m === data.current_model) opt.selected = true; modelSelect.appendChild(opt);
+    });
+  } catch (e) {}
+}
+modelSelect.addEventListener('change', async () => {
+  const chosen = modelSelect.value;
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: chosen })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('切换失败：' + (data.error || '未知错误')); loadModelSelector(); }
+  } catch (e) { alert('网络错误'); loadModelSelector(); }
+});
+
+loadHistory();
+loadStatus();
+loadModelSelector();
+</script>
+</body>
+</html>
