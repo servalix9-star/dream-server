@@ -63,9 +63,9 @@
     display: flex; align-items: center; justify-content: center;
     border: none !important;
     
-    /* 核心修复：大幅提高白底纯度（0.95），杜绝被底层黑色污染发灰 */
+    /* 大幅提高白底纯度，杜绝发灰 */
     background-color: rgba(255, 255, 255, 0.95) !important;
-    /* 覆盖粉色微型波点 */
+    /* 粉色微型波点 */
     background-image: 
       radial-gradient(circle, rgba(255, 143, 163, 0.25) 15%, transparent 15.5%),
       radial-gradient(circle, rgba(255, 143, 163, 0.25) 15%, transparent 15.5%) !important;
@@ -74,18 +74,14 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     
-    color: #ff8fa3; /* 提亮线条颜色为鲜活樱花粉 */
+    color: #ff8fa3; 
     text-decoration: none;
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-    
-    /* 干净的实体投影，完全摒弃霓虹光晕 */
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
     cursor: pointer;
     padding: 0;
   }
-  .nav-icon svg {
-    width: 20px; height: 20px; stroke-width: 1.5px;
-  }
+  .nav-icon svg { width: 20px; height: 20px; stroke-width: 1.5px; }
   .nav-icon:hover, #send-btn:hover {
     transform: translateY(-2px) scale(1.05);
     background-color: #ffffff !important;
@@ -116,6 +112,7 @@
   #header {
     padding: 20px 24px 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0;
     display: flex; align-items: center; gap: 14px; position: relative;
+    /* 纯黑到粉色的渐变条，黑、粉渐变比例为 3:2 */
     background: linear-gradient(to right, #000000 0%, #000000 52%, rgba(26, 18, 30, 0.9) 62%, #cf7d90 85%, #ffb3c1 100%);
   }
   #header::before {
@@ -230,7 +227,7 @@
 
   /* ---- 右侧状态面板（DESK 手账区） ---- */
   #panel {
-    width: 270px; /* 稍微加宽一点，给便签流出呼吸感 */
+    width: 270px; 
     flex-shrink: 0; display: none; flex-direction: column;
     padding: 22px 18px; background: rgba(255, 235, 240, 0.55); border-radius: 24px; position: relative; overflow: hidden;
     border: none; box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
@@ -247,74 +244,85 @@
     font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (易读自然流 + 精致信纸层) --- */
+  /* --- 全新自然流体散落便签 (无界排版) --- */
   .sticky-note-stack {
-    position: relative; width: 100%; display: flex; flex-direction: column; gap: 12px; /* 拉开自然间距 */
-    margin-top: 15px; margin-bottom: 25px; z-index: 1;
-    overflow-y: auto; max-height: 60vh; 
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 20px;
-    padding-right: 4px; /* 留出一点滚动条避让 */
+    position: relative; 
+    width: 100%; 
+    height: 380px; /* 固定软木板高度，给便签提供撒落空间 */
+    margin-top: 15px; 
+    margin-bottom: 25px; 
+    z-index: 1;
+    overflow: visible; /* 去掉滚动，完全基于绝对定位散落 */
   }
   
   .sticky-note-card {
-    position: relative; 
+    position: absolute; /* 绝对定位散落 */
+    width: 155px; /* 固定的手账卡片宽度 */
     background-color: #ffffff;
-    /* 引入极淡的信纸横格底纹 */
-    background-image: repeating-linear-gradient(transparent, transparent 23px, rgba(229, 153, 169, 0.08) 23px, rgba(229, 153, 169, 0.08) 24px) !important;
-    background-position: 0 10px;
-    border-radius: 2px 16px 16px 16px; /* 模拟手账纸张微折角 */
-    padding: 22px 16px 36px 16px; 
-    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.12), inset 0 0 0 1px rgba(255,255,255,0.8);
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    border-radius: 4px 18px 18px 18px; 
+    padding: 22px 14px 28px 14px; 
+    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.18), inset 0 0 0 1px rgba(255,255,255,0.9);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s, z-index 0s;
     -webkit-user-select: none; user-select: none; cursor: pointer;
-    flex-shrink: 0; 
+    overflow: hidden;
   }
   
-  /* 和纸胶带装饰 */
+  /* 悬浮交互：鼠标触碰/手指点击，立即抽离到最顶层、回正、并微微放大供阅读 */
+  .sticky-note-card:hover {
+    transform: scale(1.08) rotate(0deg) !important;
+    z-index: 100 !important;
+    box-shadow: 6px 12px 30px rgba(184, 118, 138, 0.3), inset 0 0 0 1px rgba(255,255,255,1);
+  }
+  
+  /* 便签纹理底层：用于绘制横线、波点、格子等 */
+  .sticky-note-card::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; z-index: 0; opacity: 0.6;
+  }
+
+  /* --- 5 种马卡龙纸张颜色 (动态随机赋予) --- */
+  .note-color-0 { background-color: #ffe6eb; } /* 樱花粉 */
+  .note-color-1 { background-color: #e8f8f5; } /* 薄荷绿 */
+  .note-color-2 { background-color: #fff7d6; } /* 奶油黄 */
+  .note-color-3 { background-color: #e6f0fa; } /* 天霁蓝 */
+  .note-color-4 { background-color: #f3ebe1; } /* 奶咖色 */
+
+  /* --- 5 种纸张纹理效果 (动态随机赋予) --- */
+  /* 0: 纯色无纹理 */
+  /* 1: 活页横线 */
+  .note-pattern-1::after { background-image: repeating-linear-gradient(transparent, transparent 19px, rgba(0,0,0,0.06) 19px, rgba(0,0,0,0.06) 20px); background-position: 0 5px; }
+  /* 2: 手账波点 */
+  .note-pattern-2::after { background-image: radial-gradient(rgba(0,0,0,0.05) 15%, transparent 16%), radial-gradient(rgba(0,0,0,0.05) 15%, transparent 16%); background-size: 14px 14px; background-position: 0 0, 7px 7px; }
+  /* 3: 手绘格子 */
+  .note-pattern-3::after { background-image: linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px); background-size: 15px 15px; }
+  /* 4: 极光柔和渐变 */
+  .note-pattern-4::after { background: linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 100%); opacity: 1; }
+  
+  /* 拟真和纸胶带 */
   .sticky-tape {
-    position: absolute; top: -6px; left: 50%; transform: translateX(-50%) rotate(-2deg);
-    width: 35px; height: 14px; background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%) rotate(-3deg);
+    width: 38px; height: 14px; background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255,255,255,0.9); box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 2;
   }
   
-  /* 右上角个性化心情图章 */
-  .mood-stamp {
-    position: absolute; top: 10px; right: 12px; font-size: 16px;
-    opacity: 0.8; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
-  }
-  
-  /* 根据心境渲染特有的底色渲染 (结合信纸纹理) */
-  .sticky-note-card.stage-sweet { background-color: #fff0f3; }
-  .sticky-note-card.stage-steady { background-color: #fffcfd; }
-  .sticky-note-card.stage-tsundere { background-color: #f6eef2; }
-  .sticky-note-card.stage-vulnerable { background-color: #efe6ea; }
-  .sticky-note-card.stage-period { background-color: #ffe6eb; }
-
-  .sticky-note-card:hover {
-    transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
-    z-index: 100 !important;
-    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
-  }
-  
+  /* 便签纯文本区：确保在纹理之上，限制行数防溢出 */
   .sticky-note-text {
-    font-size: 12.5px; color: #5a4550; 
-    line-height: 24px; /* 严格对齐信纸底纹 */
-    font-family: "Kaiti SC", "STKaiti", "Songti SC", serif; /* 增加手写/楷体感 */
+    position: relative; z-index: 1;
+    font-size: 12.5px; color: #5a4550; line-height: 20px; 
+    font-family: "Kaiti SC", "STKaiti", "Songti SC", serif; 
     letter-spacing: 0.5px; word-wrap: break-word;
-    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
   }
   
-  /* 纯粉色星标 (取消黄色) */
+  /* 纯粉色荧光星标 */
   .note-star-btn {
-    position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
-    opacity: 0.4; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #d1b3bd; padding: 4px; line-height: 1;
+    position: absolute; bottom: 6px; right: 8px; background: none; border: none; font-size: 18px; cursor: pointer;
+    opacity: 0.4; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
+    z-index: 2;
   }
-  .note-star-btn:hover { transform: scale(1.15); opacity: 0.8; color: #ff5e84; }
-  .note-star-btn.active {
-    opacity: 1; color: #ff5e84; filter: drop-shadow(0 2px 5px rgba(255, 94, 132, 0.45));
-  }
+  .note-star-btn:hover { transform: scale(1.2); opacity: 0.8; color: #ff5e84; }
+  .note-star-btn.active { opacity: 1; color: #ff5e84; filter: drop-shadow(0 2px 4px rgba(255, 94, 132, 0.45)); }
 
   /* --- 秘密小抽屉收纳盒 (移动到底部，文字居中重排版) --- */
   .drawer-wrapper { 
@@ -378,9 +386,7 @@
     .tab-item .tab-icon { 
       font-size: 20px; line-height: 1.2; filter: grayscale(100%); 
     }
-    /* SVG 在底部栏统一精细描边 */
     .tab-item .tab-icon svg { width: 22px; height: 22px; stroke-width: 1.5px; }
-    
     .tab-item .tab-label { font-size: 10px; margin-top: 2px; font-weight: bold; }
     .tab-item.active { color: #ff5e84; opacity: 1; transform: translateY(-3px); }
     .tab-item.active .tab-icon { filter: grayscale(0%); filter: drop-shadow(0 0 4px rgba(255, 94, 132, 0.4)); }
@@ -444,7 +450,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (纯白底，粉色图案，实体投影) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -482,6 +488,7 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
+      <!-- 无边框白底透光纸飞机发送按钮 -->
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -496,12 +503,12 @@
     <div class="panel-child panel-title">DESK</div>
     <div id="panel-body" class="panel-child" style="display:flex; flex-direction:column; height:100%;">
         
-      <!-- 冰箱贴层叠便签堆叠容器 (自然流体排版) -->
+      <!-- 冰箱贴层叠便签散落区 -->
       <div class="sticky-note-stack" id="sticky-container">
-        <!-- JS 动态灌入层叠卡片 -->
+        <!-- JS 动态随机灌入 -->
       </div>
 
-      <!-- 秘密双抽屉 (固定在底部，重排版) -->
+      <!-- 秘密双抽屉 (固定在底部) -->
       <div class="drawer-wrapper">
         <div class="drawer-btn" id="drawer-notes-btn" onclick="openDrawerNotes()">
           <div class="drawer-btn-title">💌 NOTES DRAWER</div>
@@ -542,7 +549,7 @@
 <!-- 全局悬浮菜单 -->
 <div id="bubble-menu"></div>
 
-<!-- 秘密小抽屉 1：便签收纳盒 (30) -->
+<!-- 小抽屉与弹窗区域 -->
 <div id="drawer-notes-modal">
   <div class="letter-container">
     <div class="letter-header">
@@ -553,7 +560,6 @@
   </div>
 </div>
 
-<!-- 秘密小抽屉 2：情书收纳盒 (20) -->
 <div id="letter-modal">
   <div class="letter-container">
     <div class="letter-header">
@@ -564,7 +570,6 @@
   </div>
 </div>
 
-<!-- 统一恋爱档案箱 (便签100 + 情书100) -->
 <div id="archive-modal">
   <div class="letter-container" style="max-width: 520px;">
     <div class="letter-header">
@@ -621,7 +626,10 @@ let currentMonth = new Date().getMonth();
 let periodRecords = [];
 let selectedDateStr = "";
 
-// 核心功能：原生兼容的双击事件绑定器 (用于全局无按键触发悬浮菜单)
+let currentActiveMsgId = null;
+let currentActiveRowEl = null;
+
+// 核心功能：双击事件拦截引擎 (Double Tap)
 function addDoubleTapListener(element, callback) {
   let lastTap = 0;
   element.addEventListener('click', function(e) {
@@ -704,7 +712,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 全新双击触发菜单逻辑 (去除旧版长按)
+  // 全新全局双击触发悬浮菜单 (彻底取代长按)
   addDoubleTapListener(bubble, (e) => {
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content);
@@ -901,7 +909,13 @@ async function starNote(id, isStarredNow, sourceStr) {
   } catch(e) { alert('网络错误'); }
 }
 
-// ---- 加载状态 (Desk & 堆叠便签 & 警告判定) ----
+// 伪随机数种子算法 (根据便签 ID 产生稳定的散落位置)
+function pseudoRandom(seed) {
+    let x = Math.sin(seed++) * 10000;
+    return x - Math.floor(x);
+}
+
+// ---- 加载状态 (Desk & 散落堆叠便签) ----
 async function loadStatus() {
   try {
     const res = await fetch(apiUrl('/api/chat-status'));
@@ -911,7 +925,7 @@ async function loadStatus() {
     document.getElementById('status-label').textContent = data.status_label || '在线';
     document.getElementById('status-dot').className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
-    // 渲染桌面仿真层叠便签 (自然错落排版，流式布局极小负间距)
+    // 渲染桌面仿真散落便签 (绝对定位无界引擎)
     const container = document.getElementById('sticky-container');
     container.innerHTML = '';
     
@@ -920,15 +934,37 @@ async function loadStatus() {
 
       data.sticky_notes.forEach((note, index) => {
         const card = document.createElement('div');
-        card.className = `sticky-note-card stage-${note.stage || 'steady'}`;
         
-        // 自然错落微倾斜，取消绝对定位重叠，仅留负 margin-top
-        const rotateDeg = index % 2 === 0 ? -2 : 2.5;
-        card.style.marginTop = index === 0 ? '0' : '-12px';
+        // 动态分配 5色 x 5纹理 的多款组合
+        const colorId = note.id % 5;
+        const patternId = (note.id * 7) % 5;
+        card.className = `sticky-note-card note-color-${colorId} note-pattern-${patternId}`;
+        
+        // 散落布局算法：使用伪随机确保每次刷新位置不乱跳
+        // 将板子粗略分为左右两排交错摆放，避免完全重叠
+        const rX = pseudoRandom(note.id * 2);
+        const rY = pseudoRandom(note.id * 3);
+        const rR = pseudoRandom(note.id * 5);
+        
+        // PC 面板宽度约 260px，便签宽 140px，最大 x 偏移为 260 - 140 - padding ≈ 80px
+        const gridX = index % 2; // 0 左, 1 右
+        const gridY = Math.floor(index / 2); // 第几层
+        
+        const baseX = gridX * 60; // 左右错开
+        const baseY = gridY * 40; // 往下错开
+        
+        // 添加额外随机抖动
+        const offsetX = (rX * 30) - 15;
+        const offsetY = (rY * 20) - 10;
+        const rotateDeg = (rR * 20) - 10; // -10 到 +10 度倾斜
+        
+        card.style.left = `calc(${gridX === 0 ? '10%' : '50%'} + ${offsetX}px)`; // 自适应居左或居右
+        card.style.top = `${baseY + offsetY + 20}px`;
         card.style.transform = `rotate(${rotateDeg}deg)`;
-        card.style.zIndex = 15 - index;
         
-        // 满载警告效果
+        // 最新的一定在最上层
+        card.style.zIndex = 20 - index;
+        
         if (isDeskFull) {
           card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.4), inset 0 0 0 1px rgba(255,255,255,1)';
         }
@@ -936,15 +972,14 @@ async function loadStatus() {
         const starIcon = note.is_starred ? '★' : '☆';
         const starClass = note.is_starred ? 'active' : '';
 
-        // 引入胶带、心情图章、信纸纹理
+        // 取消了心情图章，保留胶带和文本
         card.innerHTML = `
           <div class="sticky-tape"></div>
-          <div class="mood-stamp">${note.sticker || '✦'}</div>
           <div class="sticky-note-text">${escapeHtml(note.message)}</div>
           <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">${starIcon}</button>
         `;
 
-        // 全新双击交互：触发桌面便签整理菜单
+        // 双击交互：触发桌面便签整理菜单
         addDoubleTapListener(card, (e) => {
           showContextMenu(card, note.id, "desk-note");
         });
@@ -953,7 +988,7 @@ async function loadStatus() {
       });
     } else {
       container.innerHTML = `
-        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
+        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative; width: 100%; top:20px;">
           <div class="sticky-tape"></div>
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有留言。</div>
         </div>
