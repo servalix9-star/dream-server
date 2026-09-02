@@ -261,14 +261,14 @@
     position: relative;
     border: none; /* 零边框，只靠投影和底色区分层级 */
     border-radius: 3px 14px 14px 14px;
-    padding: 14px 16px;
-    aspect-ratio: 1 / 0.72; /* 贴近真实便利贴的宽扁比例 */
+    padding: 11px 14px;
+    aspect-ratio: 1 / 0.56; /* 更扁一些，一屏能露出约5张的高度 */
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 8px 20px rgba(120, 80, 95, 0.18), 0 2px 5px rgba(120, 80, 95, 0.1);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
     flex-shrink: 0;
-    margin-top: -14px; /* 只压住上一张的边缘一小截，正文完全露出，不会被压住 */
+    margin-top: -10px; /* 卡片变矮后，压角幅度也同比例收一点，避免盖住文字 */
   }
   .sticky-note-card:first-child { margin-top: 0; }
   .sticky-note-card:nth-child(1) { z-index: 20; }
@@ -284,7 +284,7 @@
     box-shadow: 0 14px 30px rgba(120, 80, 95, 0.26), 0 3px 8px rgba(120, 80, 95, 0.15);
   }
   .sticky-note-text {
-    font-size: 12.5px; line-height: 1.6; font-family: "Songti SC", serif; word-wrap: break-word;
+    font-size: 12px; line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
     /* 不再截断文字：便签高度由内容和aspect-ratio共同决定，文字完整显示 */
   }
   /* 纯正精致的荧光樱花粉标星按钮 */
