@@ -49,7 +49,7 @@
     /* 垂直黑-灰-白-灰-黑渐变 (比例 2:1:3:2:2) */
     background: linear-gradient(to bottom, #000000 0%, #000000 20%, #c0b8c0 30%, #ffffff 40%, #ffffff 60%, #c0b8c0 80%, #000000 100%);
     -webkit-mask-image: 
-      radial-gradient(circle, #000 24%, transparent 24.5%), /* 挤密和放大波点 */
+      radial-gradient(circle, #000 24%, transparent 24.5%),
       radial-gradient(circle, #000 24%, transparent 24.5%);
     -webkit-mask-size: 22px 22px; 
     -webkit-mask-position: 0 0, 11px 11px;
@@ -57,39 +57,23 @@
     z-index: 0;
     opacity: 0.85;
   }
-  
-  /* 统一高级极简矢量图标样式 */
   .nav-icon {
     position: relative;
     z-index: 1; 
     width: 42px; height: 42px;
     border-radius: 50%; /* 圆形按钮 */
     display: flex; align-items: center; justify-content: center;
-    background: #ffffff; /* 导航按钮底色改成纯白色 */
-    color: #ffb3c1; /* 统一的蜜桃粉图案色 */
+    background: #ffeef1; /* 统一采用温柔的浅粉底色 */
+    color: #ffb3c1; /* 内部图案粉色 */
+    font-size: 23px; 
     text-decoration: none;
     border: 2px solid #000000; /* 高对比度纯黑圆圈线 */
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* 实体投影 */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); 
   }
-  /* 设置 SVG 尺寸和线条 */
-  .nav-icon svg {
-    width: 22px; height: 22px;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    fill: none;
-    transition: all 0.2s ease;
-  }
-  
   .nav-icon:hover {
-    background: rgba(255, 255, 255, 0.8);
+    background: #ffffff;
     transform: translateY(-2px);
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
-  }
-  .nav-icon:hover svg {
-    transform: scale(1.1); /* 悬浮时微缩放 SVG */
   }
   .nav-icon:active { transform: translateY(0) scale(0.95); }
 
@@ -130,7 +114,7 @@
     align-items: center;
     gap: 14px;
     position: relative;
-    /* 纯黑到粉色(渐变底色拉高)的渐变条，黑、粉渐变比例为 3:2 */
+    /* 纯黑到粉色的渐变条，黑、粉渐变比例为 3:2 */
     background: linear-gradient(to right, #000000 0%, #000000 52%, rgba(26, 18, 30, 0.9) 62%, #cf7d90 85%, #ffb3c1 100%);
   }
   /* 增强白色波点颜色对比度并共同往右扩展 (65% 宽度) */
@@ -552,7 +536,7 @@
   #input-bar button:disabled { opacity: 0.4; box-shadow: none; cursor: default; background: #ffeef1; color: #b08d98; border-color: rgba(0,0,0,0.2); }
 
   /* ---- 右侧状态面板（现为 DESK 手账区，无边框，全面屏融合） ---- */
-  #panel, #health-panel {
+  #panel {
     width: 260px;
     flex-shrink: 0; display: none; flex-direction: column; gap: 16px;
     padding: 22px 18px; background: rgba(255, 235, 240, 0.55);
@@ -562,7 +546,7 @@
   }
   @media (min-width: 769px) { #panel { display: flex; } }
   
-  #panel::before, #health-panel::before {
+  #panel::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     background-image: linear-gradient(to bottom, #ffeef1 0%, #ffeef1 20%, #ffffff 35%, #ffffff 65%, #ffeef1 80%, #ffeef1 100%);
     -webkit-mask-image: radial-gradient(circle, #000 15%, transparent 15.5%), radial-gradient(circle, #000 15%, transparent 15.5%);
@@ -576,27 +560,29 @@
     text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (完全重制) --- */
+  /* --- 仿真实物便利贴堆叠留言板 --- */
   .sticky-note-stack {
     position: relative;
     width: 100%;
-    min-height: 140px; /* 根据内容动态拉长 */
+    min-height: 140px; /* 堆叠容器基准高度动态分配 */
     margin-top: 15px;
     margin-bottom: 25px;
     z-index: 1;
   }
   .sticky-note-card {
-    position: absolute; /* 初始化用绝对定位，通过内联样式修改位置 */
+    position: absolute;
     top: 0; left: 0; right: 0;
     background: #ffffff; /* 干净纯净的白纸质感 */
     border-radius: 4px 18px 18px 18px; /* 模拟手账纸张微折角 */
     padding: 16px 16px 36px 16px; /* 底部留足空间给标星按钮 */
     box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.15);
+    /* 通过 CSS 变量动态计算原位，保证动画极度丝滑且散落错置 */
+    transform: translate(var(--tx, 0), var(--ty, 0)) rotate(var(--rot, 0deg));
     transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
     cursor: pointer;
   }
   
-  /* 情绪氛围极浅渐变叠加 */
+  /* 情绪氛围极浅渐变叠加 (保留微弱的颜色区分) */
   .sticky-note-card.stage-sweet { background: linear-gradient(135deg, #fffcfd, #fff0f3); }
   .sticky-note-card.stage-tsundere { background: linear-gradient(135deg, #fffcfd, #f5eef1); }
   .sticky-note-card.stage-vulnerable { background: linear-gradient(135deg, #fffcfd, #ede3e7); }
@@ -604,9 +590,11 @@
 
   /* 悬浮交互：原位无缝浮起放大，绝不跳跃 */
   .sticky-note-card:hover {
+    /* 保持原来的 XY 偏移，仅修改 Y 轴上升和比例 */
+    transform: translate(var(--tx, 0), calc(var(--ty, 0px) - 6px)) rotate(0deg) scale(1.03) !important;
     z-index: 100 !important;
     opacity: 1 !important;
-    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22) !important;
+    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
   }
   
   /* 便签纯文本区 */
@@ -627,7 +615,7 @@
     cursor: pointer;
     opacity: 0.6;
     transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.2s, filter 0.2s, color 0.2s;
-    color: #e593a4; /* 未点亮的粉色星星 */
+    color: #d1b3bd; /* 未点亮的粉灰 */
     padding: 4px;
     line-height: 1;
   }
@@ -636,8 +624,8 @@
   }
   .note-star-btn.active {
     opacity: 1;
-    color: #ff5e84; /* 饱和发亮的甜心粉色 */
-    filter: drop-shadow(0 0 6px rgba(255, 94, 132, 0.5));
+    color: #ff5e84; /* 恢复完美的甜心粉色 */
+    filter: drop-shadow(0 2px 4px rgba(255, 94, 132, 0.4));
   }
 
   /* --- 秘密双层收纳抽屉 (对称排列并沉于底部) --- */
@@ -645,7 +633,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-top: auto; /* 保证抽屉沉在面板最下方 */
+    margin-top: auto; /* 保证抽屉在状态面板的最下方 */
   }
   .drawer-btn {
     display: flex;
@@ -737,17 +725,13 @@
       color: #b08d98; cursor: pointer; opacity: 0.6; transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
       width: 60px;
     }
-    /* 手机端图标保持 SVG 极简风格 */
-    .tab-item .tab-icon svg { 
-      width: 24px; height: 24px;
-      stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none;
-    }
+    .tab-item .tab-icon { font-size: 20px; line-height: 1.2; filter: grayscale(100%); }
     .tab-item .tab-label { font-size: 10px; margin-top: 2px; font-weight: bold; }
     .tab-item.active {
       color: #ff5e84; opacity: 1; transform: translateY(-3px);
     }
-    /* 激活态加光晕 */
-    .tab-item.active .tab-icon { filter: drop-shadow(0 0 4px rgba(255, 94, 132, 0.4)); }
+    /* 激活态移除灰度，还原 emoji 彩色并加光晕 */
+    .tab-item.active .tab-icon { filter: grayscale(0%); filter: drop-shadow(0 0 4px rgba(255, 94, 132, 0.4)); }
   }
 
   /* --- 秘密小抽屉：信件/便签列表弹窗 --- */
@@ -871,15 +855,9 @@
 
   <!-- 1. 左侧波点玻璃舱导航栏 -->
   <div id="nav">
-    <a class="nav-icon" href="/" title="聊天">
-      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-    </a>
-    <a class="nav-icon" href="javascript:void(0)" onclick="openPeriodCalendar()" title="月经生理日历">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-    </a>
-    <a class="nav-icon" href="javascript:void(0)" onclick="openArchiveBox()" title="恋爱档案箱">
-      <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
-    </a>
+    <a class="nav-icon" href="/" title="聊天">💝</a>
+    <a class="nav-icon" href="javascript:void(0)" onclick="openPeriodCalendar()" title="月经生理日历">🌷</a>
+    <a class="nav-icon" href="javascript:void(0)" onclick="openArchiveBox()" title="恋爱档案箱">📮</a>
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
@@ -907,6 +885,7 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
+      <!-- 圆形纯黑描边飞机发送按钮 -->
       <button id="send-btn" title="发送">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -921,12 +900,12 @@
     <div class="panel-child panel-title">DESK</div>
     <div id="panel-body" class="panel-child" style="display:flex; flex-direction:column; height:100%;">
         
-      <!-- 冰箱贴层叠便签堆叠容器 -->
+      <!-- 冰箱贴层叠便签堆叠容器 (交错散落摆放，不再堆积) -->
       <div class="sticky-note-stack" id="sticky-container">
         <!-- JS 动态灌入层叠卡片 -->
       </div>
 
-      <!-- 秘密双抽屉 (已移动至底部，对称排版) -->
+      <!-- 秘密双抽屉 (已移动至底部，文字与数字左右对齐) -->
       <div class="drawer-wrapper">
         <div class="drawer-btn" id="drawer-notes-btn" onclick="openDrawerNotes()">
           <span>💌 NOTES DRAWER</span> <span class="drawer-count-text" id="notes-drawer-count">0/30</span>
@@ -944,15 +923,15 @@
 <!-- 移动端自适应底部毛玻璃 Tab 栏 -->
 <div id="bottom-tabs">
   <div class="tab-item active" onclick="switchTab('chat')">
-    <span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></span>
+    <span class="tab-icon">💝</span>
     <span class="tab-label">CHAT</span>
   </div>
   <div class="tab-item" onclick="switchTab('desk')">
-    <span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg></span>
+    <span class="tab-icon">💌</span>
     <span class="tab-label">DESK</span>
   </div>
   <div class="tab-item" onclick="openPeriodCalendar()">
-    <span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
+    <span class="tab-icon">🌷</span>
     <span class="tab-label">HEALTH</span>
   </div>
 </div>
@@ -1127,7 +1106,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 微信悬浮微信菜单触发机制
+  // 微信悬浮撤回菜单触发机制 (电脑端右键，移动端长按)
   const bindContextMenu = (e) => {
     e.preventDefault();
     currentActiveMsgId = msgId;
@@ -1157,6 +1136,7 @@ function showWeChatMenu(targetElement, id, typeOrRole) {
   contextMenu.innerHTML = '';
 
   if (typeOrRole === 'charon' || typeOrRole === 'user') {
+    // ---- 聊天气泡菜单 ----
     if (id) {
       if (typeOrRole === 'charon') {
         const regenBtn = document.createElement('button');
@@ -1178,6 +1158,7 @@ function showWeChatMenu(targetElement, id, typeOrRole) {
       contextMenu.appendChild(recallBtn);
     }
   } else if (typeOrRole === 'desk-note') {
+    // ---- 桌面便签长按菜单 ----
     const moveBtn = document.createElement('button');
     moveBtn.className = 'menu-btn';
     moveBtn.textContent = '📥 移入抽屉';
@@ -1188,6 +1169,7 @@ function showWeChatMenu(targetElement, id, typeOrRole) {
     delBtn.className = 'menu-btn';
     delBtn.textContent = '🗑️ 撕掉丢弃';
     delBtn.onclick = () => {
+      // 物理撕下并揉碎动画
       targetElement.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
       targetElement.style.transform = 'translateY(60px) scale(0.7) rotate(20deg)';
       targetElement.style.opacity = '0';
@@ -1207,6 +1189,7 @@ function hideWeChatMenu() {
   contextMenu.style.display = 'none';
 }
 
+// 监听屏幕全局点击，自动收起菜单或日历弹窗
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.bubble') && !e.target.closest('.sticky-note-card') && !e.target.classList.contains('menu-btn')) {
     hideWeChatMenu();
@@ -1308,6 +1291,7 @@ function escapeHtml(str) {
 
 // ---- 便签相关的操作与数据同步函数 ----
 async function deleteNote(id, sourceStr = "desk") {
+  // 桌面便签经过动画撕碎处理，这里只做请求和刷新即可，不再拦截弹窗
   if (sourceStr !== "desk" && !confirm('确定要丢弃这张便签吗？它将被永久删除。')) return;
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/delete'), {
@@ -1372,35 +1356,31 @@ async function loadStatus() {
     container.innerHTML = '';
     
     if (data.sticky_notes && data.sticky_notes.length > 0) {
+      // 桌面满警告：卡片套上红色阴影或变色
       const isDeskFull = data.desk_full;
 
       data.sticky_notes.forEach((note, index) => {
         const card = document.createElement('div');
         card.className = `sticky-note-card stage-${note.stage || 'steady'}`;
         
-        // 动态注入内联样式：实现超大间距(45px)与交错散开效果
+        // 仿真手账微倾斜与错落散开算法 (大幅拉长 Y 轴间距以暴露底层)
         const rotateDeg = (index === 0) ? -2 : (index === 1 ? 3 : (index === 2 ? -1 : (index % 2 === 0 ? -4 : 4)));
-        const offsetTop = index * 45; 
-        const offsetX = index % 2 === 0 ? 4 : -4; 
-        const zIdx = 15 - index;
-        const opacity = index > 0 ? (1 - index * 0.08) : 1;
+        const offsetTop = index * 45; // [重点改进] 将原先的 10px 放大为 45px，完美散开
+        const offsetX = index % 2 === 0 ? 4 : -4; // 微弱的左右蛇形交错
         
-        card.style.transform = `translate(${offsetX}px, ${offsetTop}px) rotate(${rotateDeg}deg)`;
-        card.style.zIndex = zIdx;
-        card.style.opacity = opacity;
+        // 将位移写入 CSS 变量，供悬浮动效无缝接管
+        card.style.setProperty('--rot', `${rotateDeg}deg`);
+        card.style.setProperty('--tx', `${offsetX}px`);
+        card.style.setProperty('--ty', `${offsetTop}px`);
         
-        // 利用鼠标悬停事件强力注入动画覆盖，避免移动端兼容问题
-        card.onmouseenter = () => {
-          card.style.transform = `translate(${offsetX}px, ${offsetTop - 6}px) rotate(0deg) scale(1.03)`;
-          card.style.zIndex = 100;
-          card.style.opacity = 1;
-        };
-        card.onmouseleave = () => {
-          card.style.transform = `translate(${offsetX}px, ${offsetTop}px) rotate(${rotateDeg}deg)`;
-          card.style.zIndex = zIdx;
-          card.style.opacity = opacity;
-        };
-
+        card.style.zIndex = 15 - index;
+        
+        // 底层适当淡化，更有景深感
+        if (index > 0) {
+          card.style.opacity = 1 - index * 0.08; 
+        }
+        
+        // 满载警告效果
         if (isDeskFull) {
           card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.4), inset 0 0 0 1px rgba(255,255,255,1)';
         }
@@ -1408,11 +1388,13 @@ async function loadStatus() {
         const starIcon = note.is_starred ? '⭐' : '☆';
         const starClass = note.is_starred ? 'active' : '';
 
+        // 彻底清空杂乱图标，只保留文本和右下角星芒
         card.innerHTML = `
           <div class="sticky-note-text">${escapeHtml(note.message)}</div>
           <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">${starIcon}</button>
         `;
 
+        // 绑定右键/长按撕纸抛弃和整理机制
         const triggerNoteMenu = (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -1431,16 +1413,18 @@ async function loadStatus() {
       container.style.minHeight = (110 + (data.sticky_notes.length - 1) * 45) + 'px';
     } else {
       container.innerHTML = `
-        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
+        <div class="sticky-note-card" style="--rot:-1deg; --tx:0; --ty:0;">
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有留言。</div>
         </div>
       `;
       container.style.minHeight = '110px';
     }
 
+    // 抽屉容量统计与满仓霓虹闪烁警告
     const notesBtn = document.getElementById('drawer-notes-btn');
     const lettersBtn = document.getElementById('drawer-letters-btn');
     
+    // 异步获取抽屉计数
     fetch(apiUrl('/api/sticky-notes?status=drawer')).then(res=>res.json()).then(d => {
       if(d.ok) {
         document.getElementById('notes-drawer-count').textContent = `${d.notes.length}/30`;
@@ -1459,6 +1443,7 @@ async function loadStatus() {
       }
     });
 
+    // 档案箱容量总数提示
     Promise.all([
       fetch(apiUrl('/api/sticky-notes?status=archive')).then(res=>res.json()),
       fetch(apiUrl('/api/love-letters?status=archive')).then(res=>res.json())
@@ -1469,6 +1454,7 @@ async function loadStatus() {
       }
     });
 
+    // 新情书红点星芒提示
     const spark = document.getElementById('new-letter-indicator');
     spark.style.display = data.has_new_letter ? 'inline' : 'none';
 
@@ -1526,6 +1512,7 @@ async function openLoveLetters() {
   modal.style.display = 'flex';
   area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在拉开情书匣...</div>';
   
+  // 消除提示星芒红点标志
   fetch(apiUrl('/api/love-letters/mark-read'), {method: 'POST'}).then(() => loadStatus());
 
   try {
@@ -1561,6 +1548,7 @@ async function openLoveLetters() {
 }
 function closeLoveLetters() { document.getElementById('letter-modal').style.display = 'none'; }
 
+// 归档单封情书函数
 async function archiveLetter(id) {
   try {
     const res = await fetch(apiUrl('/api/love-letters/archive'), {
@@ -1577,6 +1565,7 @@ async function archiveLetter(id) {
   } catch(e) { alert('网络错误，归档失败'); }
 }
 
+// 物理丢弃单封情书函数
 async function deleteLetter(id) {
   if (!confirm('确定要彻底丢弃这封情书吗？它将被永久删除。')) return;
   try {
@@ -1614,6 +1603,7 @@ async function starLetter(id, isStarredNow, sourceStr) {
   } catch(e) { alert('网络错误'); }
 }
 
+
 // ==========================================
 // ---- 3. 恋爱档案箱 (容量 200) 前端功能 ----
 // ==========================================
@@ -1634,6 +1624,7 @@ async function openArchiveBox() {
     if (noteData.ok && letterData.ok) {
       let html = '';
       
+      // 档案箱便签列表
       html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Pinned Notes (${noteData.notes.length}/100)</div>`;
       if (noteData.notes.length > 0) {
         noteData.notes.forEach(note => {
@@ -1657,6 +1648,7 @@ async function openArchiveBox() {
         html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档便签...</div>';
       }
 
+      // 档案箱情书列表
       html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-top:30px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Letters Box (${letterData.letters.length}/100)</div>`;
       if (letterData.letters.length > 0) {
         letterData.letters.forEach(letter => {
@@ -1721,10 +1713,11 @@ function renderCalendarGrid() {
   // 计算当月首日是星期几（转换为周一为0，周日为6）
   const firstDay = new Date(currentYear, currentMonth, 1);
   let dayOfWeek = firstDay.getDay(); 
-  dayOfWeek = (dayOfWeek === 0) ? 6 : dayOfWeek - 1; 
+  dayOfWeek = (dayOfWeek === 0) ? 6 : dayOfWeek - 1; // 调整为：0=周一, 6=周日
 
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
+  // 1. 填充空白日期占位
   for (let i = 0; i < dayOfWeek; i++) {
     const span = document.createElement('span');
     span.className = 'calendar-day empty';
@@ -1734,6 +1727,7 @@ function renderCalendarGrid() {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
+  // 2. 绘制每一天
   for (let day = 1; day <= totalDays; day++) {
     const dayBtn = document.createElement('span');
     dayBtn.className = 'calendar-day';
@@ -1741,29 +1735,35 @@ function renderCalendarGrid() {
 
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
+    // 是否为今天
     if (dateStr === todayStr) {
       dayBtn.classList.add('today-marker');
     }
 
+    // 匹配生理期数据库区间，高亮上色
     periodRecords.forEach(record => {
       const start = record.start_date;
       const end = record.end_date;
       if (start) {
         if (end) {
+          // 已结束生理期
           if (dateStr >= start && dateStr <= end) {
             dayBtn.classList.add('period-active');
           }
         } else {
+          // 正在进行中
           if (dateStr >= start && dateStr <= todayStr) {
             dayBtn.classList.add('period-active');
           }
           if (dateStr === start) {
+            // 唯一起点带虚框
             dayBtn.classList.add('period-ongoing');
           }
         }
       }
     });
 
+    // 点击弹出选择开始还是结束的控制板
     dayBtn.onclick = (e) => {
       e.stopPropagation();
       selectedDateStr = dateStr;
@@ -1799,9 +1799,11 @@ function showDayActionPopup(dayBtn) {
   const rect = dayBtn.getBoundingClientRect();
   dayActionPopup.style.display = 'flex';
   
+  // 智能避让边界定位
   dayActionPopup.style.left = (rect.left + rect.width/2 - 65 + window.scrollX) + 'px';
   dayActionPopup.style.top = (rect.top - 110 + window.scrollY) + 'px';
 
+  // 绑定事件
   document.getElementById('popup-start-btn').onclick = () => savePeriodDate('start');
   document.getElementById('popup-end-btn').onclick = () => savePeriodDate('end');
 }
@@ -1821,7 +1823,6 @@ async function savePeriodDate(actionType) {
     if (data.ok) {
       alert(`已成功标记生理期：${actionType === 'start' ? '开始' : '结束'} (${selectedDateStr})`);
       fetchPeriodData(currentYear); // 刷新日历盘
-      loadStatus(); // 同步刷新生理提示框
       hideDayActionPopup();
     } else {
       alert('标记失败：' + (data.error || '未知错误'));
@@ -1829,6 +1830,40 @@ async function savePeriodDate(actionType) {
   } catch (e) { alert('网络错误，记录失败'); }
 }
 
+
+// ---- 以下发送相关保持不变 ----
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = ''; inputEl.style.height = 'auto'; sendBtn.disabled = true;
+
+  const nowIso = new Date().toISOString();
+  const userRow = renderMsgRow('user', text, nowIso, false);
+  messagesEl.appendChild(userRow);
+  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
+  messagesEl.appendChild(pendingRow);
+  scrollToBottom();
+
+  const pendingBubble = pendingRow.querySelector('.bubble');
+
+  try {
+    const res = await fetch(apiUrl('/api/chat-send'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      pendingBubble.textContent = data.reply; pendingBubble.classList.remove('pending');
+      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+    } else {
+      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
+      pendingBubble.classList.remove('pending');
+    }
+  } catch (e) {
+    pendingBubble.textContent = '（网络错误，没发出去）'; pendingBubble.classList.remove('pending');
+  }
+  scrollToBottom(); sendBtn.disabled = false; loadStatus();
+}
 
 sendBtn.addEventListener('click', sendMessage);
 inputEl.addEventListener('keydown', (e) => {
@@ -1861,29 +1896,6 @@ modelSelect.addEventListener('change', async () => {
     if (!data.ok) { alert('切换失败：' + (data.error || '未知错误')); loadModelSelector(); }
   } catch (e) { alert('网络错误'); loadModelSelector(); }
 });
-
-// 手机端自适应 Tab 切换逻辑
-function switchTab(tabName) {
-  const appEl = document.getElementById('app');
-  appEl.classList.remove('tab-chat', 'tab-desk');
-  appEl.classList.add('tab-' + tabName);
-
-  document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
-  
-  if (window.event && window.event.currentTarget) {
-    window.event.currentTarget.classList.add('active');
-  } else {
-    // 兜底找对应的 DOM
-    const indexMap = {'chat': 0, 'desk': 1};
-    document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
-  }
-  if (tabName === 'chat') scrollToBottom();
-}
-
-// 自动检测终端，大屏完全放弃Tab逻辑
-if (window.innerWidth <= 768) { 
-  document.getElementById('app').classList.add('tab-chat'); 
-}
 
 
 loadHistory();
