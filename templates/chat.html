@@ -71,7 +71,7 @@
     background: 
       radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
       radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
-      rgba(255, 255, 255, 0.95) !important;
+      rgba(255, 255, 255, 0.7) !important;
     background-size: 6px 6px, 6px 6px, 100% 100% !important;
     background-position: 0 0, 3px 3px, 0 0 !important;
     backdrop-filter: blur(10px);
@@ -201,7 +201,7 @@
   }
   .bubble.pending { opacity: 0.5; }
 
-  /* ---- 全局悬浮操作菜单 ---- */
+  /* ---- 悬浮操作菜单 ---- */
   #bubble-menu {
     display: none; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 8px; padding: 6px 4px;
@@ -233,7 +233,7 @@
   #input-bar textarea:focus { background: rgba(255, 255, 255, 0.9); border-color: rgba(229, 153, 169, 0.8); }
   #input-bar textarea::placeholder { color: #b08d98; }
   
-  /* 带有发光浅蜜桃粉底色的圆形发送按钮，无白色描边 */
+  /* 带有发光浅蜜桃粉底色的圆形发送按钮，无边框 */
   #input-bar button {
     position: relative; z-index: 1; width: 44px; height: 44px;
     border-radius: 50%; border: none !important; /* 彻底去除边框 */
@@ -253,7 +253,7 @@
   #input-bar button:active { transform: translateY(0) scale(0.95); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important; }
   #input-bar button:disabled { opacity: 0.4; box-shadow: none; cursor: default; background: #ffeef1; color: #b08d98; }
 
-  /* ---- 右侧状态面板（DESK 手账区） ---- */
+  /* ---- 右侧状态面板（DESK 手账区，无边框，全面屏融合） ---- */
   #panel {
     width: 260px; flex-shrink: 0; display: none; flex-direction: column;
     padding: 22px 18px; background: rgba(255, 235, 240, 0.55); border-radius: 24px; position: relative; overflow: hidden;
@@ -281,23 +281,28 @@
   .sticky-note-card {
     position: relative;
     border-radius: 4px 14px 14px 14px; 
-    padding: 10px 12px 28px 12px; /* 精致小巧的内边距 */
+    padding: 10px 12px 28px 12px; /* 调小内边距，使便签更精致紧凑 */
     box-shadow: 0 4px 12px rgba(184, 118, 138, 0.12);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
-    flex-shrink: 0;
+    flex-shrink: 0; margin-top: -16px; /* 产生微小的真实纸张交叠感 */
   }
+  .sticky-note-card:first-child { margin-top: 0; }
+  
+  .sticky-note-card.stage-sweet { background: linear-gradient(135deg, #fffcfd, #fff0f3); }
+  .sticky-note-card.stage-tsundere { background: linear-gradient(135deg, #fffcfd, #f5eef1); }
+  .sticky-note-card.stage-vulnerable { background: linear-gradient(135deg, #fffcfd, #ede3e7); }
+  .sticky-note-card.stage-period { background: linear-gradient(135deg, #fffcfd, #fde8eb); }
 
   .sticky-note-card:hover {
-    transform: rotate(0deg) translateY(-4px) scale(1.03) !important;
+    transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
     z-index: 100 !important;
-    opacity: 1 !important;
-    box-shadow: 0 8px 24px rgba(184, 118, 138, 0.2);
+    box-shadow: 0 8px 24px rgba(184, 118, 138, 0.22);
   }
   .sticky-note-text {
-    font-size: 12.5px; line-height: 1.6; font-family: "Songti SC", serif; word-wrap: break-word;
+    font-size: 11.5px; line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; /* 限制3行 */
   }
-  
   /* 纯粉色荧光星标，去掉亮金黄色，呼应新主题 */
   .note-star-btn {
     position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
@@ -309,7 +314,7 @@
     filter: drop-shadow(0 2px 5px rgba(255, 94, 132, 0.45));
   }
 
-  /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版对齐) --- */
+  /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版重构) --- */
   .drawer-wrapper { 
     display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px;
   }
@@ -436,9 +441,9 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (极细发光粉色 SVG 图标，白底透光按键) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (白透白底，樱花粉 SVG 指标，干净物理投影) -->
   <div id="nav">
-    <a class="nav-icon" href="/" title="首页">
+    <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
     </a>
     <a class="nav-icon" href="javascript:void(0)" onclick="openPeriodCalendar()" title="月经生理日历">
@@ -474,7 +479,7 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
-      <!-- 白水晶飞机发送按钮，与导航一致 -->
+      <!-- 白水晶发送按钮，与导航一致 -->
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -494,7 +499,7 @@
         <!-- JS 动态灌入层叠卡片 -->
       </div>
 
-      <!-- 秘密双抽屉 (下沉，四个螺丝高定包装盒样式) -->
+      <!-- 秘密双抽屉 (固定在底部，重排版，4颗螺丝经典复古) -->
       <div class="drawer-wrapper">
         <div class="drawer-btn" id="drawer-notes-btn" onclick="openDrawerNotes()">
           <div class="drawer-btn-title">💌 NOTES DRAWER</div>
@@ -702,7 +707,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 全新双击触发菜单逻辑 (完美废弃旧版长按)
+  // 全新双击触发菜单逻辑
   addDoubleTapListener(bubble, (e) => {
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content);
@@ -915,13 +920,13 @@ function getPersonalizedStyle(id, index) {
   const textureType = index % 5;
   if (textureType === 0) {
     // 1. Polka-dots
-    bgStyle = `background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), ${color.bg}; background-size: 6px 6px, 6px 6px; background-position: 0 0, 3px 3px;`;
+    bgStyle = `background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), ${color.bg}; background-size: 8px 8px, 8px 8px; background-position: 0 0, 4px 4px;`;
   } else if (textureType === 1) {
     // 2. Horizontal Lines
     bgStyle = `background: repeating-linear-gradient(transparent, transparent 12px, rgba(90, 69, 80, 0.04) 12px, rgba(90, 69, 80, 0.04) 13px), ${color.bg}; background-position: 0 0;`;
   } else if (textureType === 2) {
     // 3. Grid/Plaid
-    bgStyle = `background: repeating-linear-gradient(transparent, transparent 12px, rgba(90, 69, 80, 0.03) 12px, rgba(90, 69, 80, 0.03) 13px), repeating-linear-gradient(90deg, transparent, transparent 12px, rgba(90, 69, 80, 0.03) 12px, rgba(90, 69, 80, 0.03) 13px), ${color.bg};`;
+    bgStyle = `background: repeating-linear-gradient(transparent, transparent 12px, rgba(90, 69, 80, 0.04) 12px, rgba(90, 69, 80, 0.04) 13px), repeating-linear-gradient(90deg, transparent, transparent 12px, rgba(90, 69, 80, 0.04) 12px, rgba(90, 69, 80, 0.04) 13px), ${color.bg};`;
   } else if (textureType === 3) {
     // 4. Solid Color
     bgStyle = `background: ${color.bg};`;
@@ -956,7 +961,7 @@ async function loadStatus() {
         
         // 自然手写纸微斜效果，不层层掩盖，自然排列
         const rotateDeg = index % 2 === 0 ? -2 : 2.5;
-        card.style.marginTop = index === 0 ? '0' : '-16px';
+        card.style.marginTop = index === 0 ? '0' : '-12px';
         card.style.transform = `rotate(${rotateDeg}deg)`;
         card.style.zIndex = 15 - index;
         
@@ -1069,22 +1074,7 @@ async function sendMessage() {
   scrollToBottom(); sendBtn.disabled = false; loadStatus();
 }
 
-// ---- 月经一键点击生理记录控制台 ----
-async function recordPeriod(valueStr) {
-  if (!confirm(`确定要记录月经已“${valueStr}”吗？`)) return;
-  try {
-    const res = await fetch(apiUrl('/event'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'period', value: valueStr })
-    });
-    if (res.ok) {
-      alert(`已记录：月经${valueStr}`);
-      loadStatus(); 
-    }
-  } catch (e) { alert("网络错误，生理记录失败"); }
-}
-
-// 手机端自适应 Tab 切换逻辑
+// ---- 手机端 Tab 切换逻辑 ----
 function switchTab(tabName) {
   const appEl = document.getElementById('app');
   appEl.classList.remove('tab-chat', 'tab-desk');
@@ -1297,7 +1287,7 @@ async function openArchiveBox() {
           const starIcon = letter.is_starred ? '★' : '☆';
           const starClass = letter.is_starred ? 'active' : '';
           html += `
-            <div class="single-letter" id="letter-card-${letter.id}">
+            <div class="single-letter">
               <div class="letter-time-row">
                 <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
                 <div class="letter-act-group">
