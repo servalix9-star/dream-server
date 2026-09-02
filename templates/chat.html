@@ -251,24 +251,24 @@
     font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (FlowLayout 自然流式排版，非绝对定位/非滚动) --- */
+  /* --- 仿真实物便利贴堆叠留言板 (FlowLayout 自然流式排版，完整不裁切，靠负边距压角) --- */
   .sticky-note-stack {
     position: relative; width: 100%; display: flex; flex-direction: column;
     margin-top: 15px; margin-bottom: 18px; z-index: 1;
-    overflow: hidden; max-height: 44vh; /* 自然裁切多余便签，不产生滚动条 */
+    /* 不设置任何 max-height / overflow，让内容自然撑开容器高度，每张便签都完整可读 */
   }
   .sticky-note-card {
     position: relative;
-    border: none; /* 明确去掉任何边框线，只靠投影和底色区分层级 */
+    border: none; /* 零边框，只靠投影和底色区分层级 */
     border-radius: 3px 14px 14px 14px;
-    padding: 12px 14px;
-    aspect-ratio: 1 / 0.82; /* 贴近便签纸的方正比例，不被内容撑成细长条 */
+    padding: 14px 16px;
+    aspect-ratio: 1 / 0.72; /* 贴近真实便利贴的宽扁比例 */
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 6px 16px rgba(120, 80, 95, 0.16), 0 1px 3px rgba(120, 80, 95, 0.1);
+    box-shadow: 0 8px 20px rgba(120, 80, 95, 0.18), 0 2px 5px rgba(120, 80, 95, 0.1);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
     flex-shrink: 0;
-    margin-top: -34px; /* 只压住上一张的顶角一小段，不会盖住正文 */
+    margin-top: -14px; /* 只压住上一张的边缘一小截，正文完全露出，不会被压住 */
   }
   .sticky-note-card:first-child { margin-top: 0; }
   .sticky-note-card:nth-child(1) { z-index: 20; }
@@ -281,12 +281,11 @@
   .sticky-note-card:hover {
     transform: rotate(0deg) translateY(-4px) scale(1.03) !important;
     z-index: 100 !important;
-    box-shadow: 0 12px 28px rgba(120, 80, 95, 0.24), 0 2px 6px rgba(120, 80, 95, 0.14);
+    box-shadow: 0 14px 30px rgba(120, 80, 95, 0.26), 0 3px 8px rgba(120, 80, 95, 0.15);
   }
   .sticky-note-text {
     font-size: 12.5px; line-height: 1.6; font-family: "Songti SC", serif; word-wrap: break-word;
-    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
-    /* 超过4行自动省略，保证方正比例下文字不溢出、也不需要滚动 */
+    /* 不再截断文字：便签高度由内容和aspect-ratio共同决定，文字完整显示 */
   }
   /* 纯正精致的荧光樱花粉标星按钮 */
   .note-star-btn {
@@ -963,10 +962,11 @@ async function loadStatus() {
       data.sticky_notes.forEach((note, index) => {
         const card = document.createElement('div');
         card.className = `sticky-note-card`;
-        
-        // 自然手写纸微斜错落效果：FlowLayout流式排布，只压住上一张的顶角一小段，正文完整可读
-        const rotateDeg = index % 2 === 0 ? -2 : 2.5;
-        card.style.marginTop = index === 0 ? '0' : '-34px';
+
+        // 自然手写纸微斜错落效果：用便签id做种子生成伪随机角度，
+        // 保证同一张便签每次刷新角度稳定不跳动，但整体呈现自然的随机错落感（-3.5° ~ 3.5°之间）
+        const seed = (note.id * 9301 + 49297) % 233280;
+        const rotateDeg = ((seed / 233280) * 7 - 3.5).toFixed(1);
         card.style.transform = `rotate(${rotateDeg}deg)`;
         card.style.zIndex = 15 - index;
         
