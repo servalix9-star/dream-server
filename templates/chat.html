@@ -54,7 +54,7 @@
     opacity: 0.85;
   }
   
-  /* ---- 导航图标 & 发送按钮的“白底+粉波点+透明投影”样式统一 ---- */
+  /* ---- 导航图标 & 发送按钮：晶莹透白、无灰暗感 ---- */
   .nav-icon, #send-btn {
     position: relative;
     z-index: 1;
@@ -63,34 +63,34 @@
     display: flex; align-items: center; justify-content: center;
     border: none !important;
     
-    /* 核心改动：白底半透明 + 内部微小粉色波点 + 磨砂玻璃效果 */
-    background: 
-      radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
-      radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
-      rgba(255, 255, 255, 0.7) !important;
-    background-size: 6px 6px, 6px 6px, 100% 100% !important;
-    background-position: 0 0, 3px 3px, 0 0 !important;
+    /* 核心修复：大幅提高白底纯度（0.95），杜绝被底层黑色污染发灰 */
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    /* 覆盖粉色微型波点 */
+    background-image: 
+      radial-gradient(circle, rgba(255, 143, 163, 0.25) 15%, transparent 15.5%),
+      radial-gradient(circle, rgba(255, 143, 163, 0.25) 15%, transparent 15.5%) !important;
+    background-size: 6px 6px, 6px 6px !important;
+    background-position: 0 0, 3px 3px !important;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     
-    color: #ffb3c1; /* 图案粉色 */
+    color: #ff8fa3; /* 提亮线条颜色为鲜活樱花粉 */
     text-decoration: none;
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
     
-    /* 核心改动：去掉霓虹光，恢复干净的实体物理投影 */
+    /* 干净的实体投影，完全摒弃霓虹光晕 */
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
     cursor: pointer;
     padding: 0;
   }
   .nav-icon svg {
-    width: 20px; 
-    height: 20px;
-    stroke-width: 1.5px;
+    width: 20px; height: 20px; stroke-width: 1.5px;
   }
   .nav-icon:hover, #send-btn:hover {
     transform: translateY(-2px) scale(1.05);
-    background-color: rgba(255, 255, 255, 0.9) !important;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important; /* 悬浮时阴影加深 */
+    background-color: #ffffff !important;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important;
+    color: #ff5e84;
   }
   .nav-icon:active, #send-btn:active { 
     transform: translateY(0) scale(0.95); 
@@ -196,7 +196,7 @@
   }
   .bubble.pending { opacity: 0.5; }
 
-  /* ---- 悬浮操作菜单 ---- */
+  /* ---- 全局悬浮操作菜单 ---- */
   #bubble-menu {
     display: none; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 8px; padding: 6px 4px;
@@ -230,7 +230,8 @@
 
   /* ---- 右侧状态面板（DESK 手账区） ---- */
   #panel {
-    width: 260px; flex-shrink: 0; display: none; flex-direction: column;
+    width: 270px; /* 稍微加宽一点，给便签流出呼吸感 */
+    flex-shrink: 0; display: none; flex-direction: column;
     padding: 22px 18px; background: rgba(255, 235, 240, 0.55); border-radius: 24px; position: relative; overflow: hidden;
     border: none; box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
   }
@@ -246,49 +247,76 @@
     font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (易读自然流) --- */
+  /* --- 仿真实物便利贴堆叠留言板 (易读自然流 + 精致信纸层) --- */
   .sticky-note-stack {
-    position: relative; width: 100%; display: flex; flex-direction: column; gap: 4px; /* 使用微间距替代绝对堆叠 */
+    position: relative; width: 100%; display: flex; flex-direction: column; gap: 12px; /* 拉开自然间距 */
     margin-top: 15px; margin-bottom: 25px; z-index: 1;
-    overflow-y: auto; max-height: 60vh; /* 防止便签过多撑爆屏幕 */
+    overflow-y: auto; max-height: 60vh; 
     -webkit-overflow-scrolling: touch;
     padding-bottom: 20px;
+    padding-right: 4px; /* 留出一点滚动条避让 */
   }
+  
   .sticky-note-card {
-    position: relative; /* 恢复相对流式布局，方便完整阅读 */
-    background: #ffffff; border-radius: 4px 18px 18px 18px; 
-    padding: 16px 16px 36px 16px; 
-    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.15);
+    position: relative; 
+    background-color: #ffffff;
+    /* 引入极淡的信纸横格底纹 */
+    background-image: repeating-linear-gradient(transparent, transparent 23px, rgba(229, 153, 169, 0.08) 23px, rgba(229, 153, 169, 0.08) 24px) !important;
+    background-position: 0 10px;
+    border-radius: 2px 16px 16px 16px; /* 模拟手账纸张微折角 */
+    padding: 22px 16px 36px 16px; 
+    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.12), inset 0 0 0 1px rgba(255,255,255,0.8);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
-    flex-shrink: 0; margin-top: -12px; /* 产生微小的真实纸张交叠感 */
+    flex-shrink: 0; 
   }
-  .sticky-note-card:first-child { margin-top: 0; }
   
-  .sticky-note-card.stage-sweet { background: linear-gradient(135deg, #fffcfd, #fff0f3); }
-  .sticky-note-card.stage-tsundere { background: linear-gradient(135deg, #fffcfd, #f5eef1); }
-  .sticky-note-card.stage-vulnerable { background: linear-gradient(135deg, #fffcfd, #ede3e7); }
-  .sticky-note-card.stage-period { background: linear-gradient(135deg, #fffcfd, #fde8eb); }
+  /* 和纸胶带装饰 */
+  .sticky-tape {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%) rotate(-2deg);
+    width: 35px; height: 14px; background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 2;
+  }
+  
+  /* 右上角个性化心情图章 */
+  .mood-stamp {
+    position: absolute; top: 10px; right: 12px; font-size: 16px;
+    opacity: 0.8; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+  }
+  
+  /* 根据心境渲染特有的底色渲染 (结合信纸纹理) */
+  .sticky-note-card.stage-sweet { background-color: #fff0f3; }
+  .sticky-note-card.stage-steady { background-color: #fffcfd; }
+  .sticky-note-card.stage-tsundere { background-color: #f6eef2; }
+  .sticky-note-card.stage-vulnerable { background-color: #efe6ea; }
+  .sticky-note-card.stage-period { background-color: #ffe6eb; }
 
   .sticky-note-card:hover {
     transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
     z-index: 100 !important;
     box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
   }
+  
   .sticky-note-text {
-    font-size: 12.5px; color: #5a4550; line-height: 1.6; font-family: "Songti SC", serif; word-wrap: break-word;
+    font-size: 12.5px; color: #5a4550; 
+    line-height: 24px; /* 严格对齐信纸底纹 */
+    font-family: "Kaiti SC", "STKaiti", "Songti SC", serif; /* 增加手写/楷体感 */
+    letter-spacing: 0.5px; word-wrap: break-word;
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
   }
-  /* 纯粉色荧光星标 */
+  
+  /* 纯粉色星标 (取消黄色) */
   .note-star-btn {
     position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
-    opacity: 0.5; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
+    opacity: 0.4; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #d1b3bd; padding: 4px; line-height: 1;
   }
-  .note-star-btn:hover { transform: scale(1.15); }
+  .note-star-btn:hover { transform: scale(1.15); opacity: 0.8; color: #ff5e84; }
   .note-star-btn.active {
     opacity: 1; color: #ff5e84; filter: drop-shadow(0 2px 5px rgba(255, 94, 132, 0.45));
   }
 
-  /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版重构) --- */
+  /* --- 秘密小抽屉收纳盒 (移动到底部，文字居中重排版) --- */
   .drawer-wrapper { 
     display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px;
   }
@@ -303,6 +331,7 @@
   .drawer-btn-title { font-weight: bold; font-size: 13px; letter-spacing: 1px; }
   .drawer-btn-count { font-size: 10px; opacity: 0.75; font-family: "Courier New", monospace; }
   
+  /* 四角装饰波点 */
   .drawer-btn::before {
     content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px;
     background: 
@@ -382,7 +411,8 @@
   .letter-act-group { display: flex; gap: 8px; align-items: center; }
   .letter-del-btn { background: none; border: none; color: #a66275; font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
   .letter-del-btn:hover { color: #ff5e84; background-color: rgba(255, 94, 132, 0.08); }
-  .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; }
+  /* 列表里的标星按钮也换成纯粉色星芒 */
+  .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; background:none; border:none; padding:2px; cursor:pointer;}
   .note-act-btn.star-btn.active { color: #ff5e84; filter: drop-shadow(0 1px 3px rgba(255, 94, 132, 0.45)); }
   .letter-text { white-space: pre-wrap; font-style: italic; }
 
@@ -414,7 +444,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (恢复为白底半调透光，极细粉色 SVG 图标，实体投影) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (纯白底，粉色图案，实体投影) -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -452,7 +482,6 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
-      <!-- 无边框白底透光纸飞机发送按钮 -->
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -513,7 +542,6 @@
 <!-- 全局悬浮菜单 -->
 <div id="bubble-menu"></div>
 
-<!-- 小抽屉与弹窗区域略... -->
 <!-- 秘密小抽屉 1：便签收纳盒 (30) -->
 <div id="drawer-notes-modal">
   <div class="letter-container">
@@ -676,7 +704,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 全局双击触发菜单逻辑
+  // 全新双击触发菜单逻辑 (去除旧版长按)
   addDoubleTapListener(bubble, (e) => {
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content);
@@ -828,7 +856,6 @@ function escapeHtml(str) {
 
 // ---- 便签相关的操作与数据同步函数 ----
 async function deleteNote(id, sourceStr = "desk") {
-  // 桌面便签经过动画撕碎处理，这里只做请求和刷新即可，不再拦截弹窗
   if (sourceStr !== "desk" && !confirm('确定要丢弃这张便签吗？它将被永久删除。')) return;
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/delete'), {
@@ -839,8 +866,6 @@ async function deleteNote(id, sourceStr = "desk") {
       if (sourceStr === "desk") loadStatus();
       else if (sourceStr === "drawer") openDrawerNotes();
       else if (sourceStr === "archive") openArchiveBox();
-    } else {
-      alert('删除失败：' + (data.error || '未知错误'));
     }
   } catch (e) { alert('网络错误，丢弃失败'); }
 }
@@ -883,7 +908,7 @@ async function loadStatus() {
     const data = await res.json();
     if (!data.ok) return;
 
-    statusLabel.textContent = data.status_label || '在线';
+    document.getElementById('status-label').textContent = data.status_label || '在线';
     document.getElementById('status-dot').className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
     // 渲染桌面仿真层叠便签 (自然错落排版，流式布局极小负间距)
@@ -903,11 +928,6 @@ async function loadStatus() {
         card.style.transform = `rotate(${rotateDeg}deg)`;
         card.style.zIndex = 15 - index;
         
-        // 底层淡化
-        if (index > 0) {
-          card.style.opacity = 1 - index * 0.1; 
-        }
-        
         // 满载警告效果
         if (isDeskFull) {
           card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.4), inset 0 0 0 1px rgba(255,255,255,1)';
@@ -916,8 +936,10 @@ async function loadStatus() {
         const starIcon = note.is_starred ? '★' : '☆';
         const starClass = note.is_starred ? 'active' : '';
 
-        // 彻底清空杂乱图标，只保留文本和纯粉色星芒
+        // 引入胶带、心情图章、信纸纹理
         card.innerHTML = `
+          <div class="sticky-tape"></div>
+          <div class="mood-stamp">${note.sticker || '✦'}</div>
           <div class="sticky-note-text">${escapeHtml(note.message)}</div>
           <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">${starIcon}</button>
         `;
@@ -932,6 +954,7 @@ async function loadStatus() {
     } else {
       container.innerHTML = `
         <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
+          <div class="sticky-tape"></div>
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有留言。</div>
         </div>
       `;
