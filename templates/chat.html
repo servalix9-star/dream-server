@@ -15,7 +15,7 @@
     background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550; /* 恢复至初始雅致深紫灰 */
+    color: #5a4550; 
   }
   #app {
     display: flex;
@@ -218,13 +218,7 @@
   
   /* 迷你手写名字挂件 */
   .avatar-tag {
-    position: absolute;
-    font-family: "Dancing Script", cursive;
-    font-size: 11px;
-    white-space: nowrap;
-    pointer-events: none;
-    user-select: none;
-    z-index: 2;
+    position: absolute; font-family: "Dancing Script", cursive; font-size: 11px; white-space: nowrap; pointer-events: none; user-select: none; z-index: 2;
   }
   /* Charon 的名字挂件：悬浮于头像上方 */
   .avatar-wrapper.charon .avatar-tag {
@@ -420,7 +414,6 @@
     box-shadow: 0 4px 15px rgba(184, 96, 118, 0.18);
   }
   .bubble.charon {
-    /* 白透底色叠加上极其精致、浓度极低的微型粉灰小波点 */
     background: 
       radial-gradient(circle, rgba(229, 153, 171, 0.08) 15%, transparent 15.5%),
       radial-gradient(circle, rgba(229, 153, 171, 0.08) 15%, transparent 15.5%),
@@ -434,7 +427,7 @@
   }
   .bubble.pending { opacity: 0.5; }
 
-  /* ---- 悬浮微信样式撤回菜单 ---- */
+  /* ---- 悬浮操作菜单 ---- */
   #bubble-menu {
     display: none;
     position: absolute;
@@ -487,7 +480,7 @@
     /* 横向白、灰、黑、灰、白渐变波点 (比例 1:2:3:2:1) */
     background: linear-gradient(to right, #ffffff 0%, #ffffff 11%, #c0b8c0 33%, #000000 45%, #000000 55%, #c0b8c0 67%, #ffffff 89%, #ffffff 100%);
     -webkit-mask-image: 
-      radial-gradient(circle, #000 24%, transparent 24.5%), /* 放大并挤密底部波点 */
+      radial-gradient(circle, #000 24%, transparent 24.5%),
       radial-gradient(circle, #000 24%, transparent 24.5%);
     -webkit-mask-size: 22px 22px; /* 和左栏波点大小完全保持一致 */
     -webkit-mask-position: 0 0, 11px 11px;
@@ -522,7 +515,6 @@
   }
   #input-bar textarea::placeholder { color: #b08d98; }
   
-  /* 手写精致圆形发送按钮（纯黑极细外圈、发光浅蜜桃粉底色、高保真纸飞机图标） */
   #input-bar button {
     position: relative;
     z-index: 1;
@@ -537,97 +529,117 @@
   #input-bar button:active { transform: translateY(0) scale(0.95); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1); }
   #input-bar button:disabled { opacity: 0.4; box-shadow: none; cursor: default; background: #ffeef1; color: #b08d98; border-color: rgba(0,0,0,0.2); }
 
-  /* ---- 右侧状态面板（现为 DESK 手账区，无边框，全面屏融合） ---- */
-  #panel, #health-panel {
-    width: 260px;
-    flex-shrink: 0; display: none; flex-direction: column; gap: 16px;
-    padding: 22px 18px; background: rgba(255, 235, 240, 0.55);
-    border-radius: 24px; position: relative; overflow: hidden;
-    border: none; /* 去除一切白色外边框，完美融入天色 */
-    box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
+  /* ---- 右侧状态面板（DESK 手账区） ---- */
+  #panel {
+    width: 270px; /* 稍微加宽一点，给便签流出呼吸感 */
+    flex-shrink: 0; display: none; flex-direction: column;
+    padding: 22px 18px; background: rgba(255, 235, 240, 0.55); border-radius: 24px; position: relative; overflow: hidden;
+    border: none; box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
   }
   @media (min-width: 769px) { #panel { display: flex; } }
-  
-  #panel::before, #health-panel::before {
+  #panel::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     background-image: linear-gradient(to bottom, #ffeef1 0%, #ffeef1 20%, #ffffff 35%, #ffffff 65%, #ffeef1 80%, #ffeef1 100%);
     -webkit-mask-image: radial-gradient(circle, #000 15%, transparent 15.5%), radial-gradient(circle, #000 15%, transparent 15.5%);
-    -webkit-mask-size: 14px 14px; -webkit-mask-position: 0 0, 7px 7px;
-    pointer-events: none; z-index: 0; opacity: 0.85;
+    -webkit-mask-size: 14px 14px; -webkit-mask-position: 0 0, 7px 7px; pointer-events: none; z-index: 0; opacity: 0.85;
   }
   .panel-child { position: relative; z-index: 1; }
   .panel-title {
-    font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px;
-    color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold;
-    text-shadow: 0 2px 4px rgba(255,255,255,0.8);
+    font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (从上自下自然纸张流式布局 + 信纸横格) --- */
+  /* --- 仿真实物便利贴堆叠留言板 (流式重叠，高模拟手账纸张，绝对不挡文字) --- */
   .sticky-note-stack {
-    position: relative; width: 100%; display: flex; flex-direction: column; gap: 4px; 
+    position: relative; width: 100%; display: flex; flex-direction: column; gap: 4px;
     margin-top: 15px; margin-bottom: 25px; z-index: 1;
-    overflow-y: auto; max-height: 60vh; 
+    overflow-y: auto; max-height: 52vh; /* 给底下的两个抽屉留足下沉空间 */
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 20px;
+    padding-bottom: 15px;
     padding-right: 4px;
   }
   
+  /* 5 款高度定制化、不同款式与材质底纹的便签 */
   .sticky-note-card {
-    position: relative; 
-    background-color: #ffffff;
-    /* 引入极淡的信纸横格底纹 */
-    background-image: repeating-linear-gradient(transparent, transparent 23px, rgba(229, 153, 169, 0.08) 23px, rgba(229, 153, 169, 0.08) 24px) !important;
-    background-position: 0 10px;
-    border-radius: 2px 16px 16px 16px; /* 模拟手账纸张微折角 */
-    padding: 24px 16px 36px 16px; /* 留出顶部胶带与底部星星空间 */
+    position: relative;
+    padding: 24px 16px 36px 16px; /* 顶部预留胶带位置，底部预留单颗星标位置 */
     box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.12), inset 0 0 0 1px rgba(255,255,255,0.8);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
-    flex-shrink: 0; margin-top: -12px; /* 产生微小的真实纸张交叠感 */
+    flex-shrink: 0;
   }
-  .sticky-note-card:first-child { margin-top: 0; }
   
-  /* 心境专属底色融合 */
-  .sticky-note-card.stage-sweet { background-color: #fff0f3; }
-  .sticky-note-card.stage-steady { background-color: #fffcfd; }
-  .sticky-note-card.stage-tsundere { background-color: #f6eef2; }
-  .sticky-note-card.stage-vulnerable { background-color: #efe6ea; }
-  .sticky-note-card.stage-period { background-color: #ffe6eb; }
+  /* 款式 0：网格手账款 (浅黄色微网格) */
+  .sticky-note-card.style-0 {
+    background-color: #fffdf0;
+    background-image: 
+      linear-gradient(rgba(229,153,169,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(229,153,169,0.06) 1px, transparent 1px) !important;
+    background-size: 10px 10px !important;
+    border-radius: 4px 16px 16px 16px;
+  }
+  /* 款式 1：波浪蕾丝虚线粉边款 (浅暖粉底 + 虚线边) */
+  .sticky-note-card.style-1 {
+    background-color: #fff3f5;
+    border: 1.5px dashed rgba(229, 153, 169, 0.4) !important;
+    border-radius: 12px;
+  }
+  /* 款式 2：经典信纸条纹款 (浅薄荷绿底 + 渐变信线条) */
+  .sticky-note-card.style-2 {
+    background-color: #f0fcf9;
+    background-image: repeating-linear-gradient(transparent, transparent 19px, rgba(112,230,210,0.15) 19px, rgba(112,230,210,0.15) 20px) !important;
+    background-position: 0 10px;
+    border-radius: 4px 16px 4px 16px;
+  }
+  /* 款式 3：复古牛皮纸质感款 (柔和温润黄牛皮纸底) */
+  .sticky-note-card.style-3 {
+    background-color: #faf4eb;
+    box-shadow: 2px 4px 12px rgba(138, 100, 70, 0.15);
+    border-radius: 8px;
+  }
+  /* 款式 4：粉紫碎花波点底纹款 (浅紫底 + 极细白波点) */
+  .sticky-note-card.style-4 {
+    background-color: #f5f0f6;
+    background-image: radial-gradient(rgba(255,255,255,0.6) 12%, transparent 13%) !important;
+    background-size: 8px 8px !important;
+    border-radius: 16px;
+  }
 
-  /* 悬浮交互：鼠标划过自动抽离到最上层、回正、并微微放大 */
-  .sticky-note-card:hover {
-    transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
-    z-index: 100 !important;
-    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
-  }
-  
-  /* 半透明和纸胶带装饰 */
+  /* 模拟和纸手账胶带 */
   .sticky-tape {
     position: absolute; top: -8px; left: 50%; transform: translateX(-50%) rotate(-2deg);
-    width: 35px; height: 14px; background: rgba(255, 255, 255, 0.6);
+    width: 38px; height: 14px; background: rgba(255, 255, 255, 0.45);
     border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 2;
   }
-  
-  .sticky-note-text {
-    font-size: 13px; color: #5a4550; 
-    line-height: 24px; /* 严格对齐信纸底纹 */
-    font-family: "Kaiti SC", "STKaiti", "Songti SC", serif; /* 增加手写/楷体感 */
-    letter-spacing: 0.5px; word-wrap: break-word;
-    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+
+  /* 悬浮交互：鼠标划过或点击时，自动回正、提到最前、饱满高亮，绝对不挡文字 */
+  .sticky-note-card:hover {
+    transform: rotate(0deg) scale(1.03) translateY(-4px) !important;
+    z-index: 100 !important;
+    opacity: 1 !important;
+    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
   }
   
-  /* 纯粉色荧光星标 (取代原有黄色效果) */
+  /* 手写楷体/宋体混合排版 */
+  .sticky-note-text {
+    font-size: 13px; color: #5a4550; line-height: 1.7; 
+    font-family: "Kaiti SC", "STKaiti", "Songti SC", serif;
+    letter-spacing: 0.5px; word-wrap: break-word;
+  }
+  
+  /* 彻底精细化的右下角星标按钮 (纯粉色) */
   .note-star-btn {
     position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
-    opacity: 0.4; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #d1b3bd; padding: 4px; line-height: 1;
+    opacity: 0.4; transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.2s, filter 0.2s; 
+    color: #d1b3bd; padding: 4px; line-height: 1; z-index: 10;
   }
-  .note-star-btn:hover { transform: scale(1.15); opacity: 0.8; color: #ff5e84; }
+  .note-star-btn:hover { transform: scale(1.15); }
   .note-star-btn.active {
-    opacity: 1; color: #ff5e84; filter: drop-shadow(0 2px 5px rgba(255, 94, 132, 0.45));
+    opacity: 1; color: #ff5e84 !important; /* 彻底移除黄色 */
+    filter: drop-shadow(0 2px 5px rgba(255, 94, 132, 0.45));
   }
 
-  /* --- 秘密双层收纳抽屉设计 (移动到底部，采用图二盒子加四个点的高保真视觉设计) --- */
+  /* --- 秘密小抽屉收纳盒 (移动到右侧栏最底部，文字重排) --- */
   .drawer-wrapper { 
     display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px;
   }
@@ -642,7 +654,7 @@
   .drawer-btn-title { font-weight: bold; font-size: 13px; letter-spacing: 1px; }
   .drawer-btn-count { font-size: 10px; opacity: 0.75; font-family: "Courier New", monospace; }
   
-  /* 抽屉表面四角装饰小孔点，完美对齐图二视觉设计 */
+  /* 4颗螺丝波点点缀 */
   .drawer-btn::before {
     content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px;
     background: 
@@ -687,13 +699,12 @@
       color: #b08d98; cursor: pointer; opacity: 0.6; transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1); width: 60px;
     }
     .tab-item .tab-icon { 
-      font-size: 20px; line-height: 1.2; 
+      font-size: 20px; line-height: 1.2; filter: grayscale(100%); 
     }
-    /* SVG 在底部栏统一采用精细、去线框马卡龙渗透高亮设计 */
     .tab-item .tab-icon svg { width: 22px; height: 22px; stroke-width: 1.5px; }
-    
     .tab-item .tab-label { font-size: 10px; margin-top: 2px; font-weight: bold; }
     .tab-item.active { color: #ff5e84; opacity: 1; transform: translateY(-3px); }
+    .tab-item.active .tab-icon { filter: grayscale(0%); filter: drop-shadow(0 0 4px rgba(255, 94, 132, 0.4)); }
   }
 
   /* --- 秘密小抽屉/档案箱/日历弹窗 --- */
@@ -723,7 +734,7 @@
   .letter-del-btn:hover { color: #ff5e84; background-color: rgba(255, 94, 132, 0.08); }
   /* 列表里的标星按钮也换成纯粉色星芒 */
   .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; background:none; border:none; padding:2px; cursor:pointer;}
-  .note-act-btn.star-btn.active { color: #ff5e84; filter: drop-shadow(0 1px 3px rgba(255, 94, 132, 0.45)); }
+  .note-act-btn.star-btn.active { color: #ff5e84 !important; filter: drop-shadow(0 1px 3px rgba(255, 94, 132, 0.45)) !important; }
   .letter-text { white-space: pre-wrap; font-style: italic; }
 
   /* --- 仿真手账月经日历系统设计 --- */
@@ -754,7 +765,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (极细、精致的无边框半调发光 SVG 按钮) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (纯白底、高光粉、无边框、实体阴影自适应图标) -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -792,7 +803,7 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
-      <!-- 无边框白底透光圆形纸飞机发送按钮 -->
+      <!-- 无边框白底透光纸飞机发送按钮 -->
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -802,17 +813,17 @@
     </div>
   </div>
 
-  <!-- 3. 右侧状态面板 (Desk 手账区) -->
+  <!-- 3. 右侧状态面板 (Desk 手账区，已完全精简移除月经大面板) -->
   <div id="panel">
     <div class="panel-child panel-title">DESK</div>
     <div id="panel-body" class="panel-child" style="display:flex; flex-direction:column; height:100%;">
         
-      <!-- 冰箱贴层叠便签堆叠容器 (自然流体排版，手账倾斜堆叠) -->
+      <!-- 冰箱贴层叠便签堆叠容器 (自适应非重叠倾斜流) -->
       <div class="sticky-note-stack" id="sticky-container">
         <!-- JS 动态灌入层叠卡片 -->
       </div>
 
-      <!-- 秘密双抽屉 (固定在底部，重排版，4颗小圆点拟真盒子视觉设计) -->
+      <!-- 秘密双层收纳抽屉 (固定在最底部) -->
       <div class="drawer-wrapper">
         <div class="drawer-btn" id="drawer-notes-btn" onclick="openDrawerNotes()">
           <div class="drawer-btn-title">💌 NOTES DRAWER</div>
@@ -828,7 +839,7 @@
   </div>
 </div>
 
-<!-- 移动端自适应底部毛玻璃 Tab 栏 (SVG 图标同步改为无边框发光材质) -->
+<!-- 移动端自适应底部毛玻璃 Tab 栏 -->
 <div id="bottom-tabs">
   <div class="tab-item active" onclick="switchTab('chat')">
     <span class="tab-icon">
@@ -850,7 +861,7 @@
   </div>
 </div>
 
-<!-- 全局悬浮菜单 -->
+<!-- 全局双击悬浮菜单 -->
 <div id="bubble-menu"></div>
 
 <!-- 秘密小抽屉 1：便签收纳盒 (30) -->
@@ -932,12 +943,12 @@ let currentMonth = new Date().getMonth();
 let periodRecords = [];
 let selectedDateStr = "";
 
-// 长按/右键/双击菜单相关的触发状态记录
+// 核心长按定时器记录
 let pressTimer;
 let currentActiveMsgId = null;
 let currentActiveRowEl = null;
 
-// 核心功能：原生兼容的双击事件绑定器 (用于全局双击手撕便签、双击气泡调起微信浮窗)
+// 全局高度解耦的双击事件绑定器 (支持手机和电脑，彻底替代右键与长按)
 function addDoubleTapListener(element, callback) {
   let lastTap = 0;
   element.addEventListener('click', function(e) {
@@ -971,11 +982,9 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   if (msgId) row.dataset.msgId = msgId;
   if (createdAt) row.dataset.createdAt = createdAt;
 
-  // 头像星光容器化
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
 
-  // 手写迷你名字挂件悬浮标签
   const tag = document.createElement('span');
   tag.className = 'avatar-tag';
   tag.textContent = role === 'user' ? 'Seraphina' : 'Charon';
@@ -986,19 +995,16 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
   avatarWrap.appendChild(avatar);
 
-  // 主星芒 (✦)
   const star = document.createElement('span');
   star.className = 'star-accent';
   star.textContent = '✦';
   avatarWrap.appendChild(star);
 
-  // 镜像碎星 1 (✦)
   const d1 = document.createElement('span');
   d1.className = 'dust-star d-1';
   d1.textContent = '✦';
   avatarWrap.appendChild(d1);
 
-  // 镜像碎星 2 (✦)
   const d2 = document.createElement('span');
   d2.className = 'dust-star d-2';
   d2.textContent = '✦';
@@ -1025,7 +1031,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 双击气泡：触发微信式浮窗选项（复制、撤回、重新生成、重新编辑）
+  // 双击气泡呼出菜单
   addDoubleTapListener(bubble, (e) => {
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content);
@@ -1034,7 +1040,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   return row;
 }
 
-// 全局上下文菜单管理
+// 全局上下文双击浮动菜单控制
 function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
   const rect = targetElement.getBoundingClientRect();
   contextMenu.style.display = 'flex';
@@ -1103,7 +1109,7 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
     contextMenu.appendChild(delBtn);
   }
 
-  const menuWidth = contextMenu.offsetWidth || 200;
+  const menuWidth = contextMenu.offsetWidth || 120;
   const menuHeight = contextMenu.offsetHeight || 34;
   contextMenu.style.left = (rect.left + rect.width / 2 - menuWidth / 2 + window.scrollX) + 'px';
   contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
@@ -1124,84 +1130,49 @@ async function deleteMessage(msgId, rowEl) {
   if (!confirm('确定要撤回这条消息吗？')) return;
   try {
     const res = await fetch(apiUrl('/api/chat-delete'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: msgId })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msgId })
     });
     const data = await res.json();
-    if (data.ok) {
-      rowEl.remove();
-      loadStatus(); 
-    } else {
-      alert('撤回失败：' + (data.error || '未知错误'));
-    }
-  } catch (e) {
-    alert('网络错误，无法撤回');
-  }
+    if (data.ok) { rowEl.remove(); loadStatus(); } 
+    else alert('撤回失败：' + (data.error || '未知错误'));
+  } catch (e) { alert('网络错误，无法撤回'); }
 }
 
 async function regenerateMessage(msgId, rowEl) {
   const bubble = rowEl.querySelector('.bubble');
   const originalText = bubble ? bubble.textContent : '';
   const createdAt = rowEl.dataset.createdAt || new Date().toISOString();
-  if (bubble) {
-    bubble.textContent = '…';
-    bubble.classList.add('pending');
-  }
+  if (bubble) { bubble.textContent = '…'; bubble.classList.add('pending'); }
   try {
     const res = await fetch(apiUrl('/api/chat-regenerate'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: msgId })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msgId })
     });
     const data = await res.json();
     if (data.ok) {
       rowEl.replaceWith(renderMsgRow('charon', data.reply, createdAt, false, msgId));
       loadStatus();
     } else {
-      if (bubble) {
-        bubble.textContent = originalText;
-        bubble.classList.remove('pending');
-      }
+      if (bubble) { bubble.textContent = originalText; bubble.classList.remove('pending'); }
       alert('重新生成失败：' + (data.error || '未知错误'));
     }
   } catch (e) {
-    if (bubble) {
-      bubble.textContent = originalText;
-      bubble.classList.remove('pending');
-    }
+    if (bubble) { bubble.textContent = originalText; bubble.classList.remove('pending'); }
     alert('网络错误，重新生成失败');
   }
 }
 
-function scrollToBottom() {
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
+function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
 async function loadHistory() {
   try {
     const res = await fetch(apiUrl('/api/chat-messages'));
     const data = await res.json();
     messagesEl.innerHTML = '';
-    if (!data.ok) {
-      messagesEl.innerHTML = '<div id="empty-hint">加载失败</div>';
-      return;
-    }
-    if (!data.messages || data.messages.length === 0) {
-      messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>';
-      return;
-    }
+    if (!data.ok) { messagesEl.innerHTML = '<div id="empty-hint">加载失败</div>'; return; }
+    if (!data.messages || data.messages.length === 0) { messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>'; return; }
     data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id)));
     scrollToBottom();
-  } catch (e) {
-    messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>';
-  }
-}
-
-function formatHours(h) {
-  if (h === null || h === undefined) return '还没互动过';
-  if (h < 1) return Math.round(h * 60) + ' 分钟前';
-  return h.toFixed(1) + ' 小时前';
+  } catch (e) { messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>'; }
 }
 
 function escapeHtml(str) {
@@ -1222,8 +1193,6 @@ async function deleteNote(id, sourceStr = "desk") {
       if (sourceStr === "desk") loadStatus();
       else if (sourceStr === "drawer") openDrawerNotes();
       else if (sourceStr === "archive") openArchiveBox();
-    } else {
-      alert('删除失败：' + (data.error || '未知错误'));
     }
   } catch (e) { alert('网络错误，丢弃失败'); }
 }
@@ -1269,7 +1238,7 @@ async function loadStatus() {
     document.getElementById('status-label').textContent = data.status_label || '在线';
     document.getElementById('status-dot').className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
-    // 渲染桌面仿真层叠便签 (自然错落排版，流式布局极小负间距)
+    // 渲染桌面仿真层叠便签 (自然微错落流排版)
     const container = document.getElementById('sticky-container');
     container.innerHTML = '';
     
@@ -1278,12 +1247,15 @@ async function loadStatus() {
 
       data.sticky_notes.forEach((note, index) => {
         const card = document.createElement('div');
-        card.className = "sticky-note-card stage-" + (note.stage || 'steady');
+        // 根据 note 不同的主键 id，自动确定采用 0-4 款手账便签设计之一，保证款式丰富个性化
+        const styleId = note.id % 5;
+        card.className = `sticky-note-card style-${styleId} stage-${note.stage || 'steady'}`;
         
-        // 自然错落微倾斜，取消绝对定位重叠，仅留负 margin-top
+        // 仿真手账微倾斜度数与极其自然、不重叠、易读的微幅层叠偏移
         const rotateDeg = index % 2 === 0 ? -2 : 2.5;
+        const offsetLeft = index % 2 === 0 ? -4 : 4;
         card.style.marginTop = index === 0 ? '0' : '-12px';
-        card.style.transform = "rotate(" + rotateDeg + "deg)";
+        card.style.transform = `rotate(${rotateDeg}deg) translateX(${offsetLeft}px)`;
         card.style.zIndex = 15 - index;
         
         // 底层淡化
@@ -1299,14 +1271,14 @@ async function loadStatus() {
         const starIcon = note.is_starred ? '★' : '☆';
         const starClass = note.is_starred ? 'active' : '';
 
-        // 彻底清空杂乱图标，只保留文本、和纸胶带与右下角纯粉色高亮星芒
+        // 彻底清空杂乱图标，增加撕纸胶带、只保留手写文字和纯粉色星标
         card.innerHTML = `
           <div class="sticky-tape"></div>
           <div class="sticky-note-text">${escapeHtml(note.message)}</div>
-          <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')">${starIcon}</button>
+          <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">${starIcon}</button>
         `;
 
-        // 全新双击交互：触发桌面便签整理菜单（移入抽屉/撕下丢弃）
+        // 全新双击交互：触发桌面便签整理菜单 (📥移入抽屉 / 🗑️撕掉丢弃)
         addDoubleTapListener(card, (e) => {
           showContextMenu(card, note.id, "desk-note");
         });
@@ -1315,20 +1287,23 @@ async function loadStatus() {
       });
     } else {
       container.innerHTML = `
-        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
+        <div class="sticky-note-card style-0" style="transform: rotate(-1deg); position: relative;">
           <div class="sticky-tape"></div>
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有留言。</div>
         </div>
       `;
     }
 
-    // 抽屉容量统计更新
+    // 抽屉容量统计与满仓霓虹闪烁警告
+    const notesBtn = document.getElementById('drawer-notes-btn');
+    const lettersBtn = document.getElementById('drawer-letters-btn');
+    
     fetch(apiUrl('/api/sticky-notes?status=drawer')).then(res=>res.json()).then(d => {
       if(d.ok) {
         document.getElementById('notes-drawer-count').textContent = `${d.notes.length}/30`;
         document.getElementById('box-notes-count').textContent = `${d.notes.length}/30`;
-        if (d.layer_full.drawer) document.getElementById('drawer-notes-btn').classList.add('layer-full');
-        else document.getElementById('drawer-notes-btn').classList.remove('layer-full');
+        if (d.layer_full.drawer) notesBtn.classList.add('layer-full');
+        else notesBtn.classList.remove('layer-full');
       }
     });
 
@@ -1336,8 +1311,8 @@ async function loadStatus() {
       if(d.ok) {
         document.getElementById('letters-drawer-count').textContent = `${d.letters.length}/20`;
         document.getElementById('box-letters-count').textContent = `${d.letters.length}/20`;
-        if (d.layer_full.drawer) document.getElementById('drawer-letters-btn').classList.add('layer-full');
-        else document.getElementById('drawer-letters-btn').classList.remove('layer-full');
+        if (d.layer_full.drawer) lettersBtn.classList.add('layer-full');
+        else lettersBtn.classList.remove('layer-full');
       }
     });
 
@@ -1353,10 +1328,10 @@ async function loadStatus() {
 
     document.getElementById('new-letter-indicator').style.display = data.has_new_letter ? 'inline' : 'none';
 
-    // 格式化自适应月经期状态文字并同步
+    // 格式化自适应月经期状态文字并一并同步双端（手机大屏无缝兼顾）
     const formattedPeriodText = data.period_context 
       ? escapeHtml(data.period_context).replace(/\\n/g, '<br>') 
-      : "目前没有您的生理期记录。<br>如果有需要，请随时记录。";
+      : "目前没有您的月经生理期记录。<br>如果有需要，请在日历中随时记录。";
       
     document.getElementById('period-status-text').innerHTML = formattedPeriodText;
     document.getElementById('desktop-period-status-text').innerHTML = formattedPeriodText;
@@ -1397,23 +1372,26 @@ async function sendMessage() {
   scrollToBottom(); sendBtn.disabled = false; loadStatus();
 }
 
-// ---- 月经一键点击生理记录控制台 ----
-async function recordPeriod(valueStr) {
-  if (!confirm("确定要记录月经已“" + valueStr + "”吗？")) return;
-  try {
-    const res = await fetch(apiUrl('/event'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'period', value: valueStr })
-    });
-    if (res.ok) {
-      alert("已记录：月经" + valueStr);
-      loadStatus(); 
-    }
-  } catch (e) { alert("网络错误，生理记录失败"); }
+// ---- 手机端 Tab 切换逻辑 ----
+function switchTab(tabName) {
+  const appEl = document.getElementById('app');
+  appEl.classList.remove('tab-chat', 'tab-desk');
+  appEl.classList.add('tab-' + tabName);
+
+  document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
+  if (window.event && window.event.currentTarget) {
+    window.event.currentTarget.classList.add('active');
+  } else {
+    const indexMap = {'chat': 0, 'desk': 1};
+    document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
+  }
+  if (tabName === 'chat') scrollToBottom();
 }
+if (window.innerWidth <= 768) { document.getElementById('app').classList.add('tab-chat'); }
+
 
 // ==========================================
-// ---- 抽屉与档案箱模态框逻辑略... ----
+// ---- 抽屉 1：便签收纳盒 (30) 前端功能 ----
 // ==========================================
 async function openDrawerNotes() {
   const modal = document.getElementById('drawer-notes-modal');
@@ -1454,12 +1432,16 @@ async function openDrawerNotes() {
 function closeDrawerNotes() { document.getElementById('drawer-notes-modal').style.display = 'none'; }
 
 
+// ==========================================
+// ---- 抽屉 2：情书收纳盒 (20) 前端功能 ----
+// ==========================================
 async function openLoveLetters() {
   const modal = document.getElementById('letter-modal');
   const area = document.getElementById('letter-content-area');
   modal.style.display = 'flex';
   area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在拉开情书匣...</div>';
   
+  // 消除提示星芒红点标志
   fetch(apiUrl('/api/love-letters/mark-read'), {method: 'POST'}).then(() => loadStatus());
 
   try {
@@ -1495,6 +1477,7 @@ async function openLoveLetters() {
 }
 function closeLoveLetters() { document.getElementById('letter-modal').style.display = 'none'; }
 
+// 归档单封情书函数
 async function archiveLetter(id) {
   try {
     const res = await fetch(apiUrl('/api/love-letters/archive'), {
@@ -1507,6 +1490,7 @@ async function archiveLetter(id) {
   } catch(e) { alert('网络错误'); }
 }
 
+// 物理丢弃单封情书函数
 async function deleteLetter(id) {
   if (!confirm('确定要彻底丢弃这封情书吗？它将被永久删除。')) return;
   try {
@@ -1515,7 +1499,7 @@ async function deleteLetter(id) {
     });
     const data = await res.json();
     if (data.ok) {
-      const card = document.getElementById("letter-card-" + id);
+      const card = document.getElementById(`letter-card-${id}`);
       if (card) {
         card.style.transition = 'all 0.3s'; card.style.transform = 'translateX(50px)'; card.style.opacity = '0';
         setTimeout(() => openLoveLetters(), 300);
@@ -1538,6 +1522,10 @@ async function starLetter(id, isStarredNow, sourceStr) {
   } catch(e) { alert('网络错误'); }
 }
 
+
+// ==========================================
+// ---- 3. 恋爱档案箱 (容量 200) 前端功能 ----
+// ==========================================
 async function openArchiveBox() {
   const modal = document.getElementById('archive-modal');
   const area = document.getElementById('archive-content-area');
@@ -1555,7 +1543,7 @@ async function openArchiveBox() {
     if (noteData.ok && letterData.ok) {
       let html = '';
       
-      html += '<div style="font-family: \'Georgia\', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Pinned Notes (' + noteData.notes.length + '/100)</div>';
+      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Pinned Notes (${noteData.notes.length}/100)</div>`;
       if (noteData.notes.length > 0) {
         noteData.notes.forEach(note => {
           const starIcon = note.is_starred ? '★' : '☆';
@@ -1576,7 +1564,7 @@ async function openArchiveBox() {
         });
       } else html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档便签...</div>';
 
-      html += '<div style="font-family: \'Georgia\', serif; font-size:14px; color:#a66275; margin-top:30px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Letters Box (' + letterData.letters.length + '/100)</div>';
+      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-top:30px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Letters Box (${letterData.letters.length}/100)</div>`;
       if (letterData.letters.length > 0) {
         letterData.letters.forEach(letter => {
           const typeIcon = letter.letter_type === 'sweet' ? '💌' : '🌧️';
@@ -1607,7 +1595,7 @@ function closeArchiveBox() { document.getElementById('archive-modal').style.disp
 
 
 // ==========================================
-// ---- 日历逻辑略 (保持上一版本完美不变) ----
+// ---- 日历逻辑保持不变 ----
 // ==========================================
 async function openPeriodCalendar() {
   document.getElementById('calendar-modal').style.display = 'flex';
@@ -1619,7 +1607,7 @@ function closePeriodCalendar() {
 
 async function fetchPeriodData(year) {
   try {
-    const res = await fetch(apiUrl("/api/period/calendar?year=" + year));
+    const res = await fetch(apiUrl(`/api/period/calendar?year=${year}`));
     const data = await res.json();
     if (data.ok) {
       periodRecords = data.records;
@@ -1633,7 +1621,7 @@ function renderCalendarGrid() {
   const title = document.getElementById('calendar-month-year');
   grid.innerHTML = '';
 
-  title.textContent = currentYear + "年" + (currentMonth + 1) + "月";
+  title.textContent = `${currentYear}年${currentMonth + 1}月`;
 
   const firstDay = new Date(currentYear, currentMonth, 1);
   let dayOfWeek = firstDay.getDay(); 
@@ -1648,14 +1636,14 @@ function renderCalendarGrid() {
   }
 
   const today = new Date();
-  const todayStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0') + "-" + String(today.getDate()).padStart(2, '0');
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   for (let day = 1; day <= totalDays; day++) {
     const dayBtn = document.createElement('span');
     dayBtn.className = 'calendar-day';
     dayBtn.textContent = day;
 
-    const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, '0') + "-" + String(day).padStart(2, '0');
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
     if (dateStr === todayStr) dayBtn.classList.add('today-marker');
 
@@ -1693,8 +1681,8 @@ function nextMonth() {
 function showDayActionPopup(dayBtn) {
   const rect = dayBtn.getBoundingClientRect();
   dayActionPopup.style.display = 'flex';
-  dayActionPopup.style.left = (rect.left + rect.width/2 - 65 + window.scrollX) + "px";
-  dayActionPopup.style.top = (rect.top - 110 + window.scrollY) + "px";
+  dayActionPopup.style.left = (rect.left + rect.width/2 - 65 + window.scrollX) + 'px';
+  dayActionPopup.style.top = (rect.top - 110 + window.scrollY) + 'px';
   document.getElementById('popup-start-btn').onclick = () => savePeriodDate('start');
   document.getElementById('popup-end-btn').onclick = () => savePeriodDate('end');
 }
@@ -1708,7 +1696,7 @@ async function savePeriodDate(actionType) {
     });
     const data = await res.json();
     if (data.ok) {
-      alert("已成功标记：" + (actionType === 'start' ? '开始' : '结束'));
+      alert(`已成功标记生理期：${actionType === 'start' ? '开始' : '结束'}`);
       fetchPeriodData(currentYear); loadStatus(); hideDayActionPopup();
     }
   } catch (e) { alert('网络错误'); }
@@ -1746,23 +1734,6 @@ modelSelect.addEventListener('change', async () => {
     if (!data.ok) { alert('切换失败：' + (data.error || '未知错误')); loadModelSelector(); }
   } catch (e) { alert('网络错误'); loadModelSelector(); }
 });
-
-// 手机端自适应 Tab 切换逻辑
-function switchTab(tabName) {
-  const appEl = document.getElementById('app');
-  appEl.classList.remove('tab-chat', 'tab-desk');
-  appEl.classList.add('tab-' + tabName);
-
-  document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
-  if (window.event && window.event.currentTarget) {
-    window.event.currentTarget.classList.add('active');
-  } else {
-    const indexMap = {'chat': 0, 'desk': 1};
-    document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
-  }
-  if (tabName === 'chat') scrollToBottom();
-}
-if (window.innerWidth <= 768) { document.getElementById('app').classList.add('tab-chat'); }
 
 loadHistory();
 loadStatus();
