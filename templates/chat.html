@@ -255,23 +255,24 @@
   .sticky-note-stack {
     position: relative; width: 100%; display: flex; flex-direction: column; gap: 4px;
     margin-top: 15px; margin-bottom: 18px; z-index: 1;
-    overflow: hidden; max-height: 38vh; /* 缩小堆叠区域，超出部分直接裁切，不产生滚动条 */
+    overflow: hidden; max-height: 42vh; /* 优化高度容器，防止非滚动流下产生内容裁切 */
   }
   .sticky-note-card {
     position: relative;
-    border-radius: 4px 18px 18px 18px; 
+    border-radius: 6px 18px 18px 18px; 
     padding: 13px 14px 30px 14px; 
-    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.15);
+    box-shadow: 2px 4px 12px rgba(184, 118, 138, 0.12);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
     flex-shrink: 0; margin-top: -16px; /* 产生微弱的真实纸张重叠层级感 */
+    transform-origin: center center;
   }
-  .sticky-note-card:first-child { margin-top: 0; }
+  .sticky-note-card:first-child { margin-top: 0 !important; }
 
   .sticky-note-card:hover {
-    transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
+    transform: rotate(0deg) translateY(-4px) scale(1.03) !important;
     z-index: 100 !important;
-    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
+    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.18);
   }
   .sticky-note-text {
     font-size: 12.5px; line-height: 1.6; font-family: "Songti SC", serif; word-wrap: break-word;
@@ -898,34 +899,37 @@ async function starNote(id, isStarredNow, sourceStr) {
 }
 
 // 仿真手账 5种纯色底色与5种纹理的随机碰撞算法
-function getPersonalizedStyle(id, index) {
+function getPersonalizedStyle(id) {
   const colors = [
-    { bg: '#ffe3e7', grad: '#ffd1d7', text: '#7a5a65', name: 'sakura' },  // 樱花粉
-    { bg: '#e8f5e9', grad: '#d4eed8', text: '#4e5a50', name: 'mint' },    // 薄荷绿
-    { bg: '#fffde7', grad: '#fff9c4', text: '#6b6450', name: 'cream' },   // 奶油黄
-    { bg: '#e3f2fd', grad: '#bbdefb', text: '#455160', name: 'sky' },     // 天蓝色
-    { bg: '#efebe9', grad: '#d7ccc8', text: '#5c443f', name: 'coffee' }   // 奶咖色
+    { bg: '#ffd9e1', grad: '#ffc3d0', text: '#6b434e', line: 'rgba(107, 67, 78, 0.08)' },  // Sakura Pink 樱花粉
+    { bg: '#dcf5e1', grad: '#c2ebd2', text: '#3c5a45', line: 'rgba(60, 90, 69, 0.08)' },    // Mint Green 薄荷绿
+    { bg: '#fffbc7', grad: '#fff59e', text: '#5a5438', line: 'rgba(90, 84, 56, 0.08)' },    // Cream Yellow 奶油黄
+    { bg: '#e0f2fe', grad: '#bae6fd', text: '#2e4e63', line: 'rgba(46, 78, 99, 0.08)' },    // Sky Blue 天蓝色
+    { bg: '#f5ebe0', grad: '#e3d5ca', text: '#5c4d42', line: 'rgba(92, 77, 66, 0.08)' }     // Milk Coffee 奶咖色
   ];
   
-  const color = colors[id % 5];
+  // 基于 ID 的哈希特征组合，使得同一张便签刷新时风格始终保持一致
+  const colorIndex = id % colors.length;
+  const textureIndex = (id * 3 + 1) % 5; 
+  const color = colors[colorIndex];
   let bgStyle = '';
   
-  const textureType = index % 5;
-  if (textureType === 0) {
-    // 1. Polka-dots
-    bgStyle = `background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), ${color.bg}; background-size: 8px 8px, 8px 8px; background-position: 0 0, 4px 4px;`;
-  } else if (textureType === 1) {
-    // 2. Horizontal Lines
-    bgStyle = `background: repeating-linear-gradient(transparent, transparent 15px, rgba(90, 69, 80, 0.05) 15px, rgba(90, 69, 80, 0.05) 16px), ${color.bg}; background-position: 0 0;`;
-  } else if (textureType === 2) {
-    // 3. Grid/Plaid
-    bgStyle = `background: repeating-linear-gradient(transparent, transparent 15px, rgba(90, 69, 80, 0.04) 15px, rgba(90, 69, 80, 0.04) 16px), repeating-linear-gradient(90deg, transparent, transparent 15px, rgba(90, 69, 80, 0.04) 15px, rgba(90, 69, 80, 0.04) 16px), ${color.bg};`;
-  } else if (textureType === 3) {
-    // 4. Solid Color
-    bgStyle = `background: ${color.bg};`;
-  } else {
-    // 5. Gradient
-    bgStyle = `background: linear-gradient(135deg, ${color.bg} 0%, ${color.grad} 100%);`;
+  switch (textureIndex) {
+    case 0: // 1. Polka-dots 迷你浅白波点
+      bgStyle = `background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 18%, transparent 18.5%), radial-gradient(circle, rgba(255, 255, 255, 0.5) 18%, transparent 18.5%), ${color.bg}; background-size: 10px 10px; background-position: 0 0, 5px 5px;`;
+      break;
+    case 1: // 2. Horizontal Lines 柔和横线条
+      bgStyle = `background: repeating-linear-gradient(transparent, transparent 18px, ${color.line} 18px, ${color.line} 19px), ${color.bg};`;
+      break;
+    case 2: // 3. Grid/Plaid 经典手账网格线
+      bgStyle = `background: repeating-linear-gradient(transparent, transparent 16px, ${color.line} 16px, ${color.line} 17px), repeating-linear-gradient(90deg, transparent, transparent 16px, ${color.line} 16px, ${color.line} 17px), ${color.bg};`;
+      break;
+    case 3: // 4. Solid Color 纯色磨砂纸感
+      bgStyle = `background: ${color.bg};`;
+      break;
+    case 4: // 5. Gradient 梦幻双色微渐变
+      bgStyle = `background: linear-gradient(135deg, ${color.bg} 0%, ${color.grad} 100%);`;
+      break;
   }
   
   return { bgStyle: bgStyle, textColor: color.text };
@@ -952,14 +956,15 @@ async function loadStatus() {
         const card = document.createElement('div');
         card.className = `sticky-note-card`;
         
-        // 自然手写纸微斜效果，不层层掩盖，自然排列
-        const rotateDeg = index % 2 === 0 ? -2 : 2.5;
-        card.style.marginTop = index === 0 ? '0' : '-16px';
-        card.style.transform = `rotate(${rotateDeg}deg)`;
-        card.style.zIndex = 15 - index;
+        // 结合正弦计算获取在 -2.5 到 +2.5 度的轻微拟真纸张扭转偏折
+        const tilt = (Math.sin(note.id) * 2.5).toFixed(1);
         
-        // 动态注入 5x5 的个生化手账底纹色
-        const styleObj = getPersonalizedStyle(note.id, index);
+        card.style.marginTop = index === 0 ? '0' : '-16px';
+        card.style.transform = `rotate(${tilt}deg)`;
+        card.style.zIndex = 15 - index; // 第一张保持在最上方，后续便签向后折叠滑落
+        
+        // 动态注入 5x5 的个性化手账底纹色
+        const styleObj = getPersonalizedStyle(note.id);
         card.style.cssText += styleObj.bgStyle;
         card.style.color = styleObj.textColor;
 
@@ -986,7 +991,7 @@ async function loadStatus() {
       });
     } else {
       container.innerHTML = `
-        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
+        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative; background: #fffcfd;">
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有新的留言。</div>
         </div>
       `;
@@ -1026,13 +1031,15 @@ async function loadStatus() {
 
     document.getElementById('new-letter-indicator').style.display = data.has_new_letter ? 'inline' : 'none';
 
-    // 双端静默同步自适应月经文字
+    // 双端静默同步自适应月经文字 (安全校验以防元素缺失引发执行挂起)
     const formattedPeriodText = data.period_context 
       ? escapeHtml(data.period_context).replace(/\\n/g, '<br>') 
       : "目前没有您的月经生理期记录。<br>如果有需要，请在日历中随时记录。";
       
-    document.getElementById('period-status-text').innerHTML = formattedPeriodText;
-    document.getElementById('desktop-period-status-text').innerHTML = formattedPeriodText;
+    const p1 = document.getElementById('period-status-text');
+    const p2 = document.getElementById('desktop-period-status-text');
+    if (p1) p1.innerHTML = formattedPeriodText;
+    if (p2) p2.innerHTML = formattedPeriodText;
 
   } catch (e) { console.error("状态加载失败", e); }
 }
