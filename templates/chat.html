@@ -15,7 +15,7 @@
     background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550; /* 恢复至初始雅致深紫灰 */
+    color: #5a4550; 
   }
   #app {
     display: flex;
@@ -57,52 +57,24 @@
     z-index: 0;
     opacity: 0.85;
   }
-  
-  /* ---- 导航图标 & 发送按钮的“白底+粉波点+透明投影”样式统一 ---- */
-  .nav-icon, #send-btn {
+  .nav-icon {
     position: relative;
-    z-index: 1;
+    z-index: 1; /* 确保不被波点底层遮挡，保持可点 */
     width: 42px; height: 42px;
-    border-radius: 50%;
+    border-radius: 50%; /* 圆形按钮 */
     display: flex; align-items: center; justify-content: center;
-    border: none !important;
-    
-    /* 核心材质：白底半透 (0.95 浓度隔绝黑色) + 樱花粉波点(#ff8fa3)渗透 + 磨砂玻璃效果 */
-    background: 
-      radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
-      radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
-      rgba(255, 255, 255, 0.7) !important;
-    background-size: 6px 6px, 6px 6px, 100% 100% !important;
-    background-position: 0 0, 3px 3px, 0 0 !important;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    
-    color: #ffb3c1; /* 图案粉色 */
+    background: #ffffff; /* 导航按钮底色改成纯白色 */
+    font-size: 23px; /* 图案放大 */
     text-decoration: none;
+    border: 2px solid #000000; /* 高对比度纯黑圆圈线 */
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-    
-    /* 核心阴影：去掉霓虹光，恢复干净的实体物理投影 */
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
-    cursor: pointer;
-    padding: 0;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* 实体投影 */
   }
-  .nav-icon svg {
-    width: 20px; 
-    height: 20px;
-    stroke-width: 1.5px;
+  .nav-icon:hover {
+    background: rgba(255, 255, 255, 0.8);
+    transform: translateY(-2px);
   }
-  .nav-icon:hover, #send-btn:hover {
-    transform: translateY(-2px) scale(1.05);
-    background-color: rgba(255, 255, 255, 0.9) !important;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important; /* 悬浮时阴影加深 */
-  }
-  .nav-icon:active, #send-btn:active { 
-    transform: translateY(0) scale(0.95); 
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
-  }
-  #send-btn svg { width: 18px; height: 18px; stroke-width: 1.5px; transform: rotate(-10deg) translate(-1px, 1px); transition: transform 0.2s ease; }
-  #send-btn:hover svg { transform: rotate(5deg) scale(1.1); }
-  #send-btn:disabled { opacity: 0.5; filter: grayscale(50%); cursor: default; box-shadow: none !important; }
+  .nav-icon:active { transform: translateY(0) scale(0.95); }
 
   /* ---- 中间玻璃舱对话区 ---- */
   #main {
@@ -110,6 +82,7 @@
     background: rgba(255, 255, 255, 0.35); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
     border-radius: 28px; box-shadow: 0 12px 40px rgba(184, 118, 138, 0.10); overflow: hidden; position: relative;
   }
+  /* 聊天室通体淡淡的白色微小波点背景 */
   #main::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     background-image: radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%), radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%);
@@ -122,6 +95,7 @@
     display: flex; align-items: center; gap: 14px; position: relative;
     background: linear-gradient(to right, #000000 0%, #000000 52%, rgba(26, 18, 30, 0.9) 62%, #cf7d90 85%, #ffb3c1 100%);
   }
+  /* 增强白色波点颜色对比度并共同往右扩展 (65% 宽度) */
   #header::before {
     content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 65%;
     background-image: radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%), radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%);
@@ -157,6 +131,8 @@
     text-shadow: 0 0 10px rgba(229, 153, 169, 0.8), 0 0 20px rgba(229, 153, 169, 0.4);
   }
   #header .sub { font-size: 11px; color: rgba(255, 255, 255, 0.7); letter-spacing: 1px; margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+  
+  /* 带有半透明白色背景框的在线状态 */
   .status-badge { background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); padding: 1px 7px; border-radius: 5px; font-size: 10px; color: #ffffff; display: inline-flex; align-items: center; gap: 4px; }
   #model-select { margin-left: 6px; font-size: 10px; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 5px; padding: 1px 4px; max-width: 130px; outline: none; }
   #model-select option { color: #000; }
@@ -201,7 +177,7 @@
   }
   .bubble.pending { opacity: 0.5; }
 
-  /* ---- 悬浮操作菜单 ---- */
+  /* ---- 全局悬浮操作菜单 ---- */
   #bubble-menu {
     display: none; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 8px; padding: 6px 4px;
@@ -232,28 +208,54 @@
   }
   #input-bar textarea:focus { background: rgba(255, 255, 255, 0.9); border-color: rgba(229, 153, 169, 0.8); }
   #input-bar textarea::placeholder { color: #b08d98; }
-  
-  /* 带有发光浅蜜桃粉底色的圆形发送按钮，无边框 */
-  #input-bar button {
-    position: relative; z-index: 1; width: 44px; height: 44px;
-    border-radius: 50%; border: none !important; /* 彻底去除边框 */
+
+  /* ---- 导航图标 & 发送按钮的“白水晶”白底高透质感统一 ---- */
+  .nav-icon, #send-btn {
+    position: relative;
+    z-index: 1;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: none !important;
+    
+    /* 核心材质：极高白透度 (0.95 浓度隔绝黑色) + 樱花粉波点(#ff8fa3)渗透 + 磨砂玻璃效果 */
     background: 
-      radial-gradient(circle, rgba(255, 255, 255, 0.16) 15%, transparent 15.5%),
-      radial-gradient(circle, rgba(255, 255, 255, 0.16) 15%, transparent 15.5%),
-      linear-gradient(135deg, #f3b0c3, #e593a4) !important;
+      radial-gradient(circle, rgba(255, 143, 163, 0.22) 15%, transparent 15.5%),
+      radial-gradient(circle, rgba(255, 143, 163, 0.22) 15%, transparent 15.5%),
+      rgba(255, 255, 255, 0.95) !important;
     background-size: 6px 6px, 6px 6px, 100% 100% !important;
     background-position: 0 0, 3px 3px, 0 0 !important;
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    color: #ffffff; display: flex; align-items: center; justify-content: center; cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important; transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1); padding: 0;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    
+    color: #ff8fa3 !important; /* 图案颜色：高保真樱花粉色 */
+    text-decoration: none;
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    
+    /* 核心阴影：去除霓虹，改回清透温润的实体物理投影 */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+    cursor: pointer;
+    padding: 0;
   }
-  #input-bar button svg { transform: rotate(-10deg) translate(-1px, 1px); transition: transform 0.2s ease; }
-  #input-bar button:hover { background: rgba(255, 255, 255, 0.9) !important; transform: translateY(-2px) scale(1.05); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important; }
-  #input-bar button:hover svg { transform: rotate(5deg) scale(1.1); }
-  #input-bar button:active { transform: translateY(0) scale(0.95); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important; }
-  #input-bar button:disabled { opacity: 0.4; box-shadow: none; cursor: default; background: #ffeef1; color: #b08d98; }
+  .nav-icon svg {
+    width: 20px; 
+    height: 20px;
+    stroke-width: 1.5px;
+  }
+  .nav-icon:hover, #send-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important; /* 悬浮时阴影加深 */
+  }
+  .nav-icon:active, #send-btn:active { 
+    transform: translateY(0) scale(0.95); 
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+  }
+  #send-btn svg { width: 18px; height: 18px; stroke-width: 1.5px; transform: rotate(-10deg) translate(-1px, 1px); transition: transform 0.2s ease; }
+  #send-btn:hover svg { transform: rotate(5deg) scale(1.1); }
+  #send-btn:disabled { opacity: 0.5; filter: grayscale(50%); cursor: default; box-shadow: none !important; }
 
-  /* ---- 右侧状态面板（DESK 手账区，无边框，全面屏融合） ---- */
+  /* ---- 右侧状态面板（DESK 手账区） ---- */
   #panel {
     width: 260px; flex-shrink: 0; display: none; flex-direction: column;
     padding: 22px 18px; background: rgba(255, 235, 240, 0.55); border-radius: 24px; position: relative; overflow: hidden;
@@ -271,47 +273,43 @@
     font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (易读自然流式叠排) --- */
+  /* --- 仿真实物便利贴堆叠留言板 (易读自然流式叠排 - 移除溢出和滚动) --- */
   .sticky-note-stack {
-    position: relative; width: 100%; display: flex; flex-direction: column; gap: 0; /* 依靠负 margin 实现自然重叠 */
-    margin-top: 10px; margin-bottom: 15px; z-index: 1;
-    padding: 4px 10px 15px 10px; /* 留出 10px 空间，防止旋转的尖角被父级裁切 */
-    overflow: visible; /* 彻底去除滚动条并防止裁切 */
+    position: relative; width: 100%; display: flex; flex-direction: column; gap: 0;
+    margin-top: 15px; margin-bottom: 20px; z-index: 1;
+    overflow: visible; /* 彻底去除溢出滚动和滚动条 */
   }
   .sticky-note-card {
-    position: relative;
-    border-radius: 4px 14px 14px 14px; 
-    padding: 10px 12px 28px 12px; /* 调小内边距，使便签更精致紧凑 */
-    box-shadow: 0 4px 12px rgba(184, 118, 138, 0.12);
+    position: relative; /* 恢复相对流式布局，方便完整阅读 */
+    border-radius: 4px 12px 12px 12px; /* 极细致的仿真纸圆角 */
+    padding: 10px 12px 26px 12px; /* 高精细的紧凑内边距 */
+    margin: 0 8px; /* 锁死在面板中央，绝不贴边 */
+    box-shadow: 0 2px 8px rgba(184, 118, 138, 0.12);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
-    flex-shrink: 0; margin-top: -16px; /* 产生微小的真实纸张交叠感 */
+    flex-shrink: 0; 
+    margin-top: -32px; /* 增加上层便签覆盖，形成极其紧凑层叠感 */
   }
   .sticky-note-card:first-child { margin-top: 0; }
-  
-  .sticky-note-card.stage-sweet { background: linear-gradient(135deg, #fffcfd, #fff0f3); }
-  .sticky-note-card.stage-tsundere { background: linear-gradient(135deg, #fffcfd, #f5eef1); }
-  .sticky-note-card.stage-vulnerable { background: linear-gradient(135deg, #fffcfd, #ede3e7); }
-  .sticky-note-card.stage-period { background: linear-gradient(135deg, #fffcfd, #fde8eb); }
 
   .sticky-note-card:hover {
     transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
     z-index: 100 !important;
-    box-shadow: 0 8px 24px rgba(184, 118, 138, 0.22);
+    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
   }
   .sticky-note-text {
-    font-size: 11.5px; line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; /* 限制3行 */
+    font-size: 11.5px; /* 调小字体呈现高雅感 */
+    line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
   }
-  /* 纯粉色荧光星标，去掉亮金黄色，呼应新主题 */
+  /* 纯正精致的荧光樱花粉标星按钮 */
   .note-star-btn {
-    position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
+    position: absolute; bottom: 4px; right: 8px; background: none; border: none; font-size: 16px; cursor: pointer;
     opacity: 0.5; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
   }
   .note-star-btn:hover { transform: scale(1.15); }
   .note-star-btn.active {
-    opacity: 1; color: #ff5e84 !important; /* 纯正樱花粉 */
-    filter: drop-shadow(0 2px 5px rgba(255, 94, 132, 0.45));
+    opacity: 1; color: #ff8fa3 !important; /* 纯樱花粉色 */
+    filter: drop-shadow(0 2px 5px rgba(255, 143, 163, 0.45));
   }
 
   /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版重构) --- */
@@ -441,7 +439,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (白透白底，樱花粉 SVG 指标，干净物理投影) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (恢复为白底半调透光，极细粉色 SVG 指标，干净物理投影) -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -479,7 +477,7 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
-      <!-- 白水晶发送按钮，与导航一致 -->
+      <!-- 无边框白底透光纸飞机发送按钮 -->
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -619,12 +617,7 @@ let currentMonth = new Date().getMonth();
 let periodRecords = [];
 let selectedDateStr = "";
 
-// 长按/右键/双击 触发状态记录
-let pressTimer;
-let currentActiveMsgId = null;
-let currentActiveRowEl = null;
-
-// 核心功能：双击事件绑定器 (支持桌面双击、移动端双击)
+// 核心功能：原生兼容的双击事件绑定器 (用于全局无按键触发悬浮菜单)
 function addDoubleTapListener(element, callback) {
   let lastTap = 0;
   element.addEventListener('click', function(e) {
@@ -707,7 +700,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 全新双击触发菜单逻辑
+  // 全局双击触发菜单逻辑
   addDoubleTapListener(bubble, (e) => {
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content);
@@ -716,7 +709,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   return row;
 }
 
-// 全局上下文菜单管理 (双击唤出)
+// 全局上下文菜单管理
 function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
   const rect = targetElement.getBoundingClientRect();
   contextMenu.style.display = 'flex';
@@ -806,7 +799,9 @@ async function deleteMessage(msgId, rowEl) {
   if (!confirm('确定要撤回这条消息吗？')) return;
   try {
     const res = await fetch(apiUrl('/api/chat-delete'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msgId })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: msgId })
     });
     const data = await res.json();
     if (data.ok) { rowEl.remove(); loadStatus(); } 
@@ -851,6 +846,12 @@ async function loadHistory() {
   } catch (e) { messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>'; }
 }
 
+function formatHours(h) {
+  if (h === null || h === undefined) return '还没互动过';
+  if (h < 1) return Math.round(h * 60) + ' 分钟前';
+  return h.toFixed(1) + ' 小时前';
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
@@ -869,6 +870,8 @@ async function deleteNote(id, sourceStr = "desk") {
       if (sourceStr === "desk") loadStatus();
       else if (sourceStr === "drawer") openDrawerNotes();
       else if (sourceStr === "archive") openArchiveBox();
+    } else {
+      alert('删除失败：' + (data.error || '未知错误'));
     }
   } catch (e) { alert('网络错误，丢弃失败'); }
 }
@@ -904,40 +907,6 @@ async function starNote(id, isStarredNow, sourceStr) {
   } catch(e) { alert('网络错误'); }
 }
 
-// 5种纯色底色与5种纹理的随机碰撞算法
-function getPersonalizedStyle(id, index) {
-  const colors = [
-    { bg: '#ffe3e7', grad: '#ffd1d7', text: '#7a5a65', name: 'sakura' },  // 樱花粉
-    { bg: '#e8f5e9', grad: '#d4eed8', text: '#4e5a50', name: 'mint' },    // 薄荷绿
-    { bg: '#fffde7', grad: '#fff9c4', text: '#6b6450', name: 'cream' },   // 奶油黄
-    { bg: '#e3f2fd', grad: '#bbdefb', text: '#455160', name: 'sky' },     // 天蓝色
-    { bg: '#efebe9', grad: '#d7ccc8', text: '#5c443f', name: 'coffee' }   // 奶咖色
-  ];
-  
-  const color = colors[id % 5];
-  let bgStyle = '';
-  
-  const textureType = index % 5;
-  if (textureType === 0) {
-    // 1. Polka-dots
-    bgStyle = `background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), ${color.bg}; background-size: 8px 8px, 8px 8px; background-position: 0 0, 4px 4px;`;
-  } else if (textureType === 1) {
-    // 2. Horizontal Lines
-    bgStyle = `background: repeating-linear-gradient(transparent, transparent 12px, rgba(90, 69, 80, 0.04) 12px, rgba(90, 69, 80, 0.04) 13px), ${color.bg}; background-position: 0 0;`;
-  } else if (textureType === 2) {
-    // 3. Grid/Plaid
-    bgStyle = `background: repeating-linear-gradient(transparent, transparent 12px, rgba(90, 69, 80, 0.04) 12px, rgba(90, 69, 80, 0.04) 13px), repeating-linear-gradient(90deg, transparent, transparent 12px, rgba(90, 69, 80, 0.04) 12px, rgba(90, 69, 80, 0.04) 13px), ${color.bg};`;
-  } else if (textureType === 3) {
-    // 4. Solid Color
-    bgStyle = `background: ${color.bg};`;
-  } else {
-    // 5. Gradient
-    bgStyle = `background: linear-gradient(135deg, ${color.bg} 0%, ${color.grad} 100%);`;
-  }
-  
-  return { bgStyle: bgStyle, textColor: color.text };
-}
-
 // ---- 加载状态 (Desk & 堆叠便签 & 警告判定) ----
 async function loadStatus() {
   try {
@@ -948,7 +917,7 @@ async function loadStatus() {
     statusLabel.textContent = data.status_label || '在线';
     document.getElementById('status-dot').className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
-    // 渲染桌面仿真层叠便签 (自然错落排版，流式布局极小负间距)
+    // 渲染桌面仿真层叠便签
     const container = document.getElementById('sticky-container');
     container.innerHTML = '';
     
@@ -957,20 +926,18 @@ async function loadStatus() {
 
       data.sticky_notes.forEach((note, index) => {
         const card = document.createElement('div');
-        card.className = `sticky-note-card`;
+        card.className = `sticky-note-card stage-${note.stage || 'steady'}`;
         
-        // 自然手写纸微斜效果，不层层掩盖，自然排列
+        // 自然错落微倾斜
         const rotateDeg = index % 2 === 0 ? -2 : 2.5;
         card.style.marginTop = index === 0 ? '0' : '-12px';
         card.style.transform = `rotate(${rotateDeg}deg)`;
         card.style.zIndex = 15 - index;
         
-        // 动态注入 5x5 的个性化手账底纹色
-        const styleObj = getPersonalizedStyle(note.id, index);
-        card.style.cssText += styleObj.bgStyle;
-        card.style.color = styleObj.textColor;
-
-        // 桌面满警告
+        if (index > 0) {
+          card.style.opacity = 1 - index * 0.1; 
+        }
+        
         if (isDeskFull) {
           card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.4), inset 0 0 0 1px rgba(255,255,255,1)';
         }
@@ -978,34 +945,36 @@ async function loadStatus() {
         const starIcon = note.is_starred ? '★' : '☆';
         const starClass = note.is_starred ? 'active' : '';
 
-        // 彻底清空杂乱图标，只在右下角保留一个荧光樱花粉标星按钮
         card.innerHTML = `
-          <div class="sticky-note-text" style="color: ${styleObj.textColor};">${escapeHtml(note.message)}</div>
+          <div class="sticky-note-text">${escapeHtml(note.message)}</div>
           <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">${starIcon}</button>
         `;
 
-        // 绑定双击触发微信风格悬浮撕毁/整理菜单
         addDoubleTapListener(card, (e) => {
           showContextMenu(card, note.id, "desk-note");
         });
 
         container.appendChild(card);
       });
+      container.style.minHeight = (130 + (data.sticky_notes.length - 1) * 10) + 'px';
     } else {
       container.innerHTML = `
         <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有新的留言。</div>
         </div>
       `;
+      container.style.minHeight = '130px';
     }
 
-    // 抽屉容量统计更新
+    const notesBtn = document.getElementById('drawer-notes-btn');
+    const lettersBtn = document.getElementById('drawer-letters-btn');
+    
     fetch(apiUrl('/api/sticky-notes?status=drawer')).then(res=>res.json()).then(d => {
       if(d.ok) {
         document.getElementById('notes-drawer-count').textContent = `${d.notes.length}/30`;
         document.getElementById('box-notes-count').textContent = `${d.notes.length}/30`;
-        if (d.layer_full.drawer) document.getElementById('drawer-notes-btn').classList.add('layer-full');
-        else document.getElementById('drawer-notes-btn').classList.remove('layer-full');
+        if (d.layer_full.drawer) notesBtn.classList.add('layer-full');
+        else notesBtn.classList.remove('layer-full');
       }
     });
 
@@ -1013,8 +982,8 @@ async function loadStatus() {
       if(d.ok) {
         document.getElementById('letters-drawer-count').textContent = `${d.letters.length}/20`;
         document.getElementById('box-letters-count').textContent = `${d.letters.length}/20`;
-        if (d.layer_full.drawer) document.getElementById('drawer-letters-btn').classList.add('layer-full');
-        else document.getElementById('drawer-letters-btn').classList.remove('layer-full');
+        if (d.layer_full.drawer) lettersBtn.classList.add('layer-full');
+        else lettersBtn.classList.remove('layer-full');
       }
     });
 
@@ -1030,7 +999,6 @@ async function loadStatus() {
 
     document.getElementById('new-letter-indicator').style.display = data.has_new_letter ? 'inline' : 'none';
 
-    // 双端静默同步自适应月经文字
     const formattedPeriodText = data.period_context 
       ? escapeHtml(data.period_context).replace(/\\n/g, '<br>') 
       : "目前没有您的月经生理期记录。<br>如果有需要，请在日历中随时记录。";
@@ -1074,26 +1042,23 @@ async function sendMessage() {
   scrollToBottom(); sendBtn.disabled = false; loadStatus();
 }
 
-// ---- 手机端 Tab 切换逻辑 ----
-function switchTab(tabName) {
-  const appEl = document.getElementById('app');
-  appEl.classList.remove('tab-chat', 'tab-desk');
-  appEl.classList.add('tab-' + tabName);
-
-  document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
-  if (window.event && window.event.currentTarget) {
-    window.event.currentTarget.classList.add('active');
-  } else {
-    const indexMap = {'chat': 0, 'desk': 1};
-    document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
-  }
-  if (tabName === 'chat') scrollToBottom();
+// ---- 月经一键点击生理记录控制台 ----
+async function recordPeriod(valueStr) {
+  if (!confirm(`确定要记录月经已“${{valueStr}}”吗？`)) return;
+  try {
+    const res = await fetch(apiUrl('/event'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'period', value: valueStr })
+    });
+    if (res.ok) {
+      alert(`已记录：月经${{valueStr}}`);
+      loadStatus(); 
+    }
+  } catch (e) { alert("网络错误，生理记录失败"); }
 }
-if (window.innerWidth <= 768) { document.getElementById('app').classList.add('tab-chat'); }
-
 
 // ==========================================
-// ---- 抽屉 1：便签收纳盒 (30) 前端功能 ----
+// ---- 抽屉与档案箱模态框逻辑略... (保持之前的功能一致) ----
 // ==========================================
 async function openDrawerNotes() {
   const modal = document.getElementById('drawer-notes-modal');
@@ -1134,16 +1099,12 @@ async function openDrawerNotes() {
 function closeDrawerNotes() { document.getElementById('drawer-notes-modal').style.display = 'none'; }
 
 
-// ==========================================
-// ---- 抽屉 2：情书收纳盒 (20) 前端功能 ----
-// ==========================================
 async function openLoveLetters() {
   const modal = document.getElementById('letter-modal');
   const area = document.getElementById('letter-content-area');
   modal.style.display = 'flex';
   area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在拉开情书匣...</div>';
   
-  // 消除提示星芒红点标志
   fetch(apiUrl('/api/love-letters/mark-read'), {method: 'POST'}).then(() => loadStatus());
 
   try {
@@ -1179,7 +1140,6 @@ async function openLoveLetters() {
 }
 function closeLoveLetters() { document.getElementById('letter-modal').style.display = 'none'; }
 
-// 归档单封情书函数
 async function archiveLetter(id) {
   try {
     const res = await fetch(apiUrl('/api/love-letters/archive'), {
@@ -1187,16 +1147,11 @@ async function archiveLetter(id) {
     });
     const data = await res.json();
     if (data.ok) {
-      if (data.archive_full) {
-        alert("已成功移入！但注意：恋爱档案箱当前情书容量已满（上限100），记得及时清理哦！");
-      }
-      openLoveLetters();
-      loadStatus();
+      openLoveLetters(); loadStatus();
     }
-  } catch(e) { alert('网络错误，归档失败'); }
+  } catch(e) { alert('网络错误'); }
 }
 
-// 物理丢弃单封情书函数
 async function deleteLetter(id) {
   if (!confirm('确定要彻底丢弃这封情书吗？它将被永久删除。')) return;
   try {
@@ -1207,17 +1162,11 @@ async function deleteLetter(id) {
     if (data.ok) {
       const card = document.getElementById(`letter-card-${id}`);
       if (card) {
-        card.style.transition = 'all 0.3s';
-        card.style.transform = 'translateX(50px)';
-        card.style.opacity = '0';
+        card.style.transition = 'all 0.3s'; card.style.transform = 'translateX(50px)'; card.style.opacity = '0';
         setTimeout(() => openLoveLetters(), 300);
-      } else {
-        openLoveLetters();
-      }
-    } else {
-      alert('丢弃失败：' + (data.error || '未知错误'));
+      } else openLoveLetters();
     }
-  } catch (e) { alert('网络错误，丢弃失败'); }
+  } catch (e) { alert('网络错误'); }
 }
 
 async function starLetter(id, isStarredNow, sourceStr) {
@@ -1234,10 +1183,6 @@ async function starLetter(id, isStarredNow, sourceStr) {
   } catch(e) { alert('网络错误'); }
 }
 
-
-// ==========================================
-// ---- 3. 恋爱档案箱 (容量 200) 前端功能 ----
-// ==========================================
 async function openArchiveBox() {
   const modal = document.getElementById('archive-modal');
   const area = document.getElementById('archive-content-area');
@@ -1255,7 +1200,6 @@ async function openArchiveBox() {
     if (noteData.ok && letterData.ok) {
       let html = '';
       
-      // 档案箱便签列表
       html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Pinned Notes (${noteData.notes.length}/100)</div>`;
       if (noteData.notes.length > 0) {
         noteData.notes.forEach(note => {
@@ -1275,11 +1219,8 @@ async function openArchiveBox() {
             </div>
           `;
         });
-      } else {
-        html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档便签...</div>';
-      }
+      } else html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档便签...</div>';
 
-      // 档案箱情书列表
       html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-top:30px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Letters Box (${letterData.letters.length}/100)</div>`;
       if (letterData.letters.length > 0) {
         letterData.letters.forEach(letter => {
@@ -1299,9 +1240,7 @@ async function openArchiveBox() {
             </div>
           `;
         });
-      } else {
-        html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档情书...</div>';
-      }
+      } else html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档情书...</div>';
 
       area.innerHTML = html;
     }
@@ -1313,7 +1252,7 @@ function closeArchiveBox() { document.getElementById('archive-modal').style.disp
 
 
 // ==========================================
-// ---- 4. 生理期仿真手账日历系统功能 ----
+// ---- 4. 生理期日历逻辑 ----
 // ==========================================
 async function openPeriodCalendar() {
   document.getElementById('calendar-modal').style.display = 'flex';
@@ -1331,7 +1270,7 @@ async function fetchPeriodData(year) {
       periodRecords = data.records;
       renderCalendarGrid();
     }
-  } catch(e) { console.error("日历数据获取失败", e); }
+  } catch(e) {}
 }
 
 function renderCalendarGrid() {
@@ -1341,14 +1280,12 @@ function renderCalendarGrid() {
 
   title.textContent = `${currentYear}年${currentMonth + 1}月`;
 
-  // 计算当月首日是星期几（转换为周一为0，周日为6）
   const firstDay = new Date(currentYear, currentMonth, 1);
   let dayOfWeek = firstDay.getDay(); 
-  dayOfWeek = (dayOfWeek === 0) ? 6 : dayOfWeek - 1; // 调整为：0=周一, 6=周日
+  dayOfWeek = (dayOfWeek === 0) ? 6 : dayOfWeek - 1; 
 
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-  // 1. 填充空白日期占位
   for (let i = 0; i < dayOfWeek; i++) {
     const span = document.createElement('span');
     span.className = 'calendar-day empty';
@@ -1358,7 +1295,6 @@ function renderCalendarGrid() {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  // 2. 绘制每一天
   for (let day = 1; day <= totalDays; day++) {
     const dayBtn = document.createElement('span');
     dayBtn.className = 'calendar-day';
@@ -1366,82 +1302,49 @@ function renderCalendarGrid() {
 
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
-    // 是否为今天
-    if (dateStr === todayStr) {
-      dayBtn.classList.add('today-marker');
-    }
+    if (dateStr === todayStr) dayBtn.classList.add('today-marker');
 
-    // 匹配生理期数据库区间，高亮上色
     periodRecords.forEach(record => {
       const start = record.start_date;
       const end = record.end_date;
       if (start) {
         if (end) {
-          // 已结束生理期
-          if (dateStr >= start && dateStr <= end) {
-            dayBtn.classList.add('period-active');
-          }
+          if (dateStr >= start && dateStr <= end) dayBtn.classList.add('period-active');
         } else {
-          // 正在进行中
-          if (dateStr >= start && dateStr <= todayStr) {
-            dayBtn.classList.add('period-active');
-          }
-          if (dateStr === start) {
-            // 唯一起点带虚框
-            dayBtn.classList.add('period-ongoing');
-          }
+          if (dateStr >= start && dateStr <= todayStr) dayBtn.classList.add('period-active');
+          if (dateStr === start) dayBtn.classList.add('period-ongoing');
         }
       }
     });
 
-    // 点击弹出选择开始还是结束的控制板
     dayBtn.onclick = (e) => {
       e.stopPropagation();
       selectedDateStr = dateStr;
       showDayActionPopup(dayBtn);
     };
-
     grid.appendChild(dayBtn);
   }
 }
 
 function prevMonth() {
-  if (currentMonth === 0) {
-    currentMonth = 11;
-    currentYear--;
-    fetchPeriodData(currentYear);
-  } else {
-    currentMonth--;
-    renderCalendarGrid();
-  }
+  if (currentMonth === 0) { currentMonth = 11; currentYear--; fetchPeriodData(currentYear); } 
+  else { currentMonth--; renderCalendarGrid(); }
 }
 function nextMonth() {
-  if (currentMonth === 11) {
-    currentMonth = 0;
-    currentYear++;
-    fetchPeriodData(currentYear);
-  } else {
-    currentMonth++;
-    renderCalendarGrid();
-  }
+  if (currentMonth === 11) { currentMonth = 0; currentYear++; fetchPeriodData(currentYear); } 
+  else { currentMonth++; renderCalendarGrid(); }
 }
 
 function showDayActionPopup(dayBtn) {
   const rect = dayBtn.getBoundingClientRect();
   dayActionPopup.style.display = 'flex';
-  
-  // 智能避让边界定位
   dayActionPopup.style.left = (rect.left + rect.width/2 - 65 + window.scrollX) + 'px';
   dayActionPopup.style.top = (rect.top - 110 + window.scrollY) + 'px';
-
-  // 绑定事件
   document.getElementById('popup-start-btn').onclick = () => savePeriodDate('start');
   document.getElementById('popup-end-btn').onclick = () => savePeriodDate('end');
 }
 
-function hideDayActionPopup() {
-  dayActionPopup.style.display = 'none';
-}
+function hideDayActionPopup() { dayActionPopup.style.display = 'none'; }
 
 async function savePeriodDate(actionType) {
   try {
@@ -1452,15 +1355,61 @@ async function savePeriodDate(actionType) {
     });
     const data = await res.json();
     if (data.ok) {
-      alert(`已成功标记生理期：${actionType === 'start' ? '开始' : '结束'} (${selectedDateStr})`);
-      fetchPeriodData(currentYear); // 刷新日历盘
-      loadStatus(); // 同步刷新生理提示框
-      hideDayActionPopup();
-    } else {
-      alert('标记失败：' + (data.error || '未知错误'));
+      alert(`已成功标记生理期：${actionType === 'start' ? '开始' : '结束'}`);
+      fetchPeriodData(currentYear); loadStatus(); hideDayActionPopup();
     }
-  } catch (e) { alert('网络错误，日记记录失败'); }
+  } catch (e) { alert('网络错误'); }
 }
+
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+});
+
+const modelSelect = document.getElementById('model-select');
+async function loadModelSelector() {
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'));
+    const data = await res.json();
+    if (!data.ok) return;
+    modelSelect.innerHTML = '';
+    data.available_models.forEach(m => {
+      const opt = document.createElement('option'); opt.value = m; opt.textContent = m;
+      if (m === data.current_model) opt.selected = true; modelSelect.appendChild(opt);
+    });
+  } catch (e) {}
+}
+modelSelect.addEventListener('change', async () => {
+  const chosen = modelSelect.value;
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: chosen })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('切换失败：' + (data.error || '未知错误')); loadModelSelector(); }
+  } catch (e) { alert('网络错误'); loadModelSelector(); }
+});
+
+// 手机端自适应 Tab 切换逻辑
+function switchTab(tabName) {
+  const appEl = document.getElementById('app');
+  appEl.classList.remove('tab-chat', 'tab-desk');
+  appEl.classList.add('tab-' + tabName);
+
+  document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
+  if (window.event && window.event.currentTarget) {
+    window.event.currentTarget.classList.add('active');
+  } else {
+    const indexMap = {'chat': 0, 'desk': 1};
+    document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
+  }
+  if (tabName === 'chat') scrollToBottom();
+}
+if (window.innerWidth <= 768) { document.getElementById('app').classList.add('tab-chat'); }
 
 loadHistory();
 loadStatus();
