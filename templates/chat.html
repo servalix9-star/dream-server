@@ -1175,19 +1175,19 @@ async function loadStatus() {
         // 错落歪斜度数计算：最上层的便签角度微偏，底层的依次偏移
         const rotateDeg = (index === 0) ? -2 : (index === 1 ? 3 : -1);
         const offsetTop = index * 10;
-        card.style.transform = `rotate(${{rotateDeg}}deg) translateY(${{offsetTop}}px)`;
+        card.style.transform = `rotate(${rotateDeg}deg) translateY(${offsetTop}px)`;
         card.style.zIndex = 10 - index;
-        if (index > 0) {{
+        if (index > 0) {
           card.style.opacity = 1 - index * 0.15; // 底层便签稍微淡化
-        }}
+        }
 
         card.innerHTML = `
           <div class="sticky-tape"></div>
-          <div class="sticky-sticker">${{note.sticker || '✦'}}</div>
-          <div class="sticky-note-text">${{escapeHtml(note.message)}}</div>
+          <div class="sticky-sticker">${note.sticker || '✦'}</div>
+          <div class="sticky-note-text">${escapeHtml(note.message)}</div>
           <div class="note-actions">
-            <button class="note-act-btn" onclick="unpinNote(${{note.id}})" title="收进收纳盒">📌</button>
-            <button class="note-act-btn" onclick="deleteNote(${{note.id}})" title="彻底丢弃">🗑️</button>
+            <button class="note-act-btn" onclick="unpinNote(${note.id})" title="收进收纳盒">📌</button>
+            <button class="note-act-btn" onclick="deleteNote(${note.id})" title="彻底丢弃">🗑️</button>
           </div>
         `;
         container.appendChild(card);
@@ -1254,14 +1254,14 @@ async function sendMessage() {
 
 // ---- 月经一键点击生理记录控制台 ----
 async function recordPeriod(valueStr) {
-  if (!confirm(`确定要记录月经已“${{valueStr}}”吗？`)) return;
+  if (!confirm(`确定要记录月经已“${valueStr}”吗？`)) return;
   try {
     const res = await fetch(apiUrl('/event'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'period', value: valueStr })
     });
     if (res.ok) {
-      alert(`已记录：月经${{valueStr}}`);
+      alert(`已记录：月经${valueStr}`);
       loadStatus(); 
     }
   } catch (e) { alert("网络错误，生理记录失败"); }
@@ -1285,12 +1285,12 @@ async function openLoveLetters() {
       data.letters.forEach(letter => {
         const typeIcon = letter.letter_type === 'sweet' ? '💌' : '🌧️';
         html += `
-          <div class="single-letter" id="letter-card-${{letter.id}}">
+          <div class="single-letter" id="letter-card-${letter.id}">
             <div class="letter-time-row">
-              <span class="letter-time">${{typeIcon}} ${{formatTime(letter.created_at)}} · ${{letter.created_at.substring(0,10)}}</span>
-              <button class="letter-del-btn" onclick="deleteLetter(${{letter.id}})" title="物理丢弃并删除">🗑️ 丢弃</button>
+              <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
+              <button class="letter-del-btn" onclick="deleteLetter(${letter.id})" title="物理丢弃并删除">🗑️ 丢弃</button>
             </div>
-            <div class="letter-text">${{escapeHtml(letter.content)}}</div>
+            <div class="letter-text">${escapeHtml(letter.content)}</div>
           </div>
         `;
       });
@@ -1316,18 +1316,18 @@ async function deleteLetter(id) {
     const data = await res.json();
     if (data.ok) {
       // 动画删除对应的 DOM 卡片节点，并刷新抽屉信箱
-      const card = document.getElementById(`letter-card-${{id}}`);
-      if (card) {{
+      const card = document.getElementById(`letter-card-${id}`);
+      if (card) {
         card.style.transition = 'all 0.3s';
         card.style.transform = 'translateX(50px)';
         card.style.opacity = '0';
         setTimeout(() => openLoveLetters(), 300);
-      }} else {{
+      } else {
         openLoveLetters();
-      }}
-    }} else {
+      }
+    } else {
       alert('丢弃失败：' + (data.error || '未知错误'));
-    }}
+    }
   } catch (e) {
      alert('网络错误，丢弃失败');
   }
