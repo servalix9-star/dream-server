@@ -54,31 +54,34 @@
     opacity: 0.85;
   }
   
-  /* ---- 导航图标 & 发送按钮的“无边框半调霓虹”样式统一 ---- */
+  /* ---- 导航图标 & 发送按钮的“白底+粉波点+透明投影”样式统一 ---- */
   .nav-icon, #send-btn {
     position: relative;
     z-index: 1;
     width: 44px; height: 44px;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    /* 无边框 */
     border: none !important;
-    /* 马卡龙粉渐变 + 6px微缩白波点半调渗透 */
+    
+    /* 核心改动：白底半透明 + 内部微小粉色波点 + 磨砂玻璃效果 */
     background: 
-      radial-gradient(circle, rgba(255, 255, 255, 0.16) 15%, transparent 15.5%),
-      radial-gradient(circle, rgba(255, 255, 255, 0.16) 15%, transparent 15.5%),
-      linear-gradient(135deg, #f3b0c3, #e593a4) !important;
+      radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
+      radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
+      rgba(255, 255, 255, 0.7) !important;
     background-size: 6px 6px, 6px 6px, 100% 100% !important;
     background-position: 0 0, 3px 3px, 0 0 !important;
-    color: #ffffff; 
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    
+    color: #ffb3c1; /* 图案粉色 */
     text-decoration: none;
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-    /* 弥散的荧光蜜桃粉霓虹光晕 */
-    box-shadow: 0 4px 12px rgba(255, 94, 132, 0.4), 0 0 15px rgba(255, 94, 132, 0.3) !important;
+    
+    /* 核心改动：去掉霓虹光，恢复干净的实体物理投影 */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
     cursor: pointer;
     padding: 0;
   }
-  /* 极致精细的 SVG 矢量线条控制 */
   .nav-icon svg {
     width: 20px; 
     height: 20px;
@@ -86,10 +89,12 @@
   }
   .nav-icon:hover, #send-btn:hover {
     transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 6px 16px rgba(255, 94, 132, 0.5), 0 0 20px rgba(255, 94, 132, 0.4) !important;
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important; /* 悬浮时阴影加深 */
   }
   .nav-icon:active, #send-btn:active { 
     transform: translateY(0) scale(0.95); 
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
   }
   #send-btn svg { width: 18px; height: 18px; stroke-width: 1.5px; transform: rotate(-10deg) translate(-1px, 1px); transition: transform 0.2s ease; }
   #send-btn:hover svg { transform: rotate(5deg) scale(1.1); }
@@ -191,7 +196,7 @@
   }
   .bubble.pending { opacity: 0.5; }
 
-  /* ---- 全局悬浮操作菜单 ---- */
+  /* ---- 悬浮操作菜单 ---- */
   #bubble-menu {
     display: none; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 8px; padding: 6px 4px;
@@ -377,7 +382,6 @@
   .letter-act-group { display: flex; gap: 8px; align-items: center; }
   .letter-del-btn { background: none; border: none; color: #a66275; font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
   .letter-del-btn:hover { color: #ff5e84; background-color: rgba(255, 94, 132, 0.08); }
-  /* 列表里的标星按钮也换成纯粉色星芒 */
   .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; }
   .note-act-btn.star-btn.active { color: #ff5e84; filter: drop-shadow(0 1px 3px rgba(255, 94, 132, 0.45)); }
   .letter-text { white-space: pre-wrap; font-style: italic; }
@@ -410,7 +414,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (恢复为白底半调透光，极细粉色 SVG 图标，实体投影) -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -448,7 +452,7 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
-      <!-- 无边框霓虹粉色纸飞机发送按钮 -->
+      <!-- 无边框白底透光纸飞机发送按钮 -->
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -509,6 +513,7 @@
 <!-- 全局悬浮菜单 -->
 <div id="bubble-menu"></div>
 
+<!-- 小抽屉与弹窗区域略... -->
 <!-- 秘密小抽屉 1：便签收纳盒 (30) -->
 <div id="drawer-notes-modal">
   <div class="letter-container">
@@ -587,11 +592,6 @@ let currentYear = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
 let periodRecords = [];
 let selectedDateStr = "";
-
-// 长按/右键菜单相关的触发状态记录
-let pressTimer;
-let currentActiveMsgId = null;
-let currentActiveRowEl = null;
 
 // 核心功能：原生兼容的双击事件绑定器 (用于全局无按键触发悬浮菜单)
 function addDoubleTapListener(element, callback) {
@@ -676,7 +676,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 全新双击触发菜单逻辑 (去除旧版长按)
+  // 全局双击触发菜单逻辑
   addDoubleTapListener(bubble, (e) => {
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content);
@@ -828,6 +828,7 @@ function escapeHtml(str) {
 
 // ---- 便签相关的操作与数据同步函数 ----
 async function deleteNote(id, sourceStr = "desk") {
+  // 桌面便签经过动画撕碎处理，这里只做请求和刷新即可，不再拦截弹窗
   if (sourceStr !== "desk" && !confirm('确定要丢弃这张便签吗？它将被永久删除。')) return;
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/delete'), {
@@ -838,6 +839,8 @@ async function deleteNote(id, sourceStr = "desk") {
       if (sourceStr === "desk") loadStatus();
       else if (sourceStr === "drawer") openDrawerNotes();
       else if (sourceStr === "archive") openArchiveBox();
+    } else {
+      alert('删除失败：' + (data.error || '未知错误'));
     }
   } catch (e) { alert('网络错误，丢弃失败'); }
 }
@@ -900,6 +903,12 @@ async function loadStatus() {
         card.style.transform = `rotate(${rotateDeg}deg)`;
         card.style.zIndex = 15 - index;
         
+        // 底层淡化
+        if (index > 0) {
+          card.style.opacity = 1 - index * 0.1; 
+        }
+        
+        // 满载警告效果
         if (isDeskFull) {
           card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.4), inset 0 0 0 1px rgba(255,255,255,1)';
         }
@@ -1006,6 +1015,7 @@ function switchTab(tabName) {
   if (window.event && window.event.currentTarget) {
     window.event.currentTarget.classList.add('active');
   } else {
+    // 兜底找对应的 DOM
     const indexMap = {'chat': 0, 'desk': 1};
     document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
   }
