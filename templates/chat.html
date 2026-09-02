@@ -49,7 +49,7 @@
     /* 垂直黑-灰-白-灰-黑渐变 (比例 2:1:3:2:2) */
     background: linear-gradient(to bottom, #000000 0%, #000000 20%, #c0b8c0 30%, #ffffff 40%, #ffffff 60%, #c0b8c0 80%, #000000 100%);
     -webkit-mask-image: 
-      radial-gradient(circle, #000 24%, transparent 24.5%), /* 挤密和放大波点 */
+      radial-gradient(circle, #000 24%, transparent 24.5%),
       radial-gradient(circle, #000 24%, transparent 24.5%);
     -webkit-mask-size: 22px 22px; 
     -webkit-mask-position: 0 0, 11px 11px;
@@ -627,7 +627,7 @@
     box-shadow: 2px 4px 15px rgba(229, 76, 109, 0.2), inset 0 0 0 1px rgba(255,255,255,1);
   }
   
-  /* 便签贴纸上的“整理”与“丢弃”功能栏 (彻底极简：只有星星星芒，长按或桌面整理才执行丢弃) */
+  /* 便签贴纸上的收藏小星芒机制 */
   .note-actions {
     display: flex;
     justify-content: flex-end;
@@ -649,6 +649,7 @@
     color: #d67d97;
     font-size: 15px;
     opacity: 0.4;
+    padding: 0;
   }
   .note-act-btn.star-btn.active {
     opacity: 1;
@@ -665,17 +666,42 @@
   }
   .drawer-btn {
     background: linear-gradient(to bottom, rgba(255,255,255,0.7), rgba(255,255,255,0.4));
-    border: 1.5px solid rgba(255,255,255,0.9); border-radius: 16px;
-    padding: 12px; text-align: center; cursor: pointer; position: relative;
+    border-radius: 16px;
+    padding: 14px 20px;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    color: #8c4b5d; font-weight: bold; font-family: "Georgia", serif; font-size: 12px; letter-spacing: 1px;
-    box-shadow: 0 6px 16px rgba(184, 118, 138, 0.08), inset 0 2px 4px rgba(255,255,255,1);
+    color: #8c4b5d;
+    font-weight: bold;
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    letter-spacing: 1px;
+    border: none;
+    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.12), inset 0 0 0 1px #fff;
   }
   .drawer-btn:hover {
     background: linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0.6));
     transform: translateY(-2px); box-shadow: 0 8px 20px rgba(184, 118, 138, 0.15);
   }
   .drawer-btn:active { transform: translateY(1px); }
+  
+  /* 抽屉左右两侧的双层实体黑圆纽拉手 */
+  .drawer-btn::before, .drawer-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #8c4b5d; /* 纯黑包边及深色拉手纽 */
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .drawer-btn::before { left: 16px; }
+  .drawer-btn::after { right: 16px; }
   
   /* 抽屉容量已满警告状态 */
   .drawer-btn.layer-full {
@@ -845,7 +871,7 @@
   .legend-color.active { background: #ffb3c1; }
   .legend-color.ongoing { border: 2px dashed #ff5e84; }
 
-  /* 仿真手账日历的日期操作卡片（日历内嵌或弹窗） */
+  /* 仿真手账日历的日期操作卡片 */
   .day-action-popup {
     display: none; position: absolute; background: rgba(26,18,30,0.95);
     border-radius: 8px; padding: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);
@@ -863,7 +889,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (日记完全移除，替换为日历与档案箱) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (恋爱圆标设计：白底、粉图案、纯黑边框) -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">💖</a>
     <a class="nav-icon" href="javascript:void(0)" onclick="openPeriodCalendar()" title="月经生理日历">🌷</a>
@@ -905,17 +931,17 @@
     </div>
   </div>
 
-  <!-- 3. 右侧状态面板 (Desk 手账角) -->
+  <!-- 3. 右侧状态面板 (Desk 手账区) -->
   <div id="panel">
     <div class="panel-child panel-title">DESK</div>
     <div id="panel-body" class="panel-child">
         
-      <!-- 冰箱贴层叠便签堆叠容器 (最多保留最新的 9 张，手账倾斜堆叠) -->
+      <!-- 冰箱贴层叠便签堆叠容器 (手账倾斜堆叠，桌面只堆叠，没有任何杂乱按钮) -->
       <div class="sticky-note-stack" id="sticky-container">
         <!-- JS 动态灌入层叠卡片 -->
       </div>
 
-      <!-- 秘密双抽屉 -->
+      <!-- 秘密双层收纳抽屉设计 (双实体圆把手) -->
       <div class="drawer-wrapper">
         <!-- 第一个抽屉：便签收纳盒 (容量 30) -->
         <div class="drawer-btn" id="drawer-notes-btn" onclick="openDrawerNotes()">
@@ -930,7 +956,7 @@
         </div>
       </div>
 
-      <!-- 4. 电脑/平板端大屏专属月经控制板 -->
+      <!-- 4. 电脑/平板端大屏专属月经控制板 (无白色外框，融入大屏) -->
       <div class="panel-child health-wrapper" style="margin-top: 20px;">
         <div class="panel-title">HEALTH_MONITOR</div>
         <div class="health-card">
@@ -945,7 +971,7 @@
     </div>
   </div>
 
-  <!-- 5. 移动端隐藏的自适应生理面板 (仅在手机端 Tab 3 激活) -->
+  <!-- 5. 移动端自适应生理面板 (仅在手机端 Tab 3 激活) -->
   <div id="health-panel" class="panel-child">
     <div class="panel-title">HEALTH_MONITOR</div>
     <div class="health-card">
@@ -975,7 +1001,7 @@
   </div>
 </div>
 
-<!-- 微信悬浮撤回/整理菜单 -->
+<!-- 微信悬浮撤回/桌面便签整理菜单 -->
 <div id="bubble-menu"></div>
 
 <!-- 秘密小抽屉 1：便签收纳盒 (30) -->
@@ -1004,7 +1030,7 @@
   </div>
 </div>
 
-<!-- 统一恋爱档案箱 (便签100 + 情书100) -->
+<!-- 恋爱档案箱 (便签100 + 情书100) -->
 <div id="archive-modal">
   <div class="letter-container" style="max-width: 520px;">
     <div class="letter-header">
@@ -1051,7 +1077,7 @@
 <script>
 const CODE = {{ code_param | tojson }};
 const AVATAR_CHARON = {{ avatar_charon | tojson }};
-const AVATAR_USER = {{ avatar_user | tojson }};
+const AVATAR_USER = { avatar_user: AVATAR_USER }; // 保持纯正JS单花括号逻辑
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
@@ -1103,7 +1129,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
-  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
+  avatar.src = role === 'user' ? {{ avatar_user | tojson }} : AVATAR_CHARON;
   avatarWrap.appendChild(avatar);
 
   // 主星芒 (✦)
@@ -1145,7 +1171,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 微信悬浮微信菜单触发机制
+  // 微信悬浮微信菜单触发机制 (电脑端右键，移动端长按)
   const bindContextMenu = (e) => {
     e.preventDefault();
     currentActiveMsgId = msgId;
@@ -1169,9 +1195,12 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   return row;
 }
 
+// 显示仿微信长按菜单浮窗
 function showWeChatMenu(targetBubble, msgId, role) {
   const rect = targetBubble.getBoundingClientRect();
   contextMenu.style.display = 'flex';
+  
+  // 清理旧按钮
   contextMenu.innerHTML = '';
 
   if (msgId) {
@@ -1197,6 +1226,8 @@ function showWeChatMenu(targetBubble, msgId, role) {
 
   const menuWidth = contextMenu.offsetWidth || 120;
   const menuHeight = contextMenu.offsetHeight || 34;
+  
+  // 水平居中对齐气泡，垂直置于气泡之上，留出 8px 间距
   contextMenu.style.left = (rect.left + rect.width / 2 - menuWidth / 2 + window.scrollX) + 'px';
   contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
 }
@@ -1205,7 +1236,7 @@ function hideWeChatMenu() {
   contextMenu.style.display = 'none';
 }
 
-// 监听屏幕全局点击，自动收起菜单或日记弹窗
+// 监听屏幕全局点击事件，随时收起浮窗
 document.addEventListener('click', (e) => {
   if (!e.target.classList.contains('bubble') && !e.target.classList.contains('menu-btn')) {
     hideWeChatMenu();
@@ -1226,7 +1257,7 @@ async function deleteMessage(msgId, rowEl) {
     const data = await res.json();
     if (data.ok) {
       rowEl.remove();
-      loadStatus(); 
+      loadStatus(); // 更新心里话面板
     } else {
       alert('撤回失败：' + (data.error || '未知错误'));
     }
@@ -1305,12 +1336,14 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ---- 便签相关的操作与数据同步函数 ----
+// 物理丢弃/删除便签函数
 async function deleteNote(id, sourceStr = "desk") {
-  if (!confirm('确定要丢弃这张便签吗？它将被永久删除。')) return;
+  if (!confirm('确定要彻底丢弃这张便签吗？它将被永久删除。')) return;
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/delete'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
     });
     const data = await res.json();
     if (data.ok) {
@@ -1323,22 +1356,32 @@ async function deleteNote(id, sourceStr = "desk") {
   } catch (e) { alert('网络错误，丢弃失败'); }
 }
 
+// 收起便签到收纳盒函数
 async function unpinNote(id) {
   if (!confirm('确定要将这张便签收进收纳盒吗？它将不再贴在桌面上。')) return;
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/unpin'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
     });
     const data = await res.json();
-    if (data.ok) { loadStatus(); } 
-    else { alert('收起失败：' + (data.error || '未知错误')); }
-  } catch (e) { alert('网络错误，收起失败'); }
+    if (data.ok) {
+      loadStatus();
+    } else {
+      alert('收起失败：' + (data.error || '未知错误'));
+    }
+  } catch (e) {
+    alert('网络错误，收起失败');
+  }
 }
 
+// 移动便签层级接口
 async function moveNote(id, targetStatus, sourceStr) {
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/move'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: id, target_status: targetStatus })
     });
     const data = await res.json();
@@ -1350,13 +1393,15 @@ async function moveNote(id, targetStatus, sourceStr) {
       else if (sourceStr === "drawer") openDrawerNotes();
       else if (sourceStr === "archive") openArchiveBox();
     }
-  } catch(e) { alert('网络错误，移动便签失败'); }
+  } catch (e) { alert('网络错误，移动便签失败'); }
 }
 
+// 标星收藏/取消便签接口
 async function starNote(id, isStarredNow, sourceStr) {
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/star'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: id, is_starred: !isStarredNow })
     });
     const data = await res.json();
@@ -1365,10 +1410,9 @@ async function starNote(id, isStarredNow, sourceStr) {
       else if (sourceStr === "drawer") openDrawerNotes();
       else if (sourceStr === "archive") openArchiveBox();
     }
-  } catch(e) { alert('网络错误'); }
+  } catch (e) { alert('网络错误'); }
 }
 
-// ---- 加载状态 (Desk & 堆叠便签 & 警告判定) ----
 async function loadStatus() {
   try {
     const res = await fetch(apiUrl('/api/chat-status'));
@@ -1378,42 +1422,38 @@ async function loadStatus() {
     statusLabel.textContent = data.status_label || '在线';
     statusDot.className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
-    // 渲染桌面仿真层叠便签
+    // 渲染仿真便签堆叠 (Desk Panel)
     const container = document.getElementById('sticky-container');
     container.innerHTML = '';
     
     if (data.sticky_notes && data.sticky_notes.length > 0) {
-      const notesToShow = data.sticky_notes.slice(0, 9); // 支持展示9张
-      
-      // 桌面满警告：卡片套上红色阴影或变色
+      // 限制桌面上最多同时贴 9 张，防止堆叠过多溢出，桌面满红光警告
+      const notesToShow = data.sticky_notes.slice(0, 9);
       const isDeskFull = data.desk_full;
 
       notesToShow.forEach((note, index) => {
         const card = document.createElement('div');
-        // 动态将后端心境stage拼成类名 (stage-sweet, stage-tsundere 等)
         card.className = `sticky-note-card stage-${note.stage || 'steady'}`;
         
-        // 仿真手账微倾斜度数，index越大层级越靠后
+        // 错落歪斜度数计算：最上层的便签角度微偏，底层的依次偏移
         const rotateDeg = (index === 0) ? -2 : (index === 1 ? 3 : (index === 2 ? -1 : (index % 2 === 0 ? -4 : 4)));
         const offsetTop = index * 10;
         card.style.transform = `rotate(${rotateDeg}deg) translateY(${offsetTop}px)`;
         card.style.zIndex = 15 - index;
         if (index > 0) {
-          card.style.opacity = 1 - index * 0.1; // 压在底层的便签逐渐透明
+          card.style.opacity = 1 - index * 0.1; // 底层便签稍微淡化
         }
         if (isDeskFull) {
-          // 桌面满警告：边缘套上柔和发红光
-          card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.4), inset 0 0 0 1px rgba(255,255,255,1)';
+          card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.45), inset 0 0 0 1px rgba(255,255,255,1)';
         }
 
-        // 仅保留极其干净的心情贴纸和标星机制。删除与整理改为长按/右键
         const starClass = note.is_starred ? 'active' : '';
         card.innerHTML = `
           <div class="sticky-tape"></div>
           <div class="sticky-sticker">${note.sticker || '✦'}</div>
           <div class="sticky-note-text">${escapeHtml(note.message)}</div>
           <div class="note-actions">
-            <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">★</button>
+            <button class="note-act-btn star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')">★</button>
           </div>
         `;
 
@@ -1432,6 +1472,7 @@ async function loadStatus() {
 
         container.appendChild(card);
       });
+      // 动态撑开容器高度，防止绝对定位重叠
       container.style.minHeight = (130 + (notesToShow.length - 1) * 10) + 'px';
     } else {
       container.innerHTML = `
@@ -1447,9 +1488,7 @@ async function loadStatus() {
     const notesBtn = document.getElementById('drawer-notes-btn');
     const lettersBtn = document.getElementById('drawer-letters-btn');
     
-    // 通过 chat-status 轮询或直接查询
-    // 因为 chat-status 比较高频，Claude在 love-letters?status=drawer 接口里带了层警告标志，
-    // 我们也顺手在这里异步获取一下
+    // 异步拉取两层抽屉的容量状态
     fetch(apiUrl('/api/sticky-notes?status=drawer')).then(res=>res.json()).then(d => {
       if(d.ok) {
         document.getElementById('notes-drawer-count').textContent = `${d.notes.length}/30`;
@@ -1479,14 +1518,14 @@ async function loadStatus() {
       }
     });
 
-    // 新情书红点星芒提示
+    // 更新新情书提示星芒
     const spark = document.getElementById('new-letter-indicator');
     spark.style.display = data.has_new_letter ? 'inline' : 'none';
 
-    // 格式化自适应月经期状态文字
+    // 格式化自适应月经期状态文字并一并同步双端（手机大屏无缝兼顾）
     const formattedPeriodText = data.period_context 
       ? escapeHtml(data.period_context).replace(/\\n/g, '<br>') 
-      : "目前没有您的生理期记录。<br>如果有需要，请在日历中随时记录。";
+      : "目前没有您的月经生理期记录。<br>如果有需要，请在日历中随时记录。";
       
     document.getElementById('period-status-text').innerHTML = formattedPeriodText;
     document.getElementById('desktop-period-status-text').innerHTML = formattedPeriodText;
@@ -1511,7 +1550,7 @@ function showNoteActionMenu(targetCard, noteId, sourceStr, isStarred) {
 
   const delBtn = document.createElement('button');
   delBtn.className = 'menu-btn';
-  delBtn.textContent = '🗑️ 撕掉丢弃';
+  delBtn.textContent = '🗑| 撕掉丢弃';
   delBtn.onclick = () => {
     // 渐变撕下并揉碎动画
     targetCard.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
@@ -1563,25 +1602,20 @@ async function sendMessage() {
   scrollToBottom(); sendBtn.disabled = false; loadStatus();
 }
 
-// ---- 手机端 Tab 切换逻辑 ----
-function switchTab(tabName) {
-  const appEl = document.getElementById('app');
-  appEl.classList.remove('tab-chat', 'tab-desk', 'tab-health');
-  appEl.classList.add('tab-' + tabName);
-
-  document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
-  // 支持事件绑定和直接调用
-  if (event) {
-    event.currentTarget.classList.add('active');
-  } else {
-    // 兜底找对应的 DOM
-    const indexMap = {'chat': 0, 'desk': 1, 'health': 2};
-    document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
-  }
-  if (tabName === 'chat') scrollToBottom();
+// ---- 月经一键点击生理记录控制台 ----
+async function recordPeriod(valueStr) {
+  if (!confirm(`确定要记录月经已“${valueStr}”吗？`)) return;
+  try {
+    const res = await fetch(apiUrl('/event'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'period', value: valueStr })
+    });
+    if (res.ok) {
+      alert(`已记录：月经${valueStr}`);
+      loadStatus(); 
+    }
+  } catch (e) { alert("网络错误，生理记录失败"); }
 }
-if (window.innerWidth <= 768) { document.getElementById('app').classList.add('tab-chat'); }
-
 
 // ==========================================
 // ---- 抽屉 1：便签收纳盒 (30) 前端功能 ----
@@ -1622,7 +1656,6 @@ async function openDrawerNotes() {
   }
 }
 function closeDrawerNotes() { document.getElementById('drawer-notes-modal').style.display = 'none'; }
-
 
 // ==========================================
 // ---- 抽屉 2：情书收纳盒 (20) 前端功能 ----
@@ -1723,7 +1756,6 @@ async function starLetter(id, isStarredNow, sourceStr) {
   } catch(e) { alert('网络错误'); }
 }
 
-
 // ==========================================
 // ---- 3. 恋爱档案箱 (容量 200) 前端功能 ----
 // ==========================================
@@ -1744,8 +1776,7 @@ async function openArchiveBox() {
     if (noteData.ok && letterData.ok) {
       let html = '';
       
-      // 合并展示，或者分流展示，这里做两个精致的小子栏目
-      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Pinned Notes (${noteData.notes.length}/100)</div>`;
+      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Archived Notes (${noteData.notes.length}/100)</div>`;
       if (noteData.notes.length > 0) {
         noteData.notes.forEach(note => {
           const starClass = note.is_starred ? 'active' : '';
@@ -1945,7 +1976,7 @@ async function savePeriodDate(actionType) {
     } else {
       alert('标记失败：' + (data.error || '未知错误'));
     }
-  } catch (e) { alert('网络错误，日记记录失败'); }
+  } catch (e) { alert('网络错误，生理记录失败'); }
 }
 
 
@@ -2039,4 +2070,4 @@ loadStatus();
 loadModelSelector();
 </script>
 </body>
-</html>Claude把后端（main 7.py）和前端模板（chat 2.html）都彻底按新规则写好了，现在完全没有花括号报错了，你可以放心美化了
+</html>
