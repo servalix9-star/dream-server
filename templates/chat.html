@@ -254,15 +254,13 @@
   /* --- 仿真实物便利贴堆叠留言板 (易读自然流式叠排) --- */
   .sticky-note-stack {
     position: relative; width: 100%; display: flex; flex-direction: column; gap: 4px;
-    margin-top: 15px; margin-bottom: 25px; z-index: 1;
-    overflow-y: auto; max-height: 60vh; /* 防止便签过多排满 */
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 20px;
+    margin-top: 15px; margin-bottom: 18px; z-index: 1;
+    overflow: hidden; max-height: 38vh; /* 缩小堆叠区域，超出部分直接裁切，不产生滚动条 */
   }
   .sticky-note-card {
     position: relative;
     border-radius: 4px 18px 18px 18px; 
-    padding: 16px 16px 36px 16px; 
+    padding: 13px 14px 30px 14px; 
     box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.15);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
@@ -358,8 +356,8 @@
     .tab-item.active .tab-icon { filter: grayscale(0%); filter: drop-shadow(0 0 4px rgba(255, 94, 132, 0.4)); }
   }
 
-  /* --- 秘密小抽屉/档案箱/日历弹窗 --- */
-  #letter-modal, #archive-modal, #drawer-notes-modal, #calendar-modal {
+  /* --- 秘密小抽屉/档案箱/日历/人设编辑弹窗 --- */
+  #letter-modal, #archive-modal, #drawer-notes-modal, #calendar-modal, #persona-modal {
     display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(26, 18, 30, 0.65); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
     z-index: 2000; align-items: center; justify-content: center; padding: 20px; animation: modal-fade 0.3s ease;
@@ -426,6 +424,9 @@
     </a>
     <a class="nav-icon" href="javascript:void(0)" onclick="openArchiveBox()" title="恋爱档案箱">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3.1-9-7.56c0-1.25.5-2.4 1.1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></svg>
+    </a>
+    <a class="nav-icon" href="javascript:void(0)" onclick="openPersonaEditor()" title="人设编辑">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
     </a>
   </div>
 
@@ -548,6 +549,24 @@
   </div>
 </div>
 
+<!-- 人设 / 长期记忆编辑面板 -->
+<div id="persona-modal">
+  <div class="letter-container" style="max-width: 480px;">
+    <div class="letter-header">
+      <div class="letter-title">✒️ 人设记忆</div>
+      <button class="close-modal" onclick="closePersonaEditor()">×</button>
+    </div>
+    <div class="letter-content-area">
+      <textarea id="persona-textarea" placeholder="加载中…" style="width:100%; min-height:260px; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:10px; padding:14px; font-family:'Songti SC', serif; font-size:14px; line-height:1.7; color:#4a3742; background:rgba(255,255,255,0.6); resize:vertical; outline:none;"></textarea>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+        <button id="persona-save-btn" onclick="savePersona()" style="background:#ff5e84; color:#fff; border:none; border-radius:8px; padding:9px 22px; font-size:13px; font-weight:bold; cursor:pointer; letter-spacing:1px;">保存</button>
+        <span id="persona-status" style="font-size:12px; color:#7fb87f;"></span>
+        <span id="persona-error" style="font-size:12px; color:#e0607a;"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 仿真手账生理日历 -->
 <div id="calendar-modal">
   <div class="calendar-box">
@@ -595,7 +614,6 @@ let periodRecords = [];
 let selectedDateStr = "";
 
 // 长按/右键/双击 触发状态记录
-let pressTimer;
 let currentActiveMsgId = null;
 let currentActiveRowEl = null;
 
@@ -1265,6 +1283,58 @@ async function openArchiveBox() {
   }
 }
 function closeArchiveBox() { document.getElementById('archive-modal').style.display = 'none'; }
+
+// ---- 人设 / 长期记忆编辑面板 ----
+async function openPersonaEditor() {
+  const modal = document.getElementById('persona-modal');
+  const textarea = document.getElementById('persona-textarea');
+  const errorEl = document.getElementById('persona-error');
+  const statusEl = document.getElementById('persona-status');
+  modal.style.display = 'flex';
+  statusEl.textContent = '';
+  errorEl.textContent = '';
+  try {
+    const res = await fetch(apiUrl('/api/persona'));
+    const data = await res.json();
+    if (data.ok) {
+      textarea.value = data.text;
+    } else {
+      errorEl.textContent = '加载失败：' + (data.error || '未知错误');
+    }
+  } catch (e) {
+    errorEl.textContent = '加载失败：网络错误';
+  }
+}
+function closePersonaEditor() { document.getElementById('persona-modal').style.display = 'none'; }
+
+async function savePersona() {
+  const btn = document.getElementById('persona-save-btn');
+  const statusEl = document.getElementById('persona-status');
+  const errorEl = document.getElementById('persona-error');
+  const text = document.getElementById('persona-textarea').value;
+  statusEl.textContent = '';
+  errorEl.textContent = '';
+  btn.disabled = true;
+  try {
+    const res = await fetch(apiUrl('/api/persona'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = '已保存';
+      setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    } else {
+      errorEl.textContent = '保存失败：' + (data.error || '未知错误');
+    }
+  } catch (e) {
+    errorEl.textContent = '保存失败：网络错误';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 
 
 // ==========================================
