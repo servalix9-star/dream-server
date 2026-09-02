@@ -447,20 +447,47 @@ def get_mood_context(score, hours_gap):
 
 
 # ---- 仿真便签纸（日常留言 / 冰箱贴） ----
-# 单条覆盖式存储在 app_config 的 sticky_note key 里，跟以前 window_summary 的存法一样。
-# 每次Charon回复消息或后台自动醒来时，按当前心境重新生成一条。
+# 存进 Supabase sticky_notes 表（追加写入，支持堆积），is_pinned 控制是否"贴在桌面上"，
+# false 表示被收起进收纳盒但没删除，物理删除才是真正丢弃。
+# 每次Charon回复消息或后台自动醒来时，按当前心境生成一张新的，追加进去，不覆盖旧的。
 
-def load_sticky_note():
-    return get_app_config("sticky_note", {"message": "", "stage": None, "sticker": None, "updated_at": None})
+def load_sticky_notes(limit=50, pinned_only=False):
+    """从 Supabase sticky_notes 表读最近limit条，旧->新顺序。
+    pinned_only=True 时只返回还贴在桌面上的（is_pinned=true），用于桌面堆叠展示；
+    False 时返回全部（含已收起的），用于收纳盒展示。"""
+    try:
+        params = {
+            "select": "id,created_at,message,sticker,stage,is_pinned",
+            "order": "created_at.desc", "limit": limit
+        }
+        if pinned_only:
+            params["is_pinned"] = "eq.true"
+        rows = _supabase_request("GET", "sticky_notes", params=params)
+        return list(reversed(rows or []))
+    except Exception as e:
+        log_error("load_sticky_notes", e)
+        return []
 
 
-def save_sticky_note(message, stage, sticker):
-    set_app_config("sticky_note", {
+def add_sticky_note_row(message, stage, sticker):
+    """插入一张新便签，默认贴在桌面上（is_pinned=true）。"""
+    _supabase_request("POST", "sticky_notes", json_body={
         "message": message,
         "stage": stage,
         "sticker": sticker,
-        "updated_at": datetime.now().isoformat()
+        "is_pinned": True,
+        "created_at": datetime.now().isoformat()
     })
+
+
+def unpin_sticky_note_row(note_id):
+    """收起：把is_pinned改为false，便签从桌面消失但保留在收纳盒里，不删除。"""
+    _supabase_request("PATCH", "sticky_notes", params={"id": f"eq.{note_id}"}, json_body={"is_pinned": False})
+
+
+def delete_sticky_note_row(note_id):
+    """丢弃：物理删除这条便签。"""
+    _supabase_request("DELETE", "sticky_notes", params={"id": f"eq.{note_id}"})
 
 
 def build_sticky_note_prompt(stage_name, mood_context, recent):
@@ -488,11 +515,8 @@ def build_sticky_note_prompt(stage_name, mood_context, recent):
 {{"message": "便签内容，30到50字左右"}}"""
 
 
-def generate_sticky_note(mood_score, mood_context, recent):
-    """生成并保存一条新便签。调用方需要自己捕获异常，失败不应阻断主流程。"""
-    stage, sticker, stage_name = get_mood_stage(mood_score)
-    prompt = build_sticky_note_prompt(stage_name, mood_context, recent)
-    raw = call_deepseek(prompt)
+def _extract_json_field(raw, field):
+    """从DeepSeek返回的文本里剥掉可能的代码块标记，解析JSON取出指定字段；解析失败就把原文当作字段值。"""
     text = raw.strip()
     if text.startswith("```"):
         text = text.strip("`")
@@ -501,11 +525,19 @@ def generate_sticky_note(mood_score, mood_context, recent):
         text = text.strip()
     try:
         data = json.loads(text)
-        message = data.get("message", "").strip()
+        return data.get(field, "").strip()
     except Exception:
-        message = text
+        return text
+
+
+def generate_sticky_note(mood_score, mood_context, recent):
+    """生成一张新便签并追加进桌面（不覆盖旧的）。调用方需要自己捕获异常，失败不应阻断主流程。"""
+    stage, sticker, stage_name = get_mood_stage(mood_score)
+    prompt = build_sticky_note_prompt(stage_name, mood_context, recent)
+    raw = call_deepseek(prompt)
+    message = _extract_json_field(raw, "message")
     if message:
-        save_sticky_note(message, stage, sticker)
+        add_sticky_note_row(message, stage, sticker)
     return message
 
 
@@ -584,17 +616,7 @@ def generate_love_letter(letter_type, mood_context):
     """生成一封情书并写入信箱，同时点亮"有新信"标志。失败需由调用方捕获。"""
     prompt = build_love_letter_prompt(letter_type, mood_context)
     raw = call_deepseek(prompt)
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    try:
-        data = json.loads(text)
-        content = data.get("content", "").strip()
-    except Exception:
-        content = text
+    content = _extract_json_field(raw, "content")
     if content:
         add_love_letter_row(letter_type, content)
         set_has_new_letter(True)
@@ -661,21 +683,11 @@ def add_event():
             try:
                 period_ctx = get_period_context()
                 mood_context = get_mood_context(new_score, get_hours_since_last_chat())
-                # 强制生成一条"经期关怀"特制便签，无视当前心境档位
-                message = call_deepseek(build_period_sticky_note_prompt(period_ctx, mood_context))
-                text = message.strip()
-                if text.startswith("```"):
-                    text = text.strip("`")
-                    if text.startswith("json"):
-                        text = text[4:]
-                    text = text.strip()
-                try:
-                    note_data = json.loads(text)
-                    note_message = note_data.get("message", "").strip()
-                except Exception:
-                    note_message = text
+                # 强制生成一条"经期关怀"特制便签，无视当前心境档位，追加进桌面
+                raw = call_deepseek(build_period_sticky_note_prompt(period_ctx, mood_context))
+                note_message = _extract_json_field(raw, "message")
                 if note_message:
-                    save_sticky_note(note_message, "period", "🩹")
+                    add_sticky_note_row(note_message, "period", "🩹")
                 maybe_trigger_sweet_letter(old_score, new_score, mood_context)
             except Exception as e:
                 log_error("add_event:period_followup", e)
@@ -1013,8 +1025,9 @@ def chat_status():
     # （events表会不断增长，"最近N条里今天的条数"在互动很频繁时会漏算今天更早的记录）
     today_count = count_events_today()
 
-    # 当前便签（冰箱贴留言）
-    note = load_sticky_note()
+    # 当前贴在桌面上的便签堆叠（is_pinned=true），前端用来做层叠展示；
+    # 收纳盒（含已收起的）走单独的 /api/sticky-notes 接口，避免这个高频轮询的状态接口越来越重
+    pinned_notes = load_sticky_notes(pinned_only=True)
 
     return jsonify({
         "ok": True,
@@ -1026,12 +1039,7 @@ def chat_status():
         "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
         "period_context": period_ctx or None,
         "is_checking_in": is_checking_in,
-        "sticky_note": {
-            "message": note.get("message") or None,
-            "stage": note.get("stage"),
-            "sticker": note.get("sticker"),
-            "updated_at": note.get("updated_at"),
-        },
+        "sticky_notes": pinned_notes,
         "has_new_letter": get_has_new_letter(),
         "today_interaction_count": today_count,
         "current_model": get_current_model()
@@ -1095,6 +1103,68 @@ def mark_love_letters_read():
         return jsonify({"ok": True})
     except Exception as e:
         log_error("mark_love_letters_read", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/love-letters/delete", methods=["POST"])
+def delete_love_letter():
+    """丢弃一封情书：物理删除，不可恢复。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    letter_id = data.get("id")
+    if not letter_id:
+        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+    try:
+        _supabase_request("DELETE", "love_letters", params={"id": f"eq.{letter_id}"})
+        return jsonify({"ok": True, "deleted_id": letter_id})
+    except Exception as e:
+        log_error("delete_love_letter", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/sticky-notes", methods=["GET"])
+def get_sticky_notes():
+    """拉取便签列表。默认只返回收纳盒里的全部（含贴着的和收起的），
+    传 ?pinned_only=1 则只返回当前贴在桌面上的一批，用于跟chat-status保持一致口径单独刷新。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    pinned_only = request.args.get("pinned_only") == "1"
+    notes = load_sticky_notes(pinned_only=pinned_only)
+    return jsonify({"ok": True, "notes": list(reversed(notes))})
+
+
+@app.route("/api/sticky-notes/unpin", methods=["POST"])
+def unpin_sticky_note():
+    """收起：从桌面移到收纳盒，不删除。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    note_id = data.get("id")
+    if not note_id:
+        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+    try:
+        unpin_sticky_note_row(note_id)
+        return jsonify({"ok": True, "unpinned_id": note_id})
+    except Exception as e:
+        log_error("unpin_sticky_note", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/sticky-notes/delete", methods=["POST"])
+def delete_sticky_note():
+    """丢弃：物理删除，不可恢复（贴在桌面上的和收纳盒里的都可以用这个接口删）。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    note_id = data.get("id")
+    if not note_id:
+        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+    try:
+        delete_sticky_note_row(note_id)
+        return jsonify({"ok": True, "deleted_id": note_id})
+    except Exception as e:
+        log_error("delete_sticky_note", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
