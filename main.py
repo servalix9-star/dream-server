@@ -258,34 +258,131 @@ def new_msg_id():
     return f"{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
 
 
-def load_period():
-    return get_app_config("period", {"last_start": None, "avg_cycle_days": 28, "avg_period_days": 5})
+# ---- 经期记录（period_records 表：支持日历自由标记历史起止区间） ----
+# 每条记录是一段经期区间：start_date必填，end_date在经期结束前是null。
+# 平均周期天数/平均经期天数从历史记录里动态算出来，不再单独存一份配置。
+
+PERIOD_DEFAULT_CYCLE_DAYS = 28
+PERIOD_DEFAULT_PERIOD_DAYS = 5
 
 
-def save_period(data):
-    set_app_config("period", data)
+def load_period_records(limit=24):
+    """从 Supabase period_records 表读最近limit条，按start_date倒序（最新的在前）。"""
+    try:
+        rows = _supabase_request(
+            "GET", "period_records",
+            params={"select": "id,start_date,end_date,created_at", "order": "start_date.desc", "limit": limit}
+        )
+        return rows or []
+    except Exception as e:
+        log_error("load_period_records", e)
+        return []
+
+
+def add_period_start(start_date_str):
+    """记录一次经期开始，新建一行，end_date留空。"""
+    _supabase_request("POST", "period_records", json_body={
+        "start_date": start_date_str,
+        "end_date": None,
+        "created_at": datetime.now().isoformat()
+    })
+
+
+def close_open_period_record(end_date_str):
+    """把最近一条还没结束（end_date为null）的记录填上结束日期。
+    如果没有找到"进行中"的记录（比如用户跳过了开始直接点结束），就不做任何事，避免误伤历史数据。"""
+    try:
+        rows = _supabase_request(
+            "GET", "period_records",
+            params={"select": "id,start_date", "end_date": "is.null", "order": "start_date.desc", "limit": 1}
+        )
+        if rows:
+            record_id = rows[0]["id"]
+            _supabase_request("PATCH", "period_records", params={"id": f"eq.{record_id}"},
+                               json_body={"end_date": end_date_str})
+            return True
+        return False
+    except Exception as e:
+        log_error("close_open_period_record", e)
+        return False
+
+
+def get_period_calendar(year):
+    """获取指定年份的所有生理期起止日期区间，给前端日历绘制标记用。
+    只返回跟这一年有交集的记录（开始或结束落在这一年，或者跨年横跨这一年）。"""
+    records = load_period_records(limit=100)
+    year_start = f"{year}-01-01"
+    year_end = f"{year}-12-31"
+    result = []
+    for r in records:
+        start = r.get("start_date")
+        end = r.get("end_date")
+        if not start:
+            continue
+        # 只要区间跟这一年有重叠就纳入：开始日期<=年末 且 (没有结束日期 或 结束日期>=年初)
+        if start <= year_end and (not end or end >= year_start):
+            result.append({"id": r["id"], "start_date": start, "end_date": end})
+    return result
+
+
+def _compute_period_averages(records):
+    """从历史记录里算平均周期天数（相邻两次开始日期间隔）和平均经期天数（每段start到end的天数）。
+    数据不够（少于2条已结束的周期）时用默认值兜底。"""
+    cycle_days = PERIOD_DEFAULT_CYCLE_DAYS
+    period_days = PERIOD_DEFAULT_PERIOD_DAYS
+    try:
+        starts = sorted([date.fromisoformat(r["start_date"]) for r in records if r.get("start_date")])
+        if len(starts) >= 2:
+            gaps = [(starts[i + 1] - starts[i]).days for i in range(len(starts) - 1)]
+            valid_gaps = [g for g in gaps if 15 <= g <= 45]
+            if valid_gaps:
+                cycle_days = round(sum(valid_gaps) / len(valid_gaps))
+
+        durations = []
+        for r in records:
+            if r.get("start_date") and r.get("end_date"):
+                s = date.fromisoformat(r["start_date"])
+                e = date.fromisoformat(r["end_date"])
+                d = (e - s).days + 1
+                if 1 <= d <= 15:
+                    durations.append(d)
+        if durations:
+            period_days = round(sum(durations) / len(durations))
+    except Exception as e:
+        log_error("_compute_period_averages", e)
+    return cycle_days, period_days
 
 
 def get_period_context():
-    """返回经期相关的上下文文字，没有记录就返回空字符串。"""
-    p = load_period()
-    if not p.get("last_start"):
+    """返回经期相关的上下文文字，没有记录就返回空字符串。
+    从period_records表里取最新一条记录来预测当前状态：
+    如果最新一条还没结束（end_date为空），就认为正处于经期中；
+    否则用历史平均周期天数预测下一次大概什么时候来。"""
+    records = load_period_records(limit=24)
+    if not records:
         return ""
+
+    latest = records[0]  # load_period_records已经按start_date倒序
     try:
-        last_start = date.fromisoformat(p["last_start"])
+        latest_start = date.fromisoformat(latest["start_date"])
     except Exception:
         return ""
-    today = date.today()
-    day_index = (today - last_start).days + 1  # 从开始那天算第1天
-    cycle = p.get("avg_cycle_days", 28)
-    period_len = p.get("avg_period_days", 5)
 
-    if 1 <= day_index <= period_len:
+    today = date.today()
+    cycle_days, period_days = _compute_period_averages(records)
+
+    if not latest.get("end_date"):
+        # 最新一条还没标记结束，认为仍在经期中
+        day_index = (today - latest_start).days + 1
+        if day_index >= 1:
+            return f"她现在是经期第{day_index}天，身体比较敏感，可能会累、怕冷、情绪波动，需要格外体贴关心。"
+
+    day_index = (today - latest_start).days + 1
+    if 1 <= day_index <= period_days:
         return f"她现在是经期第{day_index}天，身体比较敏感，可能会累、怕冷、情绪波动，需要格外体贴关心。"
-    elif day_index > period_len:
-        days_to_next = cycle - day_index
-        if 0 <= days_to_next <= 3:
-            return f"距离她下次经期大概还有{days_to_next}天，可以提前提醒她准备好用品、注意保暖别熬夜。"
+    days_to_next = cycle_days - day_index
+    if 0 <= days_to_next <= 3:
+        return f"距离她下次经期大概还有{days_to_next}天，可以提前提醒她准备好用品、注意保暖别熬夜。"
     return ""
 
 
@@ -447,21 +544,24 @@ def get_mood_context(score, hours_gap):
 
 
 # ---- 仿真便签纸（日常留言 / 冰箱贴） ----
-# 存进 Supabase sticky_notes 表（追加写入，支持堆积），is_pinned 控制是否"贴在桌面上"，
-# false 表示被收起进收纳盒但没删除，物理删除才是真正丢弃。
-# 每次Charon回复消息或后台自动醒来时，按当前心境生成一张新的，追加进去，不覆盖旧的。
+# 存进 Supabase sticky_notes 表（追加写入，支持堆积）。
+# status 三档物理位置：desk(桌面) -> drawer(便签抽屉) -> archive(档案箱)，层层流转。
+# is_starred 是独立的标星收藏维度，跟status正交（哪一层的便签都可以标星）。
+# 每次Charon回复消息或后台自动醒来时，按当前心境生成一张新的，追加进desk层，不覆盖旧的。
 
-def load_sticky_notes(limit=50, pinned_only=False):
+STICKY_NOTE_CAPACITY = {"desk": 9, "drawer": 30, "archive": 100}
+
+
+def load_sticky_notes(limit=100, status=None):
     """从 Supabase sticky_notes 表读最近limit条，旧->新顺序。
-    pinned_only=True 时只返回还贴在桌面上的（is_pinned=true），用于桌面堆叠展示；
-    False 时返回全部（含已收起的），用于收纳盒展示。"""
+    status指定时只返回该层（'desk'/'drawer'/'archive'）；不指定则返回全部层级混合结果。"""
     try:
         params = {
-            "select": "id,created_at,message,sticker,stage,is_pinned",
+            "select": "id,created_at,message,sticker,stage,status,is_starred",
             "order": "created_at.desc", "limit": limit
         }
-        if pinned_only:
-            params["is_pinned"] = "eq.true"
+        if status:
+            params["status"] = f"eq.{status}"
         rows = _supabase_request("GET", "sticky_notes", params=params)
         return list(reversed(rows or []))
     except Exception as e:
@@ -469,24 +569,64 @@ def load_sticky_notes(limit=50, pinned_only=False):
         return []
 
 
+def count_sticky_notes(status):
+    """按层级统计当前便签数量，用于容量提醒判断。跟count_events_today同样的PostgREST count写法。"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+            raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
+        url = f"{SUPABASE_URL}/rest/v1/sticky_notes"
+        headers = dict(SUPABASE_HEADERS)
+        headers["Prefer"] = "count=exact"
+        resp = requests.get(
+            url, headers=headers,
+            params={"select": "id", "status": f"eq.{status}", "limit": 1},
+            timeout=15
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"count_sticky_notes 失败: status={resp.status_code} body={resp.text}")
+        content_range = resp.headers.get("Content-Range", "")
+        if "/" in content_range:
+            total = content_range.split("/")[-1]
+            if total.isdigit():
+                return int(total)
+        return 0
+    except Exception as e:
+        log_error("count_sticky_notes", e)
+        return 0
+
+
+def is_sticky_layer_full(status):
+    """检查某一层是否已达到（或超过）容量上限。容量满不阻止写入，只用于返回提醒标志。"""
+    cap = STICKY_NOTE_CAPACITY.get(status)
+    if cap is None:
+        return False
+    return count_sticky_notes(status) >= cap
+
+
 def add_sticky_note_row(message, stage, sticker):
-    """插入一张新便签，默认贴在桌面上（is_pinned=true）。"""
+    """插入一张新便签，默认贴在桌面上（status='desk'）。"""
     _supabase_request("POST", "sticky_notes", json_body={
         "message": message,
         "stage": stage,
         "sticker": sticker,
-        "is_pinned": True,
+        "status": "desk",
+        "is_starred": False,
         "created_at": datetime.now().isoformat()
     })
 
 
-def unpin_sticky_note_row(note_id):
-    """收起：把is_pinned改为false，便签从桌面消失但保留在收纳盒里，不删除。"""
-    _supabase_request("PATCH", "sticky_notes", params={"id": f"eq.{note_id}"}, json_body={"is_pinned": False})
+def move_sticky_note_row(note_id, target_status):
+    """把便签移动到指定层级（desk/drawer/archive）。"""
+    _supabase_request("PATCH", "sticky_notes", params={"id": f"eq.{note_id}"}, json_body={"status": target_status})
+
+
+def star_sticky_note_row(note_id, is_starred):
+    """设置/取消标星，跟status层级无关，哪一层的便签都能标星。"""
+    _supabase_request("PATCH", "sticky_notes", params={"id": f"eq.{note_id}"}, json_body={"is_starred": bool(is_starred)})
 
 
 def delete_sticky_note_row(note_id):
-    """丢弃：物理删除这条便签。"""
+    """丢弃：物理删除这条便签，不可恢复。"""
     _supabase_request("DELETE", "sticky_notes", params={"id": f"eq.{note_id}"})
 
 
@@ -561,26 +701,87 @@ def build_period_sticky_note_prompt(period_context, mood_context):
 # ---- 神秘小抽屉（情书库） ----
 # 情书不对外公开列表位置，只在前端抽屉图标上留一个"有新信"的提示位。
 # 存进 love_letters 表（追加写入，历史信件都保留，供网页翻阅）。
+# status 两档物理位置：drawer(情书抽屉) -> archive(档案箱)，情书没有desk这一档，生成时直接进抽屉。
+# is_starred 是独立的标星收藏维度，跟status正交。
 
-def load_love_letters(limit=50):
-    """从 Supabase love_letters 表读最近limit条，旧->新顺序。"""
+LOVE_LETTER_CAPACITY = {"drawer": 20, "archive": 100}
+
+
+def load_love_letters(limit=100, status=None):
+    """从 Supabase love_letters 表读最近limit条，旧->新顺序。
+    status指定时只返回该层（'drawer'/'archive'）；不指定则返回全部混合结果。"""
     try:
-        rows = _supabase_request(
-            "GET", "love_letters",
-            params={"select": "id,created_at,letter_type,content", "order": "created_at.desc", "limit": limit}
-        )
+        params = {
+            "select": "id,created_at,letter_type,content,status,is_starred",
+            "order": "created_at.desc", "limit": limit
+        }
+        if status:
+            params["status"] = f"eq.{status}"
+        rows = _supabase_request("GET", "love_letters", params=params)
         return list(reversed(rows or []))
     except Exception as e:
         log_error("load_love_letters", e)
         return []
 
 
+def count_love_letters(status):
+    """按层级统计当前情书数量，用于容量提醒判断。"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+            raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
+        url = f"{SUPABASE_URL}/rest/v1/love_letters"
+        headers = dict(SUPABASE_HEADERS)
+        headers["Prefer"] = "count=exact"
+        resp = requests.get(
+            url, headers=headers,
+            params={"select": "id", "status": f"eq.{status}", "limit": 1},
+            timeout=15
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"count_love_letters 失败: status={resp.status_code} body={resp.text}")
+        content_range = resp.headers.get("Content-Range", "")
+        if "/" in content_range:
+            total = content_range.split("/")[-1]
+            if total.isdigit():
+                return int(total)
+        return 0
+    except Exception as e:
+        log_error("count_love_letters", e)
+        return 0
+
+
+def is_love_letter_layer_full(status):
+    """检查情书某一层是否已达到（或超过）容量上限。容量满不阻止写入，只用于返回提醒标志。"""
+    cap = LOVE_LETTER_CAPACITY.get(status)
+    if cap is None:
+        return False
+    return count_love_letters(status) >= cap
+
+
 def add_love_letter_row(letter_type, content, created_at=None):
+    """插入一封新情书，默认放进情书抽屉（status='drawer'）。"""
     _supabase_request("POST", "love_letters", json_body={
         "letter_type": letter_type,
         "content": content,
+        "status": "drawer",
+        "is_starred": False,
         "created_at": created_at or datetime.now().isoformat()
     })
+
+
+def archive_love_letter_row(letter_id):
+    """把情书从抽屉移入档案箱。"""
+    _supabase_request("PATCH", "love_letters", params={"id": f"eq.{letter_id}"}, json_body={"status": "archive"})
+
+
+def star_love_letter_row(letter_id, is_starred):
+    """设置/取消标星，跟status层级无关。"""
+    _supabase_request("PATCH", "love_letters", params={"id": f"eq.{letter_id}"}, json_body={"is_starred": bool(is_starred)})
+
+
+def delete_love_letter_row(letter_id):
+    """丢弃：物理删除这封情书，不可恢复。"""
+    _supabase_request("DELETE", "love_letters", params={"id": f"eq.{letter_id}"})
 
 
 def get_has_new_letter():
@@ -662,22 +863,11 @@ def add_event():
     try:
         add_event_row(data.get("type"), data.get("value"))
 
-        # 经期开始记录：单独存一份，方便算天数；同时触发情绪值瞬间暴涨+25，
+        # 经期开始记录：新建一行区间记录（end_date留空）；同时触发情绪值瞬间暴涨+25，
         # 无视当前任何状态，强制把便签切换为"经期关怀"特制款
         if data.get("type") == "period" and data.get("value") == "开始":
-            p = load_period()
             today_str = date.today().isoformat()
-            # 如果已有上次记录，顺便更新一下平均周期天数
-            if p.get("last_start"):
-                try:
-                    last = date.fromisoformat(p["last_start"])
-                    gap = (date.today() - last).days
-                    if 15 <= gap <= 45:  # 排除异常值
-                        p["avg_cycle_days"] = gap
-                except Exception:
-                    pass
-            p["last_start"] = today_str
-            save_period(p)
+            add_period_start(today_str)
 
             old_score, new_score = recover_mood(MOOD_RECOVERY_PERIOD_EVENT)
             try:
@@ -691,6 +881,11 @@ def add_event():
                 maybe_trigger_sweet_letter(old_score, new_score, mood_context)
             except Exception as e:
                 log_error("add_event:period_followup", e)
+
+        # 经期结束记录：把最近一条"进行中"的记录补上结束日期
+        elif data.get("type") == "period" and data.get("value") == "结束":
+            today_str = date.today().isoformat()
+            close_open_period_record(today_str)
 
         return jsonify({"ok": True})
     except Exception as e:
@@ -714,30 +909,48 @@ def get_errors():
     return "no errors logged"
 
 
-@app.route("/period", methods=["GET"])
-def get_period():
-    return jsonify(load_period())
+@app.route("/api/period/calendar", methods=["GET"])
+def get_period_calendar_api():
+    """获取指定年份（默认当前年）的所有生理期起止日期区间，供前端日历绘制标记。
+    用法：/api/period/calendar 或 /api/period/calendar?year=2026"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    year = request.args.get("year", type=int, default=date.today().year)
+    records = get_period_calendar(year)
+    return jsonify({"ok": True, "year": year, "records": records})
 
 
-@app.route("/period/init", methods=["GET"])
-def init_period():
-    """手动初始化经期数据，用于把健康App里已有的历史数据一次性填进来。
-    用法：/period/init?last_start=2026-07-11&cycle=29&period_days=7"""
-    last_start = request.args.get("last_start")
-    cycle = request.args.get("cycle", type=int, default=28)
-    period_days = request.args.get("period_days", type=int, default=5)
-
-    if not last_start:
-        return jsonify({"ok": False, "error": "需要提供 last_start 参数，格式 YYYY-MM-DD"}), 400
+@app.route("/api/period/save", methods=["POST"])
+def save_period_api():
+    """前端日历点击某个日期记生理期开始或结束。
+    Body: {"action": "start", "date": "2026-08-01"} 新建一条开始记录（end_date留空）
+          {"action": "end", "date": "2026-08-06"} 把最近一条进行中的记录补上结束日期
+    这个接口是给网页日历手动标记用的，跟 /event 里快捷指令触发的经期开始逻辑共用同一份底层数据，
+    区别是这里只负责记录日期本身，不会像/event那样连带触发情绪值暴涨和特制便签
+    （因为在日历上补录历史数据，不代表"现在"发生了什么，不该触发实时的情绪反应）。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    action = data.get("action")
+    date_str = data.get("date")
+    if action not in ("start", "end") or not date_str:
+        return jsonify({"ok": False, "error": "需要 action('start'或'end') 和 date(YYYY-MM-DD) 参数"}), 400
+    try:
+        date.fromisoformat(date_str)
+    except Exception:
+        return jsonify({"ok": False, "error": "date 格式不对，要是 YYYY-MM-DD"}), 400
 
     try:
-        date.fromisoformat(last_start)  # 校验格式
-    except Exception:
-        return jsonify({"ok": False, "error": "last_start 格式不对，要是 YYYY-MM-DD"}), 400
-
-    p = {"last_start": last_start, "avg_cycle_days": cycle, "avg_period_days": period_days}
-    save_period(p)
-    return jsonify({"ok": True, "saved": p})
+        if action == "start":
+            add_period_start(date_str)
+        else:
+            closed = close_open_period_record(date_str)
+            if not closed:
+                return jsonify({"ok": False, "error": "没有找到进行中的经期记录可以标记结束"}), 400
+        return jsonify({"ok": True})
+    except Exception as e:
+        log_error("save_period_api", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/mood", methods=["GET"])
@@ -1025,9 +1238,9 @@ def chat_status():
     # （events表会不断增长，"最近N条里今天的条数"在互动很频繁时会漏算今天更早的记录）
     today_count = count_events_today()
 
-    # 当前贴在桌面上的便签堆叠（is_pinned=true），前端用来做层叠展示；
-    # 收纳盒（含已收起的）走单独的 /api/sticky-notes 接口，避免这个高频轮询的状态接口越来越重
-    pinned_notes = load_sticky_notes(pinned_only=True)
+    # 当前贴在桌面上的便签堆叠（status='desk'），前端用来做层叠展示，最多9张；
+    # 抽屉/档案箱走单独的 /api/sticky-notes 接口，避免这个高频轮询的状态接口越来越重
+    desk_notes = load_sticky_notes(limit=9, status="desk")
 
     return jsonify({
         "ok": True,
@@ -1039,7 +1252,8 @@ def chat_status():
         "hours_since_last_event": round(hours_gap, 2) if hours_gap is not None else None,
         "period_context": period_ctx or None,
         "is_checking_in": is_checking_in,
-        "sticky_notes": pinned_notes,
+        "sticky_notes": desk_notes,
+        "desk_full": is_sticky_layer_full("desk"),
         "has_new_letter": get_has_new_letter(),
         "today_interaction_count": today_count,
         "current_model": get_current_model()
@@ -1086,11 +1300,21 @@ def get_chat_messages():
 
 @app.route("/api/love-letters", methods=["GET"])
 def get_love_letters():
-    """拉取信箱里的历史情书，供网页小抽屉面板翻阅。倒序（最新的在前）更符合翻阅习惯。"""
+    """拉取情书列表。传 ?status=drawer 或 ?status=archive 按层筛选；不传则返回全部。
+    返回结果里附带 layer_full 提示：告诉前端drawer/archive这两层当前是否已达容量上限，
+    方便前端在UI上提示"该整理一下抽屉/档案箱了"，不影响读取本身。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-    letters = load_love_letters()
-    return jsonify({"ok": True, "letters": list(reversed(letters))})
+    status = request.args.get("status")
+    letters = load_love_letters(status=status)
+    return jsonify({
+        "ok": True,
+        "letters": list(reversed(letters)),
+        "layer_full": {
+            "drawer": is_love_letter_layer_full("drawer"),
+            "archive": is_love_letter_layer_full("archive"),
+        }
+    })
 
 
 @app.route("/api/love-letters/mark-read", methods=["POST"])
@@ -1106,6 +1330,41 @@ def mark_love_letters_read():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/love-letters/archive", methods=["POST"])
+def archive_love_letter():
+    """把一封情书从抽屉移入档案箱。容量满了不拦截，只在返回值里带提醒标志。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    letter_id = data.get("id")
+    if not letter_id:
+        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+    try:
+        archive_love_letter_row(letter_id)
+        return jsonify({"ok": True, "archived_id": letter_id, "archive_full": is_love_letter_layer_full("archive")})
+    except Exception as e:
+        log_error("archive_love_letter", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/love-letters/star", methods=["POST"])
+def star_love_letter():
+    """设置/取消情书的标星收藏状态。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    letter_id = data.get("id")
+    is_starred = data.get("is_starred")
+    if not letter_id or is_starred is None:
+        return jsonify({"ok": False, "error": "缺少id或is_starred参数"}), 400
+    try:
+        star_love_letter_row(letter_id, is_starred)
+        return jsonify({"ok": True, "id": letter_id, "is_starred": bool(is_starred)})
+    except Exception as e:
+        log_error("star_love_letter", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/love-letters/delete", methods=["POST"])
 def delete_love_letter():
     """丢弃一封情书：物理删除，不可恢复。"""
@@ -1116,7 +1375,7 @@ def delete_love_letter():
     if not letter_id:
         return jsonify({"ok": False, "error": "缺少id参数"}), 400
     try:
-        _supabase_request("DELETE", "love_letters", params={"id": f"eq.{letter_id}"})
+        delete_love_letter_row(letter_id)
         return jsonify({"ok": True, "deleted_id": letter_id})
     except Exception as e:
         log_error("delete_love_letter", e)
@@ -1125,35 +1384,67 @@ def delete_love_letter():
 
 @app.route("/api/sticky-notes", methods=["GET"])
 def get_sticky_notes():
-    """拉取便签列表。默认只返回收纳盒里的全部（含贴着的和收起的），
-    传 ?pinned_only=1 则只返回当前贴在桌面上的一批，用于跟chat-status保持一致口径单独刷新。"""
+    """拉取便签列表。传 ?status=desk/drawer/archive 按层筛选；不传则返回全部。
+    返回结果里附带 layer_full 提示：desk/drawer/archive三层当前是否已达容量上限。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-    pinned_only = request.args.get("pinned_only") == "1"
-    notes = load_sticky_notes(pinned_only=pinned_only)
-    return jsonify({"ok": True, "notes": list(reversed(notes))})
+    status = request.args.get("status")
+    notes = load_sticky_notes(status=status)
+    return jsonify({
+        "ok": True,
+        "notes": list(reversed(notes)),
+        "layer_full": {
+            "desk": is_sticky_layer_full("desk"),
+            "drawer": is_sticky_layer_full("drawer"),
+            "archive": is_sticky_layer_full("archive"),
+        }
+    })
 
 
-@app.route("/api/sticky-notes/unpin", methods=["POST"])
-def unpin_sticky_note():
-    """收起：从桌面移到收纳盒，不删除。"""
+@app.route("/api/sticky-notes/move", methods=["POST"])
+def move_sticky_note():
+    """把便签移动到指定层级（desk/drawer/archive）。容量满了不拦截，只在返回值里带提醒标志。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     data = request.json or {}
     note_id = data.get("id")
-    if not note_id:
-        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+    target_status = data.get("target_status")
+    if not note_id or target_status not in ("desk", "drawer", "archive"):
+        return jsonify({"ok": False, "error": "缺少id，或target_status不是desk/drawer/archive之一"}), 400
     try:
-        unpin_sticky_note_row(note_id)
-        return jsonify({"ok": True, "unpinned_id": note_id})
+        move_sticky_note_row(note_id, target_status)
+        return jsonify({
+            "ok": True,
+            "moved_id": note_id,
+            "target_status": target_status,
+            "target_full": is_sticky_layer_full(target_status)
+        })
     except Exception as e:
-        log_error("unpin_sticky_note", e)
+        log_error("move_sticky_note", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/sticky-notes/star", methods=["POST"])
+def star_sticky_note():
+    """设置/取消便签的标星收藏状态，跟层级无关。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    note_id = data.get("id")
+    is_starred = data.get("is_starred")
+    if not note_id or is_starred is None:
+        return jsonify({"ok": False, "error": "缺少id或is_starred参数"}), 400
+    try:
+        star_sticky_note_row(note_id, is_starred)
+        return jsonify({"ok": True, "id": note_id, "is_starred": bool(is_starred)})
+    except Exception as e:
+        log_error("star_sticky_note", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/sticky-notes/delete", methods=["POST"])
 def delete_sticky_note():
-    """丢弃：物理删除，不可恢复（贴在桌面上的和收纳盒里的都可以用这个接口删）。"""
+    """丢弃：物理删除，不可恢复（哪一层的便签都可以用这个接口删）。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     data = request.json or {}
