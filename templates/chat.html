@@ -15,7 +15,7 @@
     background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550; /* 恢复至初始雅致深紫灰 */
+    color: #5a4550; 
   }
   #app {
     display: flex;
@@ -35,22 +35,18 @@
     align-items: center;
     gap: 16px;
     padding: 24px 0;
-    background: rgba(255, 238, 241, 0.6); /* 马卡龙蜜桃粉色底色 */
+    background: rgba(255, 238, 241, 0.6); 
     border-radius: 24px;
     position: relative;
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }
-  /* 纯 CSS 垂直多色渐变遮罩波点 - 放大到 22px 并且调整色比 */
   #nav::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    /* 垂直黑-灰-白-灰-黑渐变 (比例 2:1:3:2:2) */
     background: linear-gradient(to bottom, #000000 0%, #000000 20%, #c0b8c0 30%, #ffffff 40%, #ffffff 60%, #c0b8c0 80%, #000000 100%);
-    -webkit-mask-image: 
-      radial-gradient(circle, #000 24%, transparent 24.5%),
-      radial-gradient(circle, #000 24%, transparent 24.5%);
+    -webkit-mask-image: radial-gradient(circle, #000 24%, transparent 24.5%), radial-gradient(circle, #000 24%, transparent 24.5%);
     -webkit-mask-size: 22px 22px; 
     -webkit-mask-position: 0 0, 11px 11px;
     pointer-events: none;
@@ -67,7 +63,7 @@
     display: flex; align-items: center; justify-content: center;
     border: none !important;
     
-    /* 核心修复：大幅提高白底纯度（0.95），杜绝被底层黑色污染发灰 */
+    /* 核心改动：白底半透明 + 内部微小粉色波点 + 磨砂玻璃效果 */
     background: 
       radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
       radial-gradient(circle, rgba(229, 153, 169, 0.3) 15%, transparent 15.5%),
@@ -81,18 +77,20 @@
     text-decoration: none;
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
     
-    /* 干净的实体投影，完全摒弃霓虹光晕 */
+    /* 核心改动：去掉霓虹光，恢复干净的实体物理投影 */
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
     cursor: pointer;
     padding: 0;
   }
   .nav-icon svg {
-    width: 20px; height: 20px; stroke-width: 1.5px;
+    width: 20px; 
+    height: 20px;
+    stroke-width: 1.5px;
   }
   .nav-icon:hover, #send-btn:hover {
     transform: translateY(-2px) scale(1.05);
-    background-color: #ffffff !important;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important;
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important; /* 悬浮时阴影加深 */
   }
   .nav-icon:active, #send-btn:active { 
     transform: translateY(0) scale(0.95); 
@@ -198,7 +196,7 @@
   }
   .bubble.pending { opacity: 0.5; }
 
-  /* ---- 全局悬浮操作菜单 ---- */
+  /* ---- 悬浮操作菜单 ---- */
   #bubble-menu {
     display: none; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 8px; padding: 6px 4px;
@@ -232,7 +230,7 @@
 
   /* ---- 右侧状态面板（DESK 手账区） ---- */
   #panel {
-    width: 270px; flex-shrink: 0; display: none; flex-direction: column;
+    width: 260px; flex-shrink: 0; display: none; flex-direction: column;
     padding: 22px 18px; background: rgba(255, 235, 240, 0.55); border-radius: 24px; position: relative; overflow: hidden;
     border: none; box-shadow: 0 8px 32px rgba(184, 118, 138, 0.08);
   }
@@ -248,92 +246,49 @@
     font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (绝对层叠堆放) --- */
+  /* --- 仿真实物便利贴堆叠留言板 (易读自然流) --- */
   .sticky-note-stack {
-    position: relative; 
-    width: 100%; 
-    height: 180px; /* 固定的堆放高度 */
-    margin-top: 15px; 
-    margin-bottom: 25px; 
-    z-index: 1;
-    overflow: visible; /* 允许倾斜的卡片超出边界不被截断 */
+    position: relative; width: 100%; display: flex; flex-direction: column; gap: 4px; /* 使用微间距替代绝对堆叠 */
+    margin-top: 15px; margin-bottom: 25px; z-index: 1;
+    overflow-y: auto; max-height: 60vh; /* 防止便签过多撑爆屏幕 */
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 20px;
   }
   .sticky-note-card {
-    position: absolute; /* 恢复纯正的绝对定位堆叠物理舱，严禁使用滚动条/Flex流 */
-    top: 0; left: 0; right: 0;
-    min-height: 130px;
-    border-radius: 4px 18px 18px 18px; 
-    padding: 24px 16px 36px 16px; /* 留出顶部胶带和底部星标距离 */
-    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.12), inset 0 0 0 1px rgba(255,255,255,0.8);
+    position: relative; /* 恢复相对流式布局，方便完整阅读 */
+    background: #ffffff; border-radius: 4px 18px 18px 18px; 
+    padding: 16px 16px 36px 16px; 
+    box-shadow: 2px 4px 15px rgba(184, 118, 138, 0.15);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
+    flex-shrink: 0; margin-top: -12px; /* 产生微小的真实纸张交叠感 */
   }
+  .sticky-note-card:first-child { margin-top: 0; }
   
-  /* 仿真手账和纸胶带装饰 */
-  .sticky-tape {
-    position: absolute; top: -8px; left: 50%; transform: translateX(-50%) rotate(-2deg);
-    width: 40px; height: 12px; background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(255,255,255,0.8); border-radius: 2px;
-    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 2;
-  }
+  .sticky-note-card.stage-sweet { background: linear-gradient(135deg, #fffcfd, #fff0f3); }
+  .sticky-note-card.stage-tsundere { background: linear-gradient(135deg, #fffcfd, #f5eef1); }
+  .sticky-note-card.stage-vulnerable { background: linear-gradient(135deg, #fffcfd, #ede3e7); }
+  .sticky-note-card.stage-period { background: linear-gradient(135deg, #fffcfd, #fde8eb); }
 
-  /* 25种随机组合手账款式库 */
-  /* 款式1：5种马卡龙手账纸专属底色 */
-  .sticky-note-card.color-pink { background-color: #ffd8df; }
-  .sticky-note-card.color-mint { background-color: #e0f4f0; }
-  .sticky-note-card.color-yellow { background-color: #fff8d6; }
-  .sticky-note-card.color-blue { background-color: #e3f0fc; }
-  .sticky-note-card.color-beige { background-color: #f1e9e3; }
-
-  /* 款式2：5种手账特制纸张底纹 */
-  .sticky-note-card.pattern-dots {
-    background-image: 
-      radial-gradient(circle, rgba(90, 69, 80, 0.07) 15%, transparent 15.5%),
-      radial-gradient(circle, rgba(90, 69, 80, 0.07) 15%, transparent 15.5%) !important;
-    background-size: 10px 10px !important;
-    background-position: 0 0, 5px 5px !important;
-  }
-  .sticky-note-card.pattern-lined {
-    background-image: repeating-linear-gradient(transparent, transparent 23px, rgba(90, 69, 80, 0.06) 23px, rgba(90, 69, 80, 0.06) 24px) !important;
-    background-position: 0 10px !important;
-  }
-  .sticky-note-card.pattern-grid {
-    background-image: 
-      linear-gradient(rgba(90, 69, 80, 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(90, 69, 80, 0.05) 1px, transparent 1px) !important;
-    background-size: 14px 14px !important;
-  }
-  .sticky-note-card.pattern-gradient {
-    background-image: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%) !important;
-  }
-  .sticky-note-card.pattern-solid {
-    background-image: none !important;
-  }
-
-  /* 悬浮交互：底层卡片被抽出到最前，角度完全回正并获得大投影 */
   .sticky-note-card:hover {
-    transform: rotate(0deg) translateY(-8px) scale(1.03) !important;
+    transform: rotate(0deg) translateY(-2px) scale(1.02) !important;
     z-index: 100 !important;
-    opacity: 1 !important;
-    box-shadow: 4px 10px 30px rgba(184, 118, 138, 0.28);
+    box-shadow: 4px 8px 24px rgba(184, 118, 138, 0.22);
   }
-  
   .sticky-note-text {
     font-size: 12.5px; color: #5a4550; line-height: 1.6; font-family: "Songti SC", serif; word-wrap: break-word;
-    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
   }
-  
-  /* 纯粉色荧光星标 (取代金黄星标) */
+  /* 纯粉色荧光星标 */
   .note-star-btn {
     position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
-    opacity: 0.4; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #d1b3bd; padding: 4px; line-height: 1;
+    opacity: 0.5; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
   }
-  .note-star-btn:hover { transform: scale(1.15); opacity: 0.8; color: #ff5e84; }
+  .note-star-btn:hover { transform: scale(1.15); }
   .note-star-btn.active {
     opacity: 1; color: #ff5e84; filter: drop-shadow(0 2px 5px rgba(255, 94, 132, 0.45));
   }
 
-  /* --- 秘密双层收纳抽屉设计 (移动到底部，文字居中重排版) --- */
+  /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版重构) --- */
   .drawer-wrapper { 
     display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px;
   }
@@ -427,8 +382,7 @@
   .letter-act-group { display: flex; gap: 8px; align-items: center; }
   .letter-del-btn { background: none; border: none; color: #a66275; font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
   .letter-del-btn:hover { color: #ff5e84; background-color: rgba(255, 94, 132, 0.08); }
-  /* 列表里的标星按钮也换成纯粉色星芒 */
-  .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; background:none; border:none; padding:2px; cursor:pointer;}
+  .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; }
   .note-act-btn.star-btn.active { color: #ff5e84; filter: drop-shadow(0 1px 3px rgba(255, 94, 132, 0.45)); }
   .letter-text { white-space: pre-wrap; font-style: italic; }
 
@@ -460,7 +414,7 @@
 <body>
 <div id="app">
 
-  <!-- 1. 左侧波点玻璃舱导航栏 (纯白底，粉色图案，实体投影) -->
+  <!-- 1. 左侧波点玻璃舱导航栏 (恢复为白底半调透光，极细粉色 SVG 图标，实体投影) -->
   <div id="nav">
     <a class="nav-icon" href="/" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -498,7 +452,7 @@
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
-      <!-- 无边框发光粉波点发送按钮 -->
+      <!-- 无边框白底透光纸飞机发送按钮 -->
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -508,12 +462,12 @@
     </div>
   </div>
 
-  <!-- 3. 右侧状态面板 (Desk 手账区) -->
+  <!-- 3. 右侧状态面板 (Desk 手账角) -->
   <div id="panel">
     <div class="panel-child panel-title">DESK</div>
     <div id="panel-body" class="panel-child" style="display:flex; flex-direction:column; height:100%;">
         
-      <!-- 冰箱贴层叠便签堆叠容器 (物理层叠效果) -->
+      <!-- 冰箱贴层叠便签堆叠容器 (自然流体排版) -->
       <div class="sticky-note-stack" id="sticky-container">
         <!-- JS 动态灌入层叠卡片 -->
       </div>
@@ -559,6 +513,7 @@
 <!-- 全局悬浮菜单 -->
 <div id="bubble-menu"></div>
 
+<!-- 小抽屉与弹窗区域略... -->
 <!-- 秘密小抽屉 1：便签收纳盒 (30) -->
 <div id="drawer-notes-modal">
   <div class="letter-container">
@@ -873,6 +828,7 @@ function escapeHtml(str) {
 
 // ---- 便签相关的操作与数据同步函数 ----
 async function deleteNote(id, sourceStr = "desk") {
+  // 桌面便签经过动画撕碎处理，这里只做请求和刷新即可，不再拦截弹窗
   if (sourceStr !== "desk" && !confirm('确定要丢弃这张便签吗？它将被永久删除。')) return;
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/delete'), {
@@ -920,57 +876,36 @@ async function starNote(id, isStarredNow, sourceStr) {
   } catch(e) { alert('网络错误'); }
 }
 
-// ---- 纯 JavaScript 哈希种子随机数算法 ----
-function getSeededStyle(id) {
-  const colors = ['pink', 'mint', 'yellow', 'blue', 'beige'];
-  const patterns = ['dots', 'lined', 'grid', 'solid', 'gradient'];
-  let hash = 0;
-  const idStr = String(id);
-  for (let i = 0; i < idStr.length; i++) {
-    hash = idStr.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  hash = Math.abs(hash);
-  return {
-    color: colors[hash % colors.length],
-    pattern: patterns[Math.floor(hash / 3) % patterns.length],
-    rotation: (hash % 11) - 5
-  };
-}
-
-// ---- 加载状态 (Desk & 物理层叠便签 & 警告判定) ----
+// ---- 加载状态 (Desk & 堆叠便签 & 警告判定) ----
 async function loadStatus() {
   try {
     const res = await fetch(apiUrl('/api/chat-status'));
     const data = await res.json();
     if (!data.ok) return;
 
-    document.getElementById('status-label').textContent = data.status_label || '在线';
+    statusLabel.textContent = data.status_label || '在线';
     document.getElementById('status-dot').className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
-    // 渲染桌面仿真绝对层叠便签 (Reverted to physical stacking, NO scroll list)
+    // 渲染桌面仿真层叠便签 (自然错落排版，流式布局极小负间距)
     const container = document.getElementById('sticky-container');
     container.innerHTML = '';
     
     if (data.sticky_notes && data.sticky_notes.length > 0) {
       const isDeskFull = data.desk_full;
-      const notesToShow = data.sticky_notes.slice(0, 9); // 最多展示 9 张，防止溢出
 
-      notesToShow.forEach((note, index) => {
+      data.sticky_notes.forEach((note, index) => {
         const card = document.createElement('div');
-        const styleData = getSeededStyle(note.id);
+        card.className = `sticky-note-card stage-${note.stage || 'steady'}`;
         
-        // 动态拼装 25 种马卡龙纯净色与纹理的自由碰撞
-        card.className = `sticky-note-card color-${styleData.color} pattern-${styleData.pattern}`;
-        
-        // 完美恢复物理重叠定位，从上往下自然错落偏移
-        const rotateDeg = (index === 0) ? -2 : (index === 1 ? 3 : (index === 2 ? -1 : (index % 2 === 0 ? -4 : 4)));
-        const offsetTop = index * 10; // 卡片错落间隔
-        card.style.transform = `rotate(${rotateDeg}deg) translateY(${offsetTop}px)`;
+        // 自然错落微倾斜，取消绝对定位重叠，仅留负 margin-top
+        const rotateDeg = index % 2 === 0 ? -2 : 2.5;
+        card.style.marginTop = index === 0 ? '0' : '-12px';
+        card.style.transform = `rotate(${rotateDeg}deg)`;
         card.style.zIndex = 15 - index;
         
         // 底层淡化
         if (index > 0) {
-          card.style.opacity = 1 - index * 0.15; 
+          card.style.opacity = 1 - index * 0.1; 
         }
         
         // 满载警告效果
@@ -981,11 +916,10 @@ async function loadStatus() {
         const starIcon = note.is_starred ? '★' : '☆';
         const starClass = note.is_starred ? 'active' : '';
 
-        // 彻底清空杂乱图标，保留和纸胶带装饰与纯粉发光星标
+        // 彻底清空杂乱图标，只保留文本和纯粉色星芒
         card.innerHTML = `
-          <div class="sticky-tape"></div>
           <div class="sticky-note-text">${escapeHtml(note.message)}</div>
-          <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')">${starIcon}</button>
+          <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">${starIcon}</button>
         `;
 
         // 全新双击交互：触发桌面便签整理菜单
@@ -995,16 +929,12 @@ async function loadStatus() {
 
         container.appendChild(card);
       });
-      // 动态撑开容器高度，防止下方抽屉被绝对定位的便签重合遮挡
-      container.style.minHeight = (130 + (notesToShow.length - 1) * 10) + 'px';
     } else {
       container.innerHTML = `
         <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
-          <div class="sticky-tape"></div>
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有留言。</div>
         </div>
       `;
-      container.style.minHeight = '130px';
     }
 
     // 抽屉容量统计更新
@@ -1037,14 +967,6 @@ async function loadStatus() {
     });
 
     document.getElementById('new-letter-indicator').style.display = data.has_new_letter ? 'inline' : 'none';
-
-    // 格式化自适应月经期状态文字并一并同步双端（手机大屏无缝兼顾）
-    const formattedPeriodText = data.period_context 
-      ? escapeHtml(data.period_context).replace(/\\n/g, '<br>') 
-      : "目前没有您的月经生理期记录。<br>如果有需要，请在日历中随时记录。";
-      
-    document.getElementById('period-status-text').innerHTML = formattedPeriodText;
-    document.getElementById('desktop-period-status-text').innerHTML = formattedPeriodText;
 
   } catch (e) { console.error("状态加载失败", e); }
 }
@@ -1089,15 +1011,22 @@ function switchTab(tabName) {
   appEl.classList.add('tab-' + tabName);
 
   document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
+  
   if (window.event && window.event.currentTarget) {
     window.event.currentTarget.classList.add('active');
   } else {
+    // 兜底找对应的 DOM
     const indexMap = {'chat': 0, 'desk': 1};
     document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
   }
   if (tabName === 'chat') scrollToBottom();
 }
-if (window.innerWidth <= 768) { document.getElementById('app').classList.add('tab-chat'); }
+
+// 自动检测终端，大屏完全放弃Tab逻辑
+if (window.innerWidth <= 768) { 
+  document.getElementById('app').classList.add('tab-chat'); 
+}
+
 
 // ==========================================
 // ---- 抽屉 1：便签收纳盒 (30) 前端功能 ----
@@ -1200,7 +1129,7 @@ async function archiveLetter(id) {
       openLoveLetters();
       loadStatus();
     }
-  } catch(e) { alert('网络错误'); }
+  } catch(e) { alert('网络错误，归档失败'); }
 }
 
 // 物理丢弃单封情书函数
@@ -1262,6 +1191,7 @@ async function openArchiveBox() {
     if (noteData.ok && letterData.ok) {
       let html = '';
       
+      // 档案箱便签列表
       html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Pinned Notes (${noteData.notes.length}/100)</div>`;
       if (noteData.notes.length > 0) {
         noteData.notes.forEach(note => {
@@ -1285,6 +1215,7 @@ async function openArchiveBox() {
         html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档便签...</div>';
       }
 
+      // 档案箱情书列表
       html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-top:30px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Letters Box (${letterData.letters.length}/100)</div>`;
       if (letterData.letters.length > 0) {
         letterData.letters.forEach(letter => {
@@ -1466,6 +1397,39 @@ async function savePeriodDate(actionType) {
     }
   } catch (e) { alert('网络错误，日记记录失败'); }
 }
+
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+});
+
+const modelSelect = document.getElementById('model-select');
+async function loadModelSelector() {
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'));
+    const data = await res.json();
+    if (!data.ok) return;
+    modelSelect.innerHTML = '';
+    data.available_models.forEach(m => {
+      const opt = document.createElement('option'); opt.value = m; opt.textContent = m;
+      if (m === data.current_model) opt.selected = true; modelSelect.appendChild(opt);
+    });
+  } catch (e) {}
+}
+modelSelect.addEventListener('change', async () => {
+  const chosen = modelSelect.value;
+  try {
+    const res = await fetch(apiUrl('/api/chat-model'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: chosen })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('切换失败：' + (data.error || '未知错误')); loadModelSelector(); }
+  } catch (e) { alert('网络错误'); loadModelSelector(); }
+});
 
 loadHistory();
 loadStatus();
