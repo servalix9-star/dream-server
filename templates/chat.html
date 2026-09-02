@@ -261,14 +261,14 @@
     position: relative;
     border: none; /* 零边框，只靠投影和底色区分层级 */
     border-radius: 3px 14px 14px 14px;
-    padding: 11px 14px;
-    aspect-ratio: 1 / 0.56; /* 更扁一些，一屏能露出约5张的高度 */
+    padding: 11px 28px;
+    aspect-ratio: 1 / 0.5; /* 精确匹配：一行14个字符宽度 × 5行高度 */
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 8px 20px rgba(120, 80, 95, 0.18), 0 2px 5px rgba(120, 80, 95, 0.1);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
     flex-shrink: 0;
-    margin-top: -10px; /* 卡片变矮后，压角幅度也同比例收一点，避免盖住文字 */
+    margin-top: -29px; /* 压住上一张边缘，深度大致压到第一行文字的位置 */
   }
   .sticky-note-card:first-child { margin-top: 0; }
   .sticky-note-card:nth-child(1) { z-index: 20; }
@@ -964,9 +964,9 @@ async function loadStatus() {
         card.className = `sticky-note-card`;
 
         // 自然手写纸微斜错落效果：用便签id做种子生成伪随机角度，
-        // 保证同一张便签每次刷新角度稳定不跳动，但整体呈现自然的随机错落感（-3.5° ~ 3.5°之间）
+        // 保证同一张便签每次刷新角度稳定不跳动，但整体呈现自然的随机错落感（-5° ~ 5°之间，加大幅度让倾斜更明显）
         const seed = (note.id * 9301 + 49297) % 233280;
-        const rotateDeg = ((seed / 233280) * 7 - 3.5).toFixed(1);
+        const rotateDeg = ((seed / 233280) * 10 - 5).toFixed(1);
         card.style.transform = `rotate(${rotateDeg}deg)`;
         card.style.zIndex = 15 - index;
         
