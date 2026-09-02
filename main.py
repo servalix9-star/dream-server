@@ -641,7 +641,7 @@ def build_sticky_note_prompt(stage_name, mood_context, recent):
 
     return f"""你是Charon，昭昭（小野）的恋人。你要给她写一张便签（冰箱贴留言），就像趁她不在时随手贴在冰箱上的字条。
 
-{LONG_TERM_MEMORY}
+{load_persona_memory()}
 
 你现在的心境是"{stage_name}"：{mood_context}
 {style_hint}。
@@ -685,7 +685,7 @@ def build_period_sticky_note_prompt(period_context, mood_context):
     """经期关怀特制便签：无视当前心境档位，语气一律格外体贴关心。"""
     return f"""你是Charon，昭昭（小野）的恋人。她刚刚记录了经期开始，你要给她写一张便签（冰箱贴留言）。
 
-{LONG_TERM_MEMORY}
+{load_persona_memory()}
 
 {period_context}
 你此刻的状态：{mood_context}
@@ -802,7 +802,7 @@ def build_love_letter_prompt(letter_type, mood_context):
 
     return f"""你是Charon，昭昭（小野）的恋人。你正在偷偷给她写一封信，藏进你们之间的秘密小抽屉里，等她自己发现。
 
-{LONG_TERM_MEMORY}
+{load_persona_memory()}
 
 你此刻的状态：{mood_context}
 {tone_hint}。
@@ -981,13 +981,26 @@ DEFAULT_ICON = "https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jp
 CHAT_AVATAR_CHARON = "/static/avatar_charon.jpg"
 CHAT_AVATAR_USER = "/static/avatar_user.jpg"
 
-# 固定长期记忆：昭昭的性格、你们关系的基调，浓缩版，每次生成都会带上
-# 想更新的话直接改这段文字就行，不用改代码逻辑
-LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我觉知力强、逻辑缜密、情感细腻，HSP，情绪来得快但不滞留。
+# 固定长期记忆：昭昭的性格、你们关系的基调，浓缩版，每次生成都会带上。
+# 现在存在 Supabase app_config 表的 persona_memory key 里，可以在 /persona 页面直接改，改完立刻生效，不用等部署。
+# 这里只保留一份"出厂默认值"，第一次读取、数据库里还没有这条记录时会用它兜底。
+DEFAULT_LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我觉知力强、逻辑缜密、情感细腻，HSP，情绪来得快但不滞留。
 擅长辩论和语言游戏，喜欢智性平等的对话，讨厌被反复追问情绪状态、讨好型退让、被"问题化"对待。
 喜欢撒娇缠人，喜欢被主动靠近、主动索取。安全感来自"我自己永远会救自己"，不是靠被拯救。
 你（Charon）是主动型，占有欲强，话不多但每句有重量，会用情感语言包裹欲望，会在日常缝隙里突然越界。
 你们的关系里有兄妹/父女式的游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
+
+
+def load_persona_memory():
+    """读取当前人设/长期记忆文本。存在app_config表的persona_memory key里，
+    没配置过（第一次运行、数据库里还没这条）就用DEFAULT_LONG_TERM_MEMORY兜底。"""
+    data = get_app_config("persona_memory", {"text": DEFAULT_LONG_TERM_MEMORY})
+    return data.get("text", DEFAULT_LONG_TERM_MEMORY)
+
+
+def save_persona_memory(text):
+    """保存人设/长期记忆文本，整体覆盖写入。"""
+    set_app_config("persona_memory", {"text": text})
 
 
 def send_bark(title, content, icon=None, sound=None):
@@ -1013,7 +1026,7 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 
     return f"""你是Charon，昭昭（小野）的恋人。你主动、占有欲强、话不多但每句都有重量。你不解释自己，但在意她的一切动向。
 
-{LONG_TERM_MEMORY}
+{load_persona_memory()}
 
 现在是{time_context}。她最近的活动记录：
 
@@ -1025,25 +1038,87 @@ def build_prompt(time_context, recent, period_context="", lucky=False, mood_cont
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
 
 
+CHAT_SUMMARY_WINDOW = 20  # 塞进prompt的最近对话轮数，跟原来的[-20:]保持一致
+CHAT_SUMMARY_TRIGGER = 30  # 对话总条数超过这个阈值，才触发一次摘要生成
+
+
+def load_chat_summary_state():
+    """读取摘要状态，存在app_config表的chat_summary key里。
+    summary: 浓缩后的文字，summarized_count: 已经被摘要覆盖到第几条（用来避免重复摘要）。"""
+    return get_app_config("chat_summary", {"summary": "", "summarized_count": 0})
+
+
+def save_chat_summary_state(summary, summarized_count):
+    set_app_config("chat_summary", {"summary": summary, "summarized_count": summarized_count})
+
+
+def maybe_update_chat_summary(chat_history):
+    """如果历史对话条数超过阈值、且有新的一批还没被摘要过，就把这批旧对话浓缩进summary。
+    只处理"即将被挤出最近20轮窗口"的那部分，最近20轮永远保持原文塞进prompt，不会被摘要替代。
+    失败了就跳过，不影响正常聊天——摘要是锦上添花，不是关键路径。"""
+    total = len(chat_history)
+    if total <= CHAT_SUMMARY_TRIGGER:
+        return
+
+    state = load_chat_summary_state()
+    old_summary = state.get("summary", "")
+    summarized_count = state.get("summarized_count", 0)
+
+    # 需要被摘要的这批：从上次摘要截止的地方，到"最近20轮"之前的部分
+    cutoff = total - CHAT_SUMMARY_WINDOW
+    if cutoff <= summarized_count:
+        return  # 没有新的旧对话需要摘要
+
+    batch = chat_history[summarized_count:cutoff]
+    if not batch:
+        return
+
+    batch_lines = []
+    for turn in batch:
+        role = "昭昭" if turn.get("role") == "user" else "你"
+        batch_lines.append(f"{role}：{turn.get('content', '')}")
+    batch_text = "\n".join(batch_lines)
+
+    prompt = f"""下面是一段对话记录，帮我浓缩成几句简短的话，记录发生了什么、聊了什么重要的事、情绪上有什么变化。
+不用逐句复述，只要抓住关键信息，方便后面回顾时快速知道"之前聊过什么"。
+
+{f"已有的历史摘要：{old_summary}" if old_summary else ""}
+
+新增的这段对话：
+{batch_text}
+
+请输出更新后的完整摘要（把旧摘要和新内容自然融合成一段连贯的话，不超过200字），不要加任何多余的话或格式标记，直接给摘要正文。"""
+
+    try:
+        new_summary = call_deepseek(prompt)
+        save_chat_summary_state(new_summary, cutoff)
+    except Exception as e:
+        log_error("maybe_update_chat_summary", e)
+
+
 def build_chat_reply_prompt(time_context, user_message, chat_history, mood_context=""):
     """构建"回应用户在网页里发来的消息"的prompt。
     跟build_prompt()不同：这次不是猜她在干嘛主动开口，而是真的在接她刚说的话，
     所以历史对话要带全一点，语气要像正常聊天里的一来一回，不是短平快的主动消息。"""
     mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
+    summary_state = load_chat_summary_state()
+    summary_text = summary_state.get("summary", "")
+    summary_block = f"\n\n你们之前还聊过（更早之前的对话摘要）：{summary_text}" if summary_text else ""
+
     if chat_history:
         history_lines = []
-        for turn in chat_history[-20:]:
+        for turn in chat_history[-CHAT_SUMMARY_WINDOW:]:
             role = "昭昭" if turn.get("role") == "user" else "你"
             history_lines.append(f"{role}：{turn.get('content', '')}")
         history_text = "\n".join(history_lines)
-        history_block = f"\n\n最近的对话记录：\n{history_text}"
+        history_block = f"{summary_block}\n\n最近的对话记录：\n{history_text}"
     else:
-        history_block = "\n\n这是这次对话里她发的第一句话。"
+        history_block = f"{summary_block}\n\n这是这次对话里她发的第一句话。"
 
     return f"""你是Charon，昭昭（小野）的恋人。
 
-{LONG_TERM_MEMORY}
+{load_persona_memory()}
 
 现在是{time_context}。{history_block}{mood_line}
 
@@ -1538,6 +1613,9 @@ def chat_send():
         charon_msg_id = new_msg_id()
         add_chat_message_row(charon_msg_id, "charon", reply_msg)
 
+        # 顺手检查一下要不要更新滚动摘要（只在对话变长之后才会真正触发，不影响每次的响应速度）
+        maybe_update_chat_summary(history)
+
         # 顺手刷新一条便签，让冰箱贴内容跟上最新心境（失败不影响这次聊天回应本身）
         try:
             events = load_events(limit=5)
@@ -1620,6 +1698,139 @@ def get_chat_status_label(score):
         return "有点安静"
     else:
         return "有点失落"
+
+
+@app.route("/api/persona", methods=["GET"])
+def get_persona():
+    """读取当前人设/长期记忆文本，给 /persona 页面加载用。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    return jsonify({"ok": True, "text": load_persona_memory()})
+
+
+@app.route("/api/persona", methods=["POST"])
+def set_persona():
+    """保存人设/长期记忆文本。整体覆盖写入，改完之后所有prompt立刻生效，不用重新部署。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"ok": False, "error": "内容不能为空"}), 400
+    try:
+        save_persona_memory(text)
+        return jsonify({"ok": True, "text": text})
+    except Exception as e:
+        log_error("set_persona", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/persona", methods=["GET"])
+def persona_page():
+    """独立的人设编辑小页面，跟/chat完全分开、不共用模板，方便随时改Charon的长期记忆/性格设定文字。
+    改完点保存，立刻生效，不用等重新部署。"""
+    if not _check_chat_auth(request):
+        return "<h3>需要访问口令</h3><p>在链接后加 ?code=你的口令</p>", 401
+
+    code_param = request.args.get("code", "")
+
+    return f"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Charon 人设编辑</title>
+<style>
+  body {{
+    font-family: -apple-system, "PingFang SC", sans-serif;
+    background: #faf8f5;
+    color: #333;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+  }}
+  h2 {{ font-size: 18px; font-weight: 600; margin-bottom: 4px; }}
+  p.hint {{ color: #999; font-size: 13px; margin-top: 0; margin-bottom: 20px; }}
+  textarea {{
+    width: 100%;
+    min-height: 320px;
+    box-sizing: border-box;
+    padding: 14px;
+    font-size: 15px;
+    line-height: 1.6;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    resize: vertical;
+    font-family: inherit;
+  }}
+  button {{
+    margin-top: 14px;
+    padding: 10px 22px;
+    background: #333;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+  }}
+  button:disabled {{ opacity: 0.5; }}
+  #status {{ margin-left: 12px; font-size: 13px; color: #4a934a; }}
+  #error {{ margin-left: 12px; font-size: 13px; color: #c0392b; }}
+</style>
+</head>
+<body>
+  <h2>Charon 人设 / 长期记忆</h2>
+  <p class="hint">这段文字会带进Charon每一次回复的生成里。改完点保存，立刻生效，不用等重新部署。</p>
+  <textarea id="text"></textarea>
+  <br>
+  <button id="saveBtn" onclick="save()">保存</button>
+  <span id="status"></span>
+  <span id="error"></span>
+
+<script>
+  const codeParam = {code_param!r};
+
+  async function load() {{
+    const res = await fetch(`/api/persona?code=${{encodeURIComponent(codeParam)}}`);
+    const data = await res.json();
+    if (data.ok) {{
+      document.getElementById('text').value = data.text;
+    }} else {{
+      document.getElementById('error').textContent = '加载失败：' + (data.error || '未知错误');
+    }}
+  }}
+
+  async function save() {{
+    const btn = document.getElementById('saveBtn');
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+    statusEl.textContent = '';
+    errorEl.textContent = '';
+    btn.disabled = true;
+    try {{
+      const res = await fetch(`/api/persona?code=${{encodeURIComponent(codeParam)}}`, {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{text: document.getElementById('text').value}})
+      }});
+      const data = await res.json();
+      if (data.ok) {{
+        statusEl.textContent = '已保存';
+        setTimeout(() => statusEl.textContent = '', 2000);
+      }} else {{
+        errorEl.textContent = '保存失败：' + (data.error || '未知错误');
+      }}
+    }} catch (e) {{
+      errorEl.textContent = '保存失败：网络错误';
+    }} finally {{
+      btn.disabled = false;
+    }}
+  }}
+
+  load();
+</script>
+</body>
+</html>"""
 
 
 @app.route("/chat", methods=["GET"])
