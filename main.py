@@ -26,6 +26,7 @@ ERROR_LOG = os.path.join(os.environ.get("DATA_DIR", "."), "error.log")
 os.makedirs(os.path.dirname(ERROR_LOG) or ".", exist_ok=True)
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+GEMAI_API_KEY = os.environ.get("GEMAI_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 # 网页聊天的访问口令，不设置的话 /chat 页面直接放行（不建议生产环境这样用）
 CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
@@ -56,12 +57,39 @@ def _supabase_request(method, table, params=None, json_body=None, headers_extra=
 # 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
 # 和 deepseek-v4-pro（深度推理，更贵，开启思考模式，回复慢一点但推理更深）。
 # thinking 状态跟着选中的模型自动联动，见 get_thinking_config()。
-AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"]
+# gemai-gemini-pro 是接入的 gemai.cc 代理站模型，纯粹作为备选，走独立的供应商配置（见 MODEL_PROVIDER_MAP）。
+AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "gemai-gemini-pro"]
 DEFAULT_MODEL = "deepseek-v4-flash"
 # 每个模型对应的思考模式：flash关闭（快、且temperature等参数能生效），pro开启（慢、但推理更深）
+# gemai-gemini-pro 不支持DeepSeek的thinking参数，这里给个占位值，实际调用时会被跳过（见call_deepseek里的分流逻辑）
 MODEL_THINKING_MAP = {
     "deepseek-v4-flash": "disabled",
-    "deepseek-v4-pro": "enabled"
+    "deepseek-v4-pro": "enabled",
+    "gemai-gemini-pro": "disabled"
+}
+
+# 每个模型对应的真实供应商配置：base_url（接口地址）、api_key（读哪个环境变量）、
+# real_model（发给上游时真正用的模型名）、supports_thinking（是否要在请求体里带thinking字段）。
+# 新增供应商/模型以后，只需要在这里加一条映射，call_deepseek/run_once里的分流逻辑不用改。
+MODEL_PROVIDER_MAP = {
+    "deepseek-v4-flash": {
+        "base_url": "https://api.deepseek.com/chat/completions",
+        "api_key": DEEPSEEK_API_KEY,
+        "real_model": "deepseek-v4-flash",
+        "supports_thinking": True,
+    },
+    "deepseek-v4-pro": {
+        "base_url": "https://api.deepseek.com/chat/completions",
+        "api_key": DEEPSEEK_API_KEY,
+        "real_model": "deepseek-v4-pro",
+        "supports_thinking": True,
+    },
+    "gemai-gemini-pro": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[官逆]gemini-2.5-pro",  # 文档里的真实模型名，代理站按这个名字转发
+        "supports_thinking": False,
+    },
 }
 
 
@@ -1177,11 +1205,8 @@ def parse_reason_message(raw_text):
 
 
 def run_once():
-    """执行一次完整的：读取动态 -> 调 DeepSeek -> 发 Bark -> 写日记。
+    """执行一次完整的：读取动态 -> 调模型 -> 发 Bark -> 写日记。
     单独抽出来，方便 keepalive 循环和手动测试接口共用同一份逻辑。"""
-    if not DEEPSEEK_API_KEY:
-        raise RuntimeError("DEEPSEEK_API_KEY not set")
-
     hour = datetime.now().hour
     events = load_events(limit=5)
     if not events:
@@ -1211,30 +1236,9 @@ def run_once():
 
     prompt = build_prompt(time_context, recent, period_context, lucky=is_lucky, mood_context=mood_context)
 
-    resp = requests.post(
-        "https://api.deepseek.com/chat/completions",
-        headers={
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": get_current_model(),
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 1.2,
-            "thinking": get_thinking_config()
-        },
-        timeout=30
-    )
-
-    if resp.status_code != 200:
-        raise RuntimeError(f"DeepSeek API error: status={resp.status_code} body={resp.text}")
-
-    result = resp.json()
-
-    if "choices" not in result or not result["choices"]:
-        raise RuntimeError(f"DeepSeek API unexpected response: {result}")
-
-    raw = result["choices"][0]["message"]["content"]
+    # 直接复用call_deepseek，内部会根据当前选中的模型自动分流到DeepSeek官方或gemai.cc代理站，
+    # 这里不用再单独维护一份重复的请求逻辑
+    raw = call_deepseek(prompt)
     reason, msg = parse_reason_message(raw)
 
     # 按场景挑图标：经期关心 > 手气消息 > 普通
@@ -1257,29 +1261,40 @@ def run_once():
 
 
 def call_deepseek(prompt):
-    """纯粹的DeepSeek调用，返回生成的文本，不涉及事件/日记这些副作用。"""
-    if not DEEPSEEK_API_KEY:
-        raise RuntimeError("DEEPSEEK_API_KEY not set")
+    """纯粹的模型调用，返回生成的文本，不涉及事件/日记这些副作用。
+    函数名保留call_deepseek是历史原因（早期只接了DeepSeek一家），
+    现在实际会根据当前选中的模型，从MODEL_PROVIDER_MAP查到对应的供应商配置，
+    可能打DeepSeek官方接口，也可能打gemai.cc代理站——调用方完全不用关心这个分流，
+    只要模型在AVAILABLE_MODELS里、在MODEL_PROVIDER_MAP里配置好，这里就能自动选对地址。"""
+    model = get_current_model()
+    provider = MODEL_PROVIDER_MAP.get(model)
+    if not provider:
+        raise RuntimeError(f"模型 {model} 没有配置对应的供应商信息")
+    if not provider["api_key"]:
+        raise RuntimeError(f"模型 {model} 对应的 API key 未设置（环境变量缺失）")
+
+    payload = {
+        "model": provider["real_model"],
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 1.2,
+    }
+    if provider["supports_thinking"]:
+        payload["thinking"] = get_thinking_config()
 
     resp = requests.post(
-        "https://api.deepseek.com/chat/completions",
+        provider["base_url"],
         headers={
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Authorization": f"Bearer {provider['api_key']}",
             "Content-Type": "application/json"
         },
-        json={
-            "model": get_current_model(),
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 1.2,
-            "thinking": get_thinking_config()
-        },
+        json=payload,
         timeout=30
     )
     if resp.status_code != 200:
-        raise RuntimeError(f"DeepSeek API error: status={resp.status_code} body={resp.text}")
+        raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
     result = resp.json()
     if "choices" not in result or not result["choices"]:
-        raise RuntimeError(f"DeepSeek API unexpected response: {result}")
+        raise RuntimeError(f"模型API unexpected response: {result}")
     return result["choices"][0]["message"]["content"].strip()
 
 
