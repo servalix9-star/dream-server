@@ -1482,7 +1482,8 @@ inputEl.addEventListener('input', () => {
 const modelSelect = document.getElementById('model-select');
 // 部分模型id显示成更短的名字，下拉框空间有限，纯技术名太长会被截断；没在这里配置的模型会直接显示原始id
 const MODEL_DISPLAY_NAME = {
-  'gemai-gemini-pro': 'Gemini(备用)'
+  'gemai-gemini-3.1-pro': 'Gemini3.1(备用)',
+  'gemai-gemini-2.5-flash': 'Gemini2.5(备用)'
 };
 async function loadModelSelector() {
   try {
