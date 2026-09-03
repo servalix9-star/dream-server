@@ -512,7 +512,11 @@ MOOD_TSUNDERE_MIN = 20
 # [0, MOOD_TSUNDERE_MIN) 即为委屈区间
 
 # 情书触发概率
-SWEET_LETTER_CHANCE = 0.2   # 首次突破80分（甜溺态）时
+# 高甜信不再依赖"精确跨越80分那一瞬间"（旧逻辑下分数长期偏高反而永远碰不到跨越条件，
+# 关系越好越触发不了，是反直觉的设计缺陷）。改成：只要当下处于甜蜜区间[80,100]，
+# 每次聊天都有机会按概率触发，用sweet_letter_sent_date做"今天已发过就跳过"的简单冷却，
+# 避免运气好连抽导致同一天多封灌信箱。
+SWEET_LETTER_CHANCE = 0.08   # 处于甜蜜态时，每次聊天判定一次
 LONGING_LETTER_CHANCE = 0.4  # 委屈态持续超过下面这个时长时
 LONGING_LETTER_HOURS = 4
 
@@ -523,6 +527,7 @@ def load_mood():
         "last_updated": None,
         "last_chat_at": None,       # 上次用户在网页发真实消息的时间，衰减计算用这个
         "vulnerable_since": None,   # 本次连续处于委屈区间[0,20)的起始时间，离开区间就清空
+        "sweet_letter_sent_date": None,  # 上次成功触发高甜情书的日期(YYYY-MM-DD)，同一天只发一封
     })
 
 
@@ -920,14 +925,23 @@ def generate_love_letter(letter_type, mood_context):
     return content
 
 
-def maybe_trigger_sweet_letter(old_score, new_score, mood_context):
-    """检查这次情绪值回升是否命中"首次突破80分"，命中则按概率生成一封高甜情书。
-    只应该在分数真正上升的场景（聊天+10、经期事件+25）里调用，
-    自然衰减不会让分数上升，调用这个函数也不会有效果。"""
+def maybe_trigger_sweet_letter(mood_context):
+    """检查当前是否处于甜蜜区间[80,100]，命中则按概率生成一封高甜情书。
+    不再要求"这次互动恰好让分数跨越80分"——旧逻辑下分数长期维持高位反而永远碰不到
+    跨越瞬间，关系越稳定甜蜜越触发不到，是反直觉的。现在只要当下处于甜蜜态就有机会，
+    每天只发一封（sweet_letter_sent_date去重），避免运气好连续判定中奖导致信箱被灌。"""
     try:
-        if old_score < MOOD_SWEET_MIN <= new_score:
-            if random.random() < SWEET_LETTER_CHANCE:
-                generate_love_letter("sweet", mood_context)
+        mood = load_mood()
+        score = mood.get("score", MOOD_BASELINE)
+        if score < MOOD_SWEET_MIN:
+            return
+        today = datetime.now().strftime("%Y-%m-%d")
+        if mood.get("sweet_letter_sent_date") == today:
+            return
+        if random.random() < SWEET_LETTER_CHANCE:
+            generate_love_letter("sweet", mood_context)
+            mood["sweet_letter_sent_date"] = today
+            save_mood(mood)
     except Exception as e:
         log_error("maybe_trigger_sweet_letter", e)
 
@@ -974,7 +988,7 @@ def add_event():
                 note_message = _extract_json_field(raw, "message")
                 if note_message:
                     add_sticky_note_row(note_message, "period", "🩹")
-                maybe_trigger_sweet_letter(old_score, new_score, mood_context)
+                maybe_trigger_sweet_letter(mood_context)
             except Exception as e:
                 log_error("add_event:period_followup", e)
 
@@ -1681,8 +1695,8 @@ def chat_send():
         chat_hours_gap = get_hours_since_last_chat()
         mood_context = get_mood_context(mood_score, chat_hours_gap)
 
-        # 检查这次回升是否命中情书触发条件
-        maybe_trigger_sweet_letter(old_score, mood_score, mood_context)
+        # 检查当前状态是否命中情书触发条件
+        maybe_trigger_sweet_letter(mood_context)
         maybe_trigger_longing_letter(mood_context)
 
         # 生成Charon的回应，带上历史让语气能接得上
