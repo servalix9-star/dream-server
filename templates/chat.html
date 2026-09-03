@@ -261,9 +261,9 @@
     position: relative;
     border: none; /* 零边框，只靠投影和底色区分层级 */
     border-radius: 3px 14px 14px 14px;
-    padding: 14px 14.5px 14px 14.5px;
+    padding: 12px 11px 12px 11px;
     width: 88%; /* 横宽收窄，不再撑满panel整个可用宽度，露出左右呼吸感 */
-    aspect-ratio: 1 / 0.675; /* 5行14px字号文字紧凑铺满卡片的比例 */
+    aspect-ratio: 1 / 0.572; /* 字号收小、行高收紧后，5行文字精确铺满的比例，整体更矮 */
     box-shadow: 0 8px 20px rgba(120, 80, 95, 0.18), 0 2px 5px rgba(120, 80, 95, 0.1);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
@@ -284,7 +284,7 @@
     box-shadow: 0 14px 30px rgba(120, 80, 95, 0.26), 0 3px 8px rgba(120, 80, 95, 0.15);
   }
   .sticky-note-text {
-    font-size: 14px; line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
+    font-size: 12.5px; line-height: 1.42; font-family: "Songti SC", serif; word-wrap: break-word;
     /* 不再垂直居中：文字从卡片顶部padding之后自然开始排列 */
   }
   /* 纯正精致的荧光樱花粉标星按钮 */
@@ -963,15 +963,22 @@ async function loadStatus() {
         const card = document.createElement('div');
         card.className = `sticky-note-card`;
 
-        // 自然手写纸错落效果：用便签id生成两个独立的伪随机种子，
-        // 一个控制旋转角度、一个控制左右水平位移，两者叠加才会呈现"左右都压、角度各异"的自然感，
-        // 同一张便签每次刷新都稳定不跳动，不会因为随机数重算而抖动。
-        const seedA = (note.id * 9301 + 49297) % 233280;
-        const seedB = (note.id * 4517 + 12345) % 176160;
-        const rotateDeg = ((seedA / 233280) * 10 - 5).toFixed(1); // -5° ~ 5°
-        const shiftX = ((seedB / 176160) * 24 - 12).toFixed(1);   // -12px ~ 12px，左右都会偏移
+        // 自然手写纸错落效果：用更强的位运算哈希打散便签id，避免连续id（1,2,3...）
+        // 算出的随机值也是线性递增/顺拐的问题——之前用简单同余公式时，连续id的偏移量会平滑递增，
+        // 视觉上所有便签都往同一边斜，现在换成位混合哈希，让角度和位移都能真正交替、忽左忽右。
+        function hashNoteId(n, salt) {
+          n = (n ^ salt) >>> 0;
+          n = Math.imul(n ^ (n >>> 16), 0x45d9f3b) >>> 0;
+          n = Math.imul(n ^ (n >>> 16), 0x45d9f3b) >>> 0;
+          n = (n ^ (n >>> 16)) >>> 0;
+          return n % 1000;
+        }
+        const h1 = hashNoteId(note.id, 0);
+        const h2 = hashNoteId(note.id, 7919);
+        const rotateDeg = ((h1 / 1000) * 10 - 5).toFixed(1);   // -5° ~ 5°，正负交替更明显
+        const shiftX = ((h2 / 1000) * 32 - 16).toFixed(1);      // -16px ~ 16px，左右都会明显偏移
         card.style.transform = `rotate(${rotateDeg}deg) translateX(${shiftX}px)`;
-        card.style.margin = index === 0 ? '0 auto' : '-32px auto 0'; // 横向居中收窄后，靠auto margin保持基准位置，再叠加transform做左右错落
+        card.style.margin = index === 0 ? '0 auto' : '-27px auto 0'; // 横向居中收窄后，靠auto margin保持基准位置，再叠加transform做左右错落
         card.style.zIndex = 15 - index;
         
         // 动态注入 5x5 的个生化手账底纹色
