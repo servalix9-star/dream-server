@@ -261,14 +261,14 @@
     position: relative;
     border: none; /* 零边框，只靠投影和底色区分层级 */
     border-radius: 3px 14px 14px 14px;
-    padding: 11px 28px;
-    aspect-ratio: 1 / 0.5; /* 精确匹配：一行14个字符宽度 × 5行高度 */
-    display: flex; align-items: center; justify-content: center;
+    padding: 14px 14.5px 14px 14.5px;
+    width: 88%; /* 横宽收窄，不再撑满panel整个可用宽度，露出左右呼吸感 */
+    aspect-ratio: 1 / 0.675; /* 5行14px字号文字紧凑铺满卡片的比例 */
     box-shadow: 0 8px 20px rgba(120, 80, 95, 0.18), 0 2px 5px rgba(120, 80, 95, 0.1);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
     flex-shrink: 0;
-    margin-top: -29px; /* 压住上一张边缘，深度大致压到第一行文字的位置 */
+    /* margin-top 由JS按便签id动态计算（含左右随机水平位移），这里不再写死，避免覆盖冲突 */
   }
   .sticky-note-card:first-child { margin-top: 0; }
   .sticky-note-card:nth-child(1) { z-index: 20; }
@@ -284,8 +284,8 @@
     box-shadow: 0 14px 30px rgba(120, 80, 95, 0.26), 0 3px 8px rgba(120, 80, 95, 0.15);
   }
   .sticky-note-text {
-    font-size: 12px; line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
-    /* 不再截断文字：便签高度由内容和aspect-ratio共同决定，文字完整显示 */
+    font-size: 14px; line-height: 1.5; font-family: "Songti SC", serif; word-wrap: break-word;
+    /* 不再垂直居中：文字从卡片顶部padding之后自然开始排列 */
   }
   /* 纯正精致的荧光樱花粉标星按钮 */
   .note-star-btn {
@@ -963,11 +963,15 @@ async function loadStatus() {
         const card = document.createElement('div');
         card.className = `sticky-note-card`;
 
-        // 自然手写纸微斜错落效果：用便签id做种子生成伪随机角度，
-        // 保证同一张便签每次刷新角度稳定不跳动，但整体呈现自然的随机错落感（-5° ~ 5°之间，加大幅度让倾斜更明显）
-        const seed = (note.id * 9301 + 49297) % 233280;
-        const rotateDeg = ((seed / 233280) * 10 - 5).toFixed(1);
-        card.style.transform = `rotate(${rotateDeg}deg)`;
+        // 自然手写纸错落效果：用便签id生成两个独立的伪随机种子，
+        // 一个控制旋转角度、一个控制左右水平位移，两者叠加才会呈现"左右都压、角度各异"的自然感，
+        // 同一张便签每次刷新都稳定不跳动，不会因为随机数重算而抖动。
+        const seedA = (note.id * 9301 + 49297) % 233280;
+        const seedB = (note.id * 4517 + 12345) % 176160;
+        const rotateDeg = ((seedA / 233280) * 10 - 5).toFixed(1); // -5° ~ 5°
+        const shiftX = ((seedB / 176160) * 24 - 12).toFixed(1);   // -12px ~ 12px，左右都会偏移
+        card.style.transform = `rotate(${rotateDeg}deg) translateX(${shiftX}px)`;
+        card.style.margin = index === 0 ? '0 auto' : '-32px auto 0'; // 横向居中收窄后，靠auto margin保持基准位置，再叠加transform做左右错落
         card.style.zIndex = 15 - index;
         
         // 动态注入 5x5 的个生化手账底纹色
@@ -998,7 +1002,7 @@ async function loadStatus() {
       });
     } else {
       container.innerHTML = `
-        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative;">
+        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative; margin: 0 auto;">
           <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有新的留言。</div>
         </div>
       `;
