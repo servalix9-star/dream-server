@@ -814,7 +814,8 @@ document.addEventListener('click', (e) => {
 });
 
 async function deleteMessage(msgId, rowEl) {
-  if (!confirm('确定要撤回这条消息吗？')) return;
+  // 点击菜单里的"撤回"本身已经是一次明确的决定动作，原生confirm()是多余的二次确认，
+  // 且原生弹窗的黑白系统样式跟整体视觉风格不搭，去掉后操作会干脆很多。
   try {
     const res = await fetch(apiUrl('/api/chat-delete'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msgId })
@@ -911,21 +912,25 @@ function escapeHtml(str) {
 
 // ---- 便签相关的操作与数据同步函数 ----
 async function deleteNote(id, sourceStr = "desk") {
-  if (sourceStr !== "desk" && !confirm('确定要丢弃这张便签吗？它将被永久删除。')) return;
+  // 本地直接移除对应卡片，不再等后端返回后重新拉整个列表——这才是"丢弃便签"反应慢的
+  // 主要原因：以前是"等写入完成→再整表重新查询→重新渲染"两轮网络往返，现在只有一次写入请求，
+  // 界面即时响应。
+  const card = document.getElementById(`drawer-note-card-${id}`) || document.getElementById(`archive-note-card-${id}`);
+  if (card) card.remove();
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/delete'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id })
     });
     const data = await res.json();
-    if (data.ok) {
-      if (sourceStr === "desk") loadStatus();
-      else if (sourceStr === "drawer") openDrawerNotes();
-      else if (sourceStr === "archive") openArchiveBox();
-    }
+    if (!data.ok) alert('丢弃失败：' + (data.error || '未知错误'));
+    if (sourceStr === "desk") loadStatus();
   } catch (e) { alert('网络错误，丢弃失败'); }
 }
 
 async function moveNote(id, targetStatus, sourceStr) {
+  // 同样做本地即时移除：移动的本质是"从当前列表消失"，不需要为了这个去重新拉全量数据。
+  const card = document.getElementById(`drawer-note-card-${id}`) || document.getElementById(`archive-note-card-${id}`);
+  if (card) card.remove();
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/move'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -935,25 +940,43 @@ async function moveNote(id, targetStatus, sourceStr) {
     if (data.ok) {
       if (data.target_full) alert(`已成功移入！当前${targetStatus === 'drawer' ? '便签抽屉' : '档案箱'}容量已满，记得及时清理哦！`);
       if (sourceStr === "desk") loadStatus();
-      else if (sourceStr === "drawer") openDrawerNotes();
-      else if (sourceStr === "archive") openArchiveBox();
+    } else {
+      alert('移动失败：' + (data.error || '未知错误'));
     }
   } catch(e) { alert('网络错误，移动便签失败'); }
 }
 
 async function starNote(id, isStarredNow, sourceStr) {
+  // 乐观更新：不等后端返回就先把当前按钮的图标/状态切换过去，
+  // 网络请求在背后悄悄发；失败了再退回原状态。避免"点一下要等一轮网络往返+整表重绘"的迟钝感。
+  const btn = document.querySelector(`.star-btn[onclick*="starNote(${id},"]`)
+    || document.querySelector(`.star-btn[onclick*="starLetter(${id},"]`);
+  const newStarred = !isStarredNow;
+  if (btn) {
+    btn.textContent = newStarred ? '★' : '☆';
+    btn.classList.toggle('active', newStarred);
+    btn.setAttribute('onclick', `starNote(${id}, ${newStarred}, '${sourceStr}')`);
+  }
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/star'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, is_starred: !isStarredNow })
+      body: JSON.stringify({ id: id, is_starred: newStarred })
     });
     const data = await res.json();
-    if (data.ok) {
-      if (sourceStr === "desk") loadStatus();
-      else if (sourceStr === "drawer") openDrawerNotes();
-      else if (sourceStr === "archive") openArchiveBox();
+    if (!data.ok && btn) {
+      // 后端拒绝了，退回原状态
+      btn.textContent = isStarredNow ? '★' : '☆';
+      btn.classList.toggle('active', isStarredNow);
+      btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}')`);
     }
-  } catch(e) { alert('网络错误'); }
+  } catch(e) {
+    if (btn) {
+      btn.textContent = isStarredNow ? '★' : '☆';
+      btn.classList.toggle('active', isStarredNow);
+      btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}')`);
+    }
+    alert('网络错误，星标可能没有保存成功');
+  }
 }
 
 // 仿真手账 5种纯色底色与5种纹理的随机碰撞算法
@@ -1241,47 +1264,59 @@ function closeLoveLetters() { document.getElementById('letter-modal').style.disp
 
 // 归档单封情书函数
 async function archiveLetter(id) {
+  const card = document.getElementById(`letter-card-${id}`);
+  if (card) card.remove();
   try {
     const res = await fetch(apiUrl('/api/love-letters/archive'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id })
     });
     const data = await res.json();
-    if (data.ok) {
-      openLoveLetters(); loadStatus();
-    }
+    if (data.ok) loadStatus();
+    else alert('归档失败：' + (data.error || '未知错误'));
   } catch(e) { alert('网络错误'); }
 }
 
 // 物理丢弃单封情书函数
 async function deleteLetter(id) {
   if (!confirm('确定要彻底丢弃这封情书吗？它将被永久删除。')) return;
+  const card = document.getElementById(`letter-card-${id}`) || document.getElementById(`archive-letter-card-${id}`);
+  if (card) card.remove();
   try {
     const res = await fetch(apiUrl('/api/love-letters/delete'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id })
     });
     const data = await res.json();
-    if (data.ok) {
-      const card = document.getElementById(`letter-card-${id}`);
-      if (card) {
-        card.style.transition = 'all 0.3s'; card.style.transform = 'translateX(50px)'; card.style.opacity = '0';
-        setTimeout(() => openLoveLetters(), 300);
-      } else openLoveLetters();
-    }
+    if (!data.ok) alert('丢弃失败：' + (data.error || '未知错误'));
   } catch (e) { alert('网络错误'); }
 }
 
 async function starLetter(id, isStarredNow, sourceStr) {
+  const btn = document.querySelector(`.star-btn[onclick*="starLetter(${id},"]`);
+  const newStarred = !isStarredNow;
+  if (btn) {
+    btn.textContent = newStarred ? '★' : '☆';
+    btn.classList.toggle('active', newStarred);
+    btn.setAttribute('onclick', `starLetter(${id}, ${newStarred}, '${sourceStr}')`);
+  }
   try {
     const res = await fetch(apiUrl('/api/love-letters/star'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, is_starred: !isStarredNow })
+      body: JSON.stringify({ id: id, is_starred: newStarred })
     });
     const data = await res.json();
-    if (data.ok) {
-      if (sourceStr === "drawer") openLoveLetters();
-      else if (sourceStr === "archive") openArchiveBox();
+    if (!data.ok && btn) {
+      btn.textContent = isStarredNow ? '★' : '☆';
+      btn.classList.toggle('active', isStarredNow);
+      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}')`);
     }
-  } catch(e) { alert('网络错误'); }
+  } catch(e) {
+    if (btn) {
+      btn.textContent = isStarredNow ? '★' : '☆';
+      btn.classList.toggle('active', isStarredNow);
+      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}')`);
+    }
+    alert('网络错误，星标可能没有保存成功');
+  }
 }
 
 
@@ -1311,7 +1346,7 @@ async function openArchiveBox() {
           const starIcon = note.is_starred ? '★' : '☆';
           const starClass = note.is_starred ? 'active' : '';
           html += `
-            <div class="single-letter">
+            <div class="single-letter" id="archive-note-card-${note.id}">
               <div class="letter-time-row">
                 <span class="letter-time">📌 ${formatTime(note.created_at)} · ${note.created_at.substring(0,10)}</span>
                 <div class="letter-act-group">
@@ -1333,7 +1368,7 @@ async function openArchiveBox() {
           const starIcon = letter.is_starred ? '★' : '☆';
           const starClass = letter.is_starred ? 'active' : '';
           html += `
-            <div class="single-letter">
+            <div class="single-letter" id="archive-letter-card-${letter.id}">
               <div class="letter-time-row">
                 <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
                 <div class="letter-act-group">
