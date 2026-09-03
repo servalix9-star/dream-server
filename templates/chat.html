@@ -158,7 +158,7 @@
   }
   #header .sub { font-size: 11px; color: rgba(255, 255, 255, 0.7); letter-spacing: 1px; margin-top: 3px; display: flex; align-items: center; gap: 6px; }
   .status-badge { background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); padding: 1px 7px; border-radius: 5px; font-size: 10px; color: #ffffff; display: inline-flex; align-items: center; gap: 4px; }
-  #model-select { margin-left: 6px; font-size: 10px; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 5px; padding: 1px 4px; max-width: 130px; outline: none; }
+  #model-select { margin-left: 6px; font-size: 10px; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 5px; padding: 1px 4px; max-width: 150px; outline: none; }
   #model-select option { color: #000; }
   .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #84cc9a; display: inline-block; box-shadow: 0 0 6px #84cc9a; }
   .status-dot.low { background: #c3a1ad; box-shadow: 0 0 6px #c3a1ad; }
@@ -1482,8 +1482,15 @@ inputEl.addEventListener('input', () => {
 const modelSelect = document.getElementById('model-select');
 // 部分模型id显示成更短的名字，下拉框空间有限，纯技术名太长会被截断；没在这里配置的模型会直接显示原始id
 const MODEL_DISPLAY_NAME = {
-  'gemai-gemini-3.1-pro': 'Gemini3.1(备用)',
-  'gemai-gemini-2.5-flash': 'Gemini2.5(备用)'
+  'gemai-gpt-4o-mini': 'gpt-4o-mini',
+  'gemai-gpt-4.1-mini': 'gpt-4.1-mini',
+  'gemai-gpt-5-mini': 'gpt-5-mini',
+  'gemai-gemini-2.5-flash-a': 'gemini-2.5-flash(满血A)',
+  'gemai-gemini-2.5-pro-a': 'gemini-2.5-pro(满血A)',
+  'gemai-gemini-2.5-pro-d': 'gemini-2.5-pro(满血D)',
+  'gemai-gemini-3.1-pro': 'gemini-3.1-pro-preview',
+  'gemai-gemini-3.1-pro-thinking': 'gemini-3.1-pro-thinking-128(满血A)',
+  'gemai-grok-4': 'grok-4'
 };
 async function loadModelSelector() {
   try {
