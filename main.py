@@ -347,6 +347,19 @@ def delete_chat_message_row(msg_id):
     _supabase_request("DELETE", "chat_messages", params={"id": f"eq.{msg_id}"})
 
 
+def delete_chat_messages_after(created_at):
+    """删除created_at严格晚于给定时间戳的所有消息（用户消息+Charon回复都删）。
+    编辑重发时用来截断"被编辑消息之后的整条对话尾巴"，实现真正的分支/回滚，
+    而不是让编辑后的新一轮对话跟旧尾巴并存在同一个列表里。"""
+    _supabase_request("DELETE", "chat_messages", params={"created_at": f"gt.{created_at}"})
+
+
+def delete_events_after(created_at):
+    """配合delete_chat_messages_after：把events表里对应时间之后的chat类型记录也一并清掉，
+    避免Charon下次醒来时recent里还看得到已经被编辑截断掉的旧对话内容。"""
+    _supabase_request("DELETE", "events", params={"created_at": f"gt.{created_at}", "type": "eq.chat"})
+
+
 def get_chat_message_row(msg_id):
     """按id查单条消息，重新生成/撤回时需要先确认这条消息存在、拿到它的created_at和content。"""
     rows = _supabase_request(
@@ -1681,6 +1694,80 @@ def chat_delete():
         return jsonify({"ok": True, "deleted_id": msg_id})
     except Exception as e:
         log_error("chat_delete", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/chat-edit-resend", methods=["POST"])
+def chat_edit_resend():
+    """编辑一条已发送的用户消息并重发：真正的"分支/回滚"，不是简单地再发一条。
+    行为：把这条消息内容原地改掉，同时删除它之后的所有消息（不管是这一轮的Charon回复，
+    还是编辑点之后用户又追加发过的任何内容）——对话收束到编辑的这个点，然后基于截断后
+    的历史重新生成一条Charon回复接上去。跟之前"编辑=把文字填回输入框再发一遍"的区别是：
+    旧方式会在记录里留下原消息+新消息两条重复内容，还得手动删掉中间的旧对话；
+    这个接口一次操作就把"回滚到这里、换一种说法重新说"这件事做完。
+    Body: {"id": "被编辑的用户消息id", "new_content": "编辑后的新内容"}"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    data = request.json or {}
+    msg_id = data.get("id")
+    new_content = (data.get("new_content") or "").strip()
+    if not msg_id or not new_content:
+        return jsonify({"ok": False, "error": "缺少id或new_content参数"}), 400
+
+    try:
+        target = get_chat_message_row(msg_id)
+        if not target:
+            return jsonify({"ok": False, "error": "没找到这条消息，可能已经被删过了"}), 404
+        if target.get("role") != "user":
+            return jsonify({"ok": False, "error": "只能编辑用户自己发的消息"}), 400
+
+        target_created_at = target.get("created_at", "")
+        old_content = target.get("content", "")
+
+        # 截断：删掉这条消息之后的所有对话（用户后续消息+Charon的所有回复），
+        # 同步清理events里对应时间段的记录，避免Charon下次自动醒来时还惦记着已经被覆盖的旧对话。
+        delete_chat_messages_after(target_created_at)
+        delete_events_after(target_created_at)
+
+        # 原地覆盖这条用户消息的内容，不新增行、不改created_at（保持它在时间线上的原有位置）
+        update_chat_message_row(msg_id, new_content)
+
+        # 同步更新events里这条消息自己的记录内容（如果存在的话），跟chat_delete的做法对称
+        delete_event_row(target_created_at, old_content)
+        add_event_row("chat", f"她在网页里说：{new_content}", target_created_at)
+
+        # 用截断后的历史（不含被替换的旧内容和旧回复）构建prompt，生成新的Charon回复。
+        # 编辑重发不额外加情绪分——这是"把已经说过的话修正一下"，不是一次新的互动，
+        # 原消息发送时已经加过一次分，这里只读当前分数（走自然衰减），不再调用recover_mood。
+        history = load_chat_history()  # 此时target这条已经是新内容了，之后的都已删除
+        mood_score = apply_mood_decay()
+        chat_hours_gap = get_hours_since_last_chat()
+        mood_context = get_mood_context(mood_score, chat_hours_gap)
+
+        maybe_trigger_sweet_letter(mood_context)
+        maybe_trigger_longing_letter(mood_context)
+
+        hour = datetime.now().hour
+        time_context = get_time_context(hour)
+        prompt = build_chat_reply_prompt(time_context, new_content, history, mood_context)
+        raw = call_deepseek(prompt)
+        _, reply_msg = parse_reason_message(raw)
+
+        charon_msg_id = new_msg_id()
+        add_chat_message_row(charon_msg_id, "charon", reply_msg)
+
+        maybe_update_chat_summary(history)
+
+        return jsonify({
+            "ok": True,
+            "user_msg_id": msg_id,
+            "new_content": new_content,
+            "reply": reply_msg,
+            "charon_msg_id": charon_msg_id
+        })
+    except Exception as e:
+        log_error("chat_edit_resend", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
