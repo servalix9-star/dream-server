@@ -57,24 +57,39 @@ def _supabase_request(method, table, params=None, json_body=None, headers_extra=
 # 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
 # 和 deepseek-v4-pro（深度推理，更贵，开启思考模式，回复慢一点但推理更深）。
 # thinking 状态跟着选中的模型自动联动，见 get_thinking_config()。
-# gemai-gemini-3.1-pro / gemai-gemini-2.5-flash 是接入的 gemai.cc 代理站模型，纯粹作为备选，
-# 走独立的供应商配置（见 MODEL_PROVIDER_MAP）。这类代理站的具体渠道时常变动，
-# 之前接的 gemini-2.5-pro（官逆渠道）出现过 503 model_not_found（渠道下线），
-# 所以这里换成两个当前在控制台确认可用、且没有"官逆"标签（相对更稳）的型号，
-# 两个都放进下拉框，哪个能用切哪个，不用等改代码。
-AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "gemai-gemini-3.1-pro", "gemai-gemini-2.5-flash"]
+# gemai-* 系列是接入的 gemai.cc 代理站模型，纯粹作为备选，走独立的供应商配置（见 MODEL_PROVIDER_MAP）。
+# 这类代理站的具体渠道时常变动（之前接的[官逆]gemini-2.5-pro出现过503 model_not_found，渠道下线），
+# 所以这里一次接入9个当前指定的型号，覆盖GPT/Gemini/Grok三个系列，哪个能用切哪个。
+# 其中gemini-2.5-pro有[满血A][满血D]两条渠道，gemini-3.1-pro-preview有[官逆]和[满血A]+thinking两条渠道，
+# 内部id用 -a / -d / -thinking 后缀区分，real_model原样保留完整前缀标注（渠道识别用）。
+AVAILABLE_MODELS = [
+    "deepseek-v4-flash", "deepseek-v4-pro",
+    "gemai-gpt-4o-mini", "gemai-gpt-4.1-mini", "gemai-gpt-5-mini",
+    "gemai-gemini-2.5-flash-a", "gemai-gemini-2.5-pro-a", "gemai-gemini-2.5-pro-d",
+    "gemai-gemini-3.1-pro", "gemai-gemini-3.1-pro-thinking",
+    "gemai-grok-4"
+]
 DEFAULT_MODEL = "deepseek-v4-flash"
 # 每个模型对应的思考模式：flash关闭（快、且temperature等参数能生效），pro开启（慢、但推理更深）
 # gemai系列不支持DeepSeek的thinking参数，这里给个占位值，实际调用时会被跳过（见call_deepseek里的分流逻辑）
 MODEL_THINKING_MAP = {
     "deepseek-v4-flash": "disabled",
     "deepseek-v4-pro": "enabled",
+    "gemai-gpt-4o-mini": "disabled",
+    "gemai-gpt-4.1-mini": "disabled",
+    "gemai-gpt-5-mini": "disabled",
+    "gemai-gemini-2.5-flash-a": "disabled",
+    "gemai-gemini-2.5-pro-a": "disabled",
+    "gemai-gemini-2.5-pro-d": "disabled",
     "gemai-gemini-3.1-pro": "disabled",
-    "gemai-gemini-2.5-flash": "disabled"
+    "gemai-gemini-3.1-pro-thinking": "disabled",
+    "gemai-grok-4": "disabled"
 }
 
 # 每个模型对应的真实供应商配置：base_url（接口地址）、api_key（读哪个环境变量）、
-# real_model（发给上游时真正用的模型名）、supports_thinking（是否要在请求体里带thinking字段）。
+# real_model（发给上游时真正用的模型名，代理站渠道识别要用，前缀方括号必须原样保留，
+# 跟下面前端下拉框显示的"去掉前缀"的名字是两回事，不要混着改）、
+# supports_thinking（是否要在请求体里带thinking字段）。
 # 新增供应商/模型以后，只需要在这里加一条映射，call_deepseek/run_once里的分流逻辑不用改。
 MODEL_PROVIDER_MAP = {
     "deepseek-v4-flash": {
@@ -89,16 +104,58 @@ MODEL_PROVIDER_MAP = {
         "real_model": "deepseek-v4-pro",
         "supports_thinking": True,
     },
+    "gemai-gpt-4o-mini": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[官逆]gpt-4o-mini",  # 官逆渠道
+        "supports_thinking": False,
+    },
+    "gemai-gpt-4.1-mini": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[官逆]gpt-4.1-mini",  # 官逆渠道
+        "supports_thinking": False,
+    },
+    "gemai-gpt-5-mini": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[官逆]gpt-5-mini",  # 官逆渠道
+        "supports_thinking": False,
+    },
+    "gemai-gemini-2.5-flash-a": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[满血A]gemini-2.5-flash",  # 满血A渠道
+        "supports_thinking": False,
+    },
+    "gemai-gemini-2.5-pro-a": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[满血A]gemini-2.5-pro",  # 满血A渠道
+        "supports_thinking": False,
+    },
+    "gemai-gemini-2.5-pro-d": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[满血D]gemini-2.5-pro",  # 满血D渠道
+        "supports_thinking": False,
+    },
     "gemai-gemini-3.1-pro": {
         "base_url": "https://api.gemai.cc/v1/chat/completions",
         "api_key": GEMAI_API_KEY,
-        "real_model": "gemini-3.1-pro-preview",  # 控制台确认可用的完整模型名，无前缀标注
+        "real_model": "[官逆]gemini-3.1-pro-preview",  # 官逆渠道
         "supports_thinking": False,
     },
-    "gemai-gemini-2.5-flash": {
+    "gemai-gemini-3.1-pro-thinking": {
         "base_url": "https://api.gemai.cc/v1/chat/completions",
         "api_key": GEMAI_API_KEY,
-        "real_model": "[premium]gemini-2.5-flash",  # 控制台确认可用的完整模型名，标注premium
+        "real_model": "[满血A]gemini-3.1-pro-preview-thinking-128",  # 满血A渠道，开启深度思考
+        "supports_thinking": False,
+    },
+    "gemai-grok-4": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "grok-4",  # 无前缀标注
         "supports_thinking": False,
     },
 }
