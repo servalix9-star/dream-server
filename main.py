@@ -22,6 +22,12 @@ SUPABASE_HEADERS = {
     "Content-Type": "application/json",
 }
 
+# 用Session复用底层TCP连接（HTTP keep-alive），避免每次请求Supabase都重新做一次TLS握手。
+# 之前是每次_supabase_request都用requests.request()裸调用，握手开销会在"一次操作背后
+# 有好几次Supabase查询"的场景里（比如打开档案箱要连着查便签表和情书表）明显叠加起来，
+# 是"打开抽屉/档案箱慢"的原因之一（另一个是Render免费套餐冷启动，已用UptimeRobot缓解）。
+_supabase_session = requests.Session()
+
 ERROR_LOG = os.path.join(os.environ.get("DATA_DIR", "."), "error.log")
 os.makedirs(os.path.dirname(ERROR_LOG) or ".", exist_ok=True)
 
@@ -43,7 +49,7 @@ def _supabase_request(method, table, params=None, json_body=None, headers_extra=
     headers = dict(SUPABASE_HEADERS)
     if headers_extra:
         headers.update(headers_extra)
-    resp = requests.request(method, url, headers=headers, params=params, json=json_body, timeout=15)
+    resp = _supabase_session.request(method, url, headers=headers, params=params, json=json_body, timeout=15)
     if resp.status_code >= 400:
         raise RuntimeError(f"Supabase {method} {table} 失败: status={resp.status_code} body={resp.text}")
     if resp.text:
@@ -274,7 +280,7 @@ def count_events_today():
         url = f"{SUPABASE_URL}/rest/v1/events"
         headers = dict(SUPABASE_HEADERS)
         headers["Prefer"] = "count=exact"
-        resp = requests.get(
+        resp = _supabase_session.get(
             url, headers=headers,
             params={"select": "id", "created_at": f"gte.{today_start}", "limit": 1},
             timeout=15
@@ -680,7 +686,7 @@ def count_sticky_notes(status):
         url = f"{SUPABASE_URL}/rest/v1/sticky_notes"
         headers = dict(SUPABASE_HEADERS)
         headers["Prefer"] = "count=exact"
-        resp = requests.get(
+        resp = _supabase_session.get(
             url, headers=headers,
             params={"select": "id", "status": f"eq.{status}", "limit": 1},
             timeout=15
@@ -835,7 +841,7 @@ def count_love_letters(status):
         url = f"{SUPABASE_URL}/rest/v1/love_letters"
         headers = dict(SUPABASE_HEADERS)
         headers["Prefer"] = "count=exact"
-        resp = requests.get(
+        resp = _supabase_session.get(
             url, headers=headers,
             params={"select": "id", "status": f"eq.{status}", "limit": 1},
             timeout=15
