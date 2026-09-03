@@ -57,15 +57,20 @@ def _supabase_request(method, table, params=None, json_body=None, headers_extra=
 # 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
 # 和 deepseek-v4-pro（深度推理，更贵，开启思考模式，回复慢一点但推理更深）。
 # thinking 状态跟着选中的模型自动联动，见 get_thinking_config()。
-# gemai-gemini-pro 是接入的 gemai.cc 代理站模型，纯粹作为备选，走独立的供应商配置（见 MODEL_PROVIDER_MAP）。
-AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "gemai-gemini-pro"]
+# gemai-gemini-3.1-pro / gemai-gemini-2.5-flash 是接入的 gemai.cc 代理站模型，纯粹作为备选，
+# 走独立的供应商配置（见 MODEL_PROVIDER_MAP）。这类代理站的具体渠道时常变动，
+# 之前接的 gemini-2.5-pro（官逆渠道）出现过 503 model_not_found（渠道下线），
+# 所以这里换成两个当前在控制台确认可用、且没有"官逆"标签（相对更稳）的型号，
+# 两个都放进下拉框，哪个能用切哪个，不用等改代码。
+AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "gemai-gemini-3.1-pro", "gemai-gemini-2.5-flash"]
 DEFAULT_MODEL = "deepseek-v4-flash"
 # 每个模型对应的思考模式：flash关闭（快、且temperature等参数能生效），pro开启（慢、但推理更深）
-# gemai-gemini-pro 不支持DeepSeek的thinking参数，这里给个占位值，实际调用时会被跳过（见call_deepseek里的分流逻辑）
+# gemai系列不支持DeepSeek的thinking参数，这里给个占位值，实际调用时会被跳过（见call_deepseek里的分流逻辑）
 MODEL_THINKING_MAP = {
     "deepseek-v4-flash": "disabled",
     "deepseek-v4-pro": "enabled",
-    "gemai-gemini-pro": "disabled"
+    "gemai-gemini-3.1-pro": "disabled",
+    "gemai-gemini-2.5-flash": "disabled"
 }
 
 # 每个模型对应的真实供应商配置：base_url（接口地址）、api_key（读哪个环境变量）、
@@ -84,10 +89,16 @@ MODEL_PROVIDER_MAP = {
         "real_model": "deepseek-v4-pro",
         "supports_thinking": True,
     },
-    "gemai-gemini-pro": {
+    "gemai-gemini-3.1-pro": {
         "base_url": "https://api.gemai.cc/v1/chat/completions",
         "api_key": GEMAI_API_KEY,
-        "real_model": "[官逆]gemini-2.5-pro",  # 文档里的真实模型名，代理站按这个名字转发
+        "real_model": "gemini-3.1-pro-preview",  # 控制台确认可用的完整模型名，无前缀标注
+        "supports_thinking": False,
+    },
+    "gemai-gemini-2.5-flash": {
+        "base_url": "https://api.gemai.cc/v1/chat/completions",
+        "api_key": GEMAI_API_KEY,
+        "real_model": "[premium]gemini-2.5-flash",  # 控制台确认可用的完整模型名，标注premium
         "supports_thinking": False,
     },
 }
