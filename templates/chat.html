@@ -201,6 +201,21 @@
   }
   .bubble.pending { opacity: 0.5; }
 
+  /* 行内编辑模式：气泡本身变可编辑，需要覆盖默认的user-select:none/cursor:pointer，
+     否则光标无法进入、文字也选不中。虚线描边给出"正在编辑"的明确视觉信号。 */
+  .bubble.editing-bubble {
+    -webkit-user-select: text; user-select: text; cursor: text;
+    outline: 2px dashed rgba(255, 255, 255, 0.65); outline-offset: 2px;
+  }
+  .edit-action-bar { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .edit-action-btn {
+    border: none; border-radius: 12px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+    font-family: inherit; transition: opacity 0.15s;
+  }
+  .edit-action-btn:disabled { opacity: 0.5; cursor: default; }
+  .edit-action-btn.cancel { background: rgba(107, 84, 96, 0.12); color: #6b5460; }
+  .edit-action-btn.send { background: linear-gradient(135deg, #f3b0c3, #e593a4); color: #fff; }
+
   /* ---- 全局悬浮操作菜单 ---- */
   #bubble-menu {
     display: none; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
@@ -711,13 +726,109 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 全新双击触发菜单逻辑
+  // 全新双击触发菜单逻辑（编辑状态下暂停响应，避免编辑时快速点字词被误判成双击唤出菜单）
   addDoubleTapListener(bubble, (e) => {
+    if (row.classList.contains('editing')) return;
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content);
   });
 
   return row;
+}
+
+// 行内编辑模式：气泡变成可编辑文本，旁边冒出"发送/取消"两个小按钮。
+// 确认后调用/api/chat-edit-resend，真正做到"编辑这条→截断它之后的所有对话→重新生成回复"，
+// 而不是旧版那种"把文字填回输入框，用户再手动发一遍，记录里留下重复消息"的做法。
+function enterEditMode(row, bubble, msgId, originalContent) {
+  if (row.classList.contains('editing')) return; // 防止双击等重复触发时进入两次编辑态
+  row.classList.add('editing');
+
+  bubble.contentEditable = 'true';
+  bubble.classList.add('editing-bubble');
+  bubble.focus();
+  // 光标定位到文本末尾，而不是全选或停在开头，编辑体验更符合直觉
+  const range = document.createRange();
+  range.selectNodeContents(bubble);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const actionBar = document.createElement('div');
+  actionBar.className = 'edit-action-bar';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'edit-action-btn cancel';
+  cancelBtn.textContent = '取消';
+
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'edit-action-btn send';
+  sendBtn.textContent = '发送';
+
+  actionBar.appendChild(cancelBtn);
+  actionBar.appendChild(sendBtn);
+  row.querySelector('.msg-col').appendChild(actionBar);
+
+  function exitEditMode(restoreContent) {
+    bubble.contentEditable = 'false';
+    bubble.classList.remove('editing-bubble');
+    if (restoreContent !== undefined) bubble.textContent = restoreContent;
+    actionBar.remove();
+    row.classList.remove('editing');
+  }
+
+  cancelBtn.onclick = () => exitEditMode(originalContent);
+
+  sendBtn.onclick = async () => {
+    // contenteditable换行后浏览器可能插入<div>/<br>而不是纯文本\n，textContent会把这些
+    // 换行结构压没；先把<br>和块级换行统一转成\n，再取纯文本，避免多行内容被拼成一行。
+    const rawHtml = bubble.innerHTML.replace(/<div>/gi, '\n').replace(/<\/div>/gi, '').replace(/<br\s*\/?>/gi, '\n');
+    const tempEl = document.createElement('div');
+    tempEl.innerHTML = rawHtml;
+    const newContent = tempEl.textContent.trim();
+    if (!newContent) { exitEditMode(originalContent); return; }
+    if (newContent === originalContent) { exitEditMode(); return; }
+
+    sendBtn.disabled = true;
+    cancelBtn.disabled = true;
+    bubble.contentEditable = 'false';
+    bubble.classList.remove('editing-bubble');
+    bubble.classList.add('pending');
+
+    try {
+      const res = await fetch(apiUrl('/api/chat-edit-resend'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: msgId, new_content: newContent })
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        alert('编辑失败：' + (data.error || '未知错误'));
+        exitEditMode(originalContent);
+        return;
+      }
+      // 成功：这条消息文字定格为新内容；它之后的所有消息（不管是这一轮的旧回复，
+      // 还是编辑点之后用户又追加发过的任何内容）从视图里一并移除，插入新的Charon回复，
+      // 对话真正收束到编辑的这个点，不会留下任何重复或残留。
+      bubble.textContent = newContent;
+      bubble.classList.remove('pending');
+      actionBar.remove();
+      row.classList.remove('editing');
+
+      let sibling = row.nextSibling;
+      while (sibling) {
+        const toRemove = sibling;
+        sibling = sibling.nextSibling;
+        toRemove.remove();
+      }
+
+      messagesEl.appendChild(renderMsgRow('charon', data.reply, new Date().toISOString(), false, data.charon_msg_id));
+      scrollToBottom();
+      loadStatus();
+    } catch (e) {
+      alert('网络错误，编辑重发失败');
+      exitEditMode(originalContent);
+    }
+  };
 }
 
 // 全局上下文菜单管理 (双击唤出)
@@ -744,8 +855,10 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
         editBtn.className = 'menu-btn';
         editBtn.textContent = '✍️ 重新编辑';
         editBtn.onclick = () => {
-          document.getElementById('input').value = textContent;
-          document.getElementById('input').focus();
+          if (currentActiveRowEl) {
+            const bubbleEl = currentActiveRowEl.querySelector('.bubble');
+            if (bubbleEl) enterEditMode(currentActiveRowEl, bubbleEl, id, textContent);
+          }
           hideWeChatMenu();
         };
         contextMenu.appendChild(editBtn);
