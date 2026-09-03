@@ -1480,6 +1480,10 @@ inputEl.addEventListener('input', () => {
 });
 
 const modelSelect = document.getElementById('model-select');
+// 部分模型id显示成更短的名字，下拉框空间有限，纯技术名太长会被截断；没在这里配置的模型会直接显示原始id
+const MODEL_DISPLAY_NAME = {
+  'gemai-gemini-pro': 'Gemini(备用)'
+};
 async function loadModelSelector() {
   try {
     const res = await fetch(apiUrl('/api/chat-model'));
@@ -1487,7 +1491,7 @@ async function loadModelSelector() {
     if (!data.ok) return;
     modelSelect.innerHTML = '';
     data.available_models.forEach(m => {
-      const opt = document.createElement('option'); opt.value = m; opt.textContent = m;
+      const opt = document.createElement('option'); opt.value = m; opt.textContent = MODEL_DISPLAY_NAME[m] || m;
       if (m === data.current_model) opt.selected = true; modelSelect.appendChild(opt);
     });
   } catch (e) {}
