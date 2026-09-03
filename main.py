@@ -308,13 +308,15 @@ def delete_event_row(created_at, content_substr):
         log_error("delete_event_row", e)
 
 
-def load_chat_history(limit=200):
-    """从 Supabase chat_messages 表读最近limit条，旧->新顺序。"""
+def load_chat_history(limit=200, before=None):
+    """从 Supabase chat_messages 表读limit条，旧->新顺序。
+    before：传入某条消息的created_at时间戳，只取比它更早的记录——用于前端"上滑加载更早的历史"，
+    不传就是原来的行为（取最新的limit条）。"""
     try:
-        rows = _supabase_request(
-            "GET", "chat_messages",
-            params={"select": "id,role,content,created_at", "order": "created_at.desc", "limit": limit}
-        )
+        params = {"select": "id,role,content,created_at", "order": "created_at.desc", "limit": limit}
+        if before:
+            params["created_at"] = f"lt.{before}"
+        rows = _supabase_request("GET", "chat_messages", params=params)
         return list(reversed(rows or []))
     except Exception as e:
         log_error("load_chat_history", e)
@@ -1463,11 +1465,21 @@ def set_chat_model():
 
 @app.route("/api/chat-messages", methods=["GET"])
 def get_chat_messages():
-    """拉取网页聊天的历史记录，供前端渲染。"""
+    """拉取网页聊天的历史记录，供前端渲染。
+    支持 ?before=<ISO时间戳> 向前翻页加载更早的消息；不传就是最新的一页。
+    PAGE_SIZE条命中就说明理论上可能还有更早的，has_more给前端一个提示，
+    真实是否还有更多要等下一次真的查到空结果才最终确认（这里用条数打个近似的提前量，
+    避免多一次空查询的往返）。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-    history = load_chat_history(limit=50)
-    return jsonify({"ok": True, "messages": history})
+    before = request.args.get("before")
+    PAGE_SIZE = 50
+    history = load_chat_history(limit=PAGE_SIZE, before=before)
+    return jsonify({
+        "ok": True,
+        "messages": history,
+        "has_more": len(history) == PAGE_SIZE
+    })
 
 
 @app.route("/api/love-letters", methods=["GET"])
@@ -1712,14 +1724,6 @@ def chat_send():
 
         # 顺手检查一下要不要更新滚动摘要（只在对话变长之后才会真正触发，不影响每次的响应速度）
         maybe_update_chat_summary(history)
-
-        # 顺手刷新一条便签，让冰箱贴内容跟上最新心境（失败不影响这次聊天回应本身）
-        try:
-            events = load_events(limit=5)
-            recent = "\n".join([f"{e['created_at'][:16]} {e['value']}" for e in events]) if events else "最近没有任何活动记录"
-            generate_sticky_note(mood_score, mood_context, recent)
-        except Exception as e:
-            log_error("chat_send:sticky_note", e)
 
         return jsonify({
             "ok": True,
