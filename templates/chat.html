@@ -723,9 +723,11 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
 // 全局上下文菜单管理 (双击唤出)
 function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
   const rect = targetElement.getBoundingClientRect();
+  // 先在不可见状态下重建内容并测量尺寸，避免"旧位置菜单闪现→跳到新位置"这个中间态被误触，
+  // 这正是"要点两次才生效"的卡顿感来源：第一次点击其实点在了闪现的旧位置上。
+  contextMenu.style.visibility = 'hidden';
   contextMenu.style.display = 'flex';
   contextMenu.innerHTML = '';
-
   if (typeOrRole === 'user' || typeOrRole === 'charon') {
     // ---- 聊天气泡专属双击选项 ----
     const copyBtn = document.createElement('button');
@@ -789,13 +791,18 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
     contextMenu.appendChild(delBtn);
   }
 
-  const menuWidth = contextMenu.offsetWidth || 200;
-  const menuHeight = contextMenu.offsetHeight || 34;
-  contextMenu.style.left = (rect.left + rect.width / 2 - menuWidth / 2 + window.scrollX) + 'px';
-  contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
+  // 内容已重建完毕，用requestAnimationFrame等浏览器完成一次布局计算后再测量尺寸，
+  // 这样offsetWidth/offsetHeight才是本次菜单内容真正的尺寸，不会拿到上一次残留的值。
+  requestAnimationFrame(() => {
+    const menuWidth = contextMenu.offsetWidth || 200;
+    const menuHeight = contextMenu.offsetHeight || 34;
+    contextMenu.style.left = (rect.left + rect.width / 2 - menuWidth / 2 + window.scrollX) + 'px';
+    contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
+    contextMenu.style.visibility = 'visible';
+  });
 }
 
-function hideWeChatMenu() { contextMenu.style.display = 'none'; }
+function hideWeChatMenu() { contextMenu.style.display = 'none'; contextMenu.style.visibility = 'visible'; }
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.bubble') && !e.target.closest('.sticky-note-card') && !e.target.classList.contains('menu-btn')) {
@@ -843,6 +850,13 @@ async function regenerateMessage(msgId, rowEl) {
 
 function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
+// 历史消息分页：oldestLoadedAt记录当前已加载的最早一条消息的created_at，
+// 上滑到顶部时拿它作为before参数去要更早的一页；hasMoreHistory是后端给的提示，
+// 到底了就不再触发请求，避免用户在顶端反复滚动时发送大量空查询。
+let oldestLoadedAt = null;
+let hasMoreHistory = true;
+let isLoadingMoreHistory = false;
+
 async function loadHistory() {
   try {
     const res = await fetch(apiUrl('/api/chat-messages'));
@@ -851,9 +865,43 @@ async function loadHistory() {
     if (!data.ok) { messagesEl.innerHTML = '<div id="empty-hint">加载失败</div>'; return; }
     if (!data.messages || data.messages.length === 0) { messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>'; return; }
     data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id)));
+    oldestLoadedAt = data.messages[0].created_at;
+    hasMoreHistory = !!data.has_more;
     scrollToBottom();
   } catch (e) { messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>'; }
 }
+
+// 上滑到顶部时调用：取比oldestLoadedAt更早的一页，插到消息列表最前面。
+// 插入前先记住当前滚动位置对应的"内容高度"，插入后把scrollTop往下补偿同样的增量，
+// 这样视口里正看着的那几条消息不会因为顶部突然多出内容而跳来跳去。
+async function loadMoreHistory() {
+  if (isLoadingMoreHistory || !hasMoreHistory || !oldestLoadedAt) return;
+  isLoadingMoreHistory = true;
+  try {
+    const res = await fetch(apiUrl(`/api/chat-messages?before=${encodeURIComponent(oldestLoadedAt)}`));
+    const data = await res.json();
+    if (!data.ok || !data.messages || data.messages.length === 0) {
+      hasMoreHistory = false;
+      return;
+    }
+    const prevScrollHeight = messagesEl.scrollHeight;
+    const frag = document.createDocumentFragment();
+    data.messages.forEach(m => frag.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id)));
+    messagesEl.insertBefore(frag, messagesEl.firstChild);
+    messagesEl.scrollTop += (messagesEl.scrollHeight - prevScrollHeight);
+    oldestLoadedAt = data.messages[0].created_at;
+    hasMoreHistory = !!data.has_more;
+  } catch (e) {
+    // 静默失败：下次滚动到顶部会自然重试，不用打断阅读体验弹提示
+  } finally {
+    isLoadingMoreHistory = false;
+  }
+}
+
+// 滚动到接近顶部（40px阈值，留点余量避免刚好卡在0时抖动触发不了）就尝试加载更早的消息
+messagesEl.addEventListener('scroll', () => {
+  if (messagesEl.scrollTop < 40) loadMoreHistory();
+});
 
 function escapeHtml(str) {
   const div = document.createElement('div');
