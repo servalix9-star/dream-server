@@ -1,5 +1,5 @@
 import subprocess
-subprocess.run(["pip", "install", "requests"], capture_output=True)
+subprocess.run(["pip", "install", "requests", "pywebpush"], capture_output=True)
 
 from flask import Flask, request, jsonify, render_template
 from datetime import datetime, date
@@ -36,6 +36,16 @@ GEMAI_API_KEY = os.environ.get("GEMAI_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 # 网页聊天的访问口令，不设置的话 /chat 页面直接放行（不建议生产环境这样用）
 CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
+
+# ---- Web Push (PWA原生推送) ----
+# 用于替代 Bark：脱离 iOS 快捷指令生态，点开通知直接跳转到 /chat 页面。
+# VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY 是urlsafe-base64编码的原始密钥（不是PEM），
+# 这样传给 pywebpush.webpush() 不会触发"Could not deserialize key data"的已知坑
+# （PEM字符串会被py_vapid当成需要base64解码+DER解析的格式，跟urlsafe-b64编码不兼容）。
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
+# sub必须是可路由的联系方式（mailto或https URL），Apple对这个claim比其他推送服务更严格
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
 
 
 def _supabase_request(method, table, params=None, json_body=None, headers_extra=None):
@@ -1150,6 +1160,85 @@ def send_bark(title, content, icon=None, sound=None):
         log_error("send_bark", e)
 
 
+def load_push_subscriptions():
+    """读取所有已注册的 Web Push 订阅设备（Supabase push_subscriptions 表）。"""
+    try:
+        rows = _supabase_request(
+            "GET", "push_subscriptions",
+            params={"select": "id,endpoint,p256dh,auth"}
+        )
+        return rows or []
+    except Exception as e:
+        log_error("load_push_subscriptions", e)
+        return []
+
+
+def save_push_subscription(endpoint, p256dh, auth):
+    """保存/覆盖一条订阅。endpoint有唯一约束，重复订阅走upsert，不会产生重复记录。"""
+    _supabase_request(
+        "POST", "push_subscriptions",
+        json_body={"endpoint": endpoint, "p256dh": p256dh, "auth": auth},
+        headers_extra={"Prefer": "resolution=merge-duplicates"}
+    )
+
+
+def delete_push_subscription(endpoint):
+    """删除一条订阅，用于设备主动退订，或推送时发现endpoint已失效(410/404)时清理。"""
+    _supabase_request(
+        "DELETE", "push_subscriptions",
+        params={"endpoint": f"eq.{endpoint}"}
+    )
+
+
+def send_web_push(title, body, url=None, icon=None):
+    """给所有已注册设备发送一次Web Push通知。逐个发送、互不阻断：
+    一台设备失败（比如订阅已过期）不影响给其他设备推送。
+    endpoint返回410/404说明订阅已失效（用户卸载了/长期未用被浏览器厂商清理），
+    顺手从数据库里删掉，避免以后每次推送都对着一个死endpoint重试浪费请求。"""
+    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+        log_error("send_web_push", "VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY 未配置")
+        return
+
+    from pywebpush import webpush, WebPushException
+
+    subs = load_push_subscriptions()
+    if not subs:
+        log_error("send_web_push", "没有任何已注册的推送订阅设备")
+        return
+
+    payload = json.dumps({
+        "title": title,
+        "body": body,
+        "icon": icon or DEFAULT_ICON,
+        "url": url or "/chat",
+    })
+
+    for sub in subs:
+        subscription_info = {
+            "endpoint": sub["endpoint"],
+            "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
+        }
+        try:
+            webpush(
+                subscription_info=subscription_info,
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_SUBJECT},
+            )
+        except WebPushException as e:
+            status = getattr(e.response, "status_code", None)
+            if status in (404, 410):
+                # 订阅已失效，清理掉，别让它一直占着位置每次都失败
+                try:
+                    delete_push_subscription(sub["endpoint"])
+                except Exception as cleanup_err:
+                    log_error("send_web_push:cleanup", cleanup_err)
+            else:
+                log_error("send_web_push", f"endpoint={sub['endpoint'][:40]}... status={status} {e}")
+        except Exception as e:
+            log_error("send_web_push", e)
+
+
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
@@ -1353,6 +1442,9 @@ def run_once():
         icon = ICON_NORMAL
 
     send_bark("Charon", msg, icon=icon)
+    # 过渡期：Bark和Web Push并存发送，等确认Web Push在你的设备上稳定收到后，
+    # 把上面这行send_bark删掉即可完全切换，这里不需要再改别的地方。
+    send_web_push("Charon", msg, icon=icon)
 
     # 后台自动醒来时，顺手刷新一条便签（不影响主消息推送，失败不阻断这次触发的结果）
     try:
@@ -2025,6 +2117,109 @@ def persona_page():
 </script>
 </body>
 </html>"""
+
+
+@app.route("/manifest.json", methods=["GET"])
+def pwa_manifest():
+    """PWA清单文件，iOS Safari"添加到主屏幕"时读取这个来决定图标/名字/启动页。
+    display设为standalone，去掉浏览器地址栏，看起来像原生App，这是能收Web Push的前提之一。"""
+    manifest = {
+        "name": "Charon",
+        "short_name": "Charon",
+        "start_url": "/chat",
+        "display": "standalone",
+        "background_color": "#fbf3f5",
+        "theme_color": "#fbf3f5",
+        "icons": [
+            {"src": DEFAULT_ICON, "sizes": "192x192", "type": "image/jpeg"},
+            {"src": DEFAULT_ICON, "sizes": "512x512", "type": "image/jpeg"},
+        ],
+    }
+    return jsonify(manifest)
+
+
+@app.route("/service-worker.js", methods=["GET"])
+def service_worker():
+    """Service Worker脚本，必须从根路径提供才能控制整个站点的作用域。
+    职责很单一：收到push事件就弹通知；用户点通知就把浏览器/PWA焦点切到chat页面
+    （如果已经开着就聚焦那个tab，没开就新开一个），这样点通知能直接跳转到网页。"""
+    sw_code = """
+self.addEventListener('push', function(event) {
+  let data = {title: 'Charon', body: '', icon: '', url: '/chat'};
+  try { data = event.data.json(); } catch (e) {}
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Charon', {
+      body: data.body || '',
+      icon: data.icon || '',
+      badge: data.icon || '',
+      data: { url: data.url || '/chat' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const targetUrl = event.notification.data && event.notification.data.url ? event.notification.data.url : '/chat';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (const client of clientList) {
+        if (client.url.includes('/chat') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+"""
+    return app.response_class(sw_code, mimetype="application/javascript")
+
+
+@app.route("/api/push/vapid-public-key", methods=["GET"])
+def push_vapid_public_key():
+    """前端订阅时需要用这个公钥构造 applicationServerKey，不涉及隐私数据，不需要鉴权。"""
+    if not VAPID_PUBLIC_KEY:
+        return jsonify({"ok": False, "error": "VAPID_PUBLIC_KEY 未配置"}), 500
+    return jsonify({"ok": True, "public_key": VAPID_PUBLIC_KEY})
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def push_subscribe():
+    """前端拿到浏览器的PushSubscription对象后POST到这里存起来。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    endpoint = data.get("endpoint")
+    keys = data.get("keys") or {}
+    p256dh = keys.get("p256dh")
+    auth = keys.get("auth")
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"ok": False, "error": "订阅信息不完整"}), 400
+    try:
+        save_push_subscription(endpoint, p256dh, auth)
+        return jsonify({"ok": True})
+    except Exception as e:
+        log_error("push_subscribe", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    """设备主动取消订阅时调用，把对应endpoint从数据库删掉。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    endpoint = data.get("endpoint")
+    if not endpoint:
+        return jsonify({"ok": False, "error": "缺少endpoint"}), 400
+    try:
+        delete_push_subscription(endpoint)
+        return jsonify({"ok": True})
+    except Exception as e:
+        log_error("push_unsubscribe", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/chat", methods=["GET"])
