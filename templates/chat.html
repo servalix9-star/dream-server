@@ -477,6 +477,8 @@
         <span class="sig-star s-2">✦</span>
         <div class="header-signature">@Seraphina</div>
       </div>
+      <button id="push-enable-btn" onclick="enablePushNotifications()" title="开启通知推送"
+        style="display:none; position:absolute; right:10px; bottom:6px; background:none; border:none; font-size:16px; cursor:pointer; opacity:0.6;">🔔</button>
     </div>
     <div id="messages"><div id="empty-hint">加载中…</div></div>
     <div id="input-bar">
@@ -1731,6 +1733,91 @@ if (window.innerWidth <= 768) { document.getElementById('app').classList.add('ta
 loadHistory();
 loadStatus();
 loadModelSelector();
+
+// ---- Web Push 订阅 ----
+// urlBase64转Uint8Array：pushManager.subscribe()要求applicationServerKey是这个格式，
+// 而后端给的VAPID公钥是urlsafe-base64字符串，这一步是标准转换写法。
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function setupPushNotifications() {
+  // 必要条件都不满足就直接跳过，不报错打扰用户：
+  // 1) 浏览器得支持service worker和push  2) 得是https或localhost  3) 得是"添加到主屏幕"后独立打开的PWA
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  try {
+    const registration = await navigator.serviceWorker.register('/service-worker.js');
+
+    if (Notification.permission === 'denied') return; // 用户明确拒绝过，不再打扰
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (subscription) return; // 已经订阅过，不用重复走一遍
+
+    // 还没订阅、权限也还没明确granted：露出小铃铛按钮，等用户主动点击再触发权限请求
+    // （iOS要求权限请求必须由用户手势触发，不能页面一加载就自动弹窗）
+    const btn = document.getElementById('push-enable-btn');
+    if (btn) btn.style.display = 'block';
+
+    if (Notification.permission === 'granted') {
+      await subscribeToPush(registration);
+      if (btn) btn.style.display = 'none';
+    }
+  } catch (e) {
+    console.warn('Service worker注册失败', e);
+  }
+}
+
+async function subscribeToPush(registration) {
+  try {
+    const keyRes = await fetch(apiUrl('/api/push/vapid-public-key'));
+    const keyData = await keyRes.json();
+    if (!keyData.ok) return;
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(keyData.public_key)
+    });
+
+    await fetch(apiUrl('/api/push/subscribe'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subscription.toJSON())
+    });
+  } catch (e) {
+    console.warn('订阅推送失败', e);
+  }
+}
+
+// 手动触发入口：iOS要求权限请求必须由用户点击触发，不能页面一加载就自动弹窗。
+// 挂在window上，方便你在页面上加一个"开启通知"按钮时直接调用 enablePushNotifications()。
+window.enablePushNotifications = async function() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    alert('当前浏览器不支持推送通知');
+    return;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      alert('未授权通知权限，无法开启推送');
+      return;
+    }
+    const registration = await navigator.serviceWorker.ready;
+    await subscribeToPush(registration);
+    const btn = document.getElementById('push-enable-btn');
+    if (btn) btn.style.display = 'none';
+    alert('推送通知已开启');
+  } catch (e) {
+    alert('开启失败：' + e.message);
+  }
+};
+
+setupPushNotifications();
 </script>
 </body>
 </html>
