@@ -1195,6 +1195,8 @@ def send_web_push(title, body, url=None, icon=None):
     一台设备失败（比如订阅已过期）不影响给其他设备推送。
     endpoint返回410/404说明订阅已失效（用户卸载了/长期未用被浏览器厂商清理），
     顺手从数据库里删掉，避免以后每次推送都对着一个死endpoint重试浪费请求。"""
+    print(f"[send_web_push] called, title={title!r}")
+
     if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
         log_error("send_web_push", "VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY 未配置")
         return
@@ -1202,6 +1204,7 @@ def send_web_push(title, body, url=None, icon=None):
     from pywebpush import webpush, WebPushException
 
     subs = load_push_subscriptions()
+    print(f"[send_web_push] 已注册订阅设备数量: {len(subs)}")
     if not subs:
         log_error("send_web_push", "没有任何已注册的推送订阅设备")
         return
@@ -1213,30 +1216,35 @@ def send_web_push(title, body, url=None, icon=None):
         "url": url or "/chat",
     })
 
+    success_count = 0
     for sub in subs:
         subscription_info = {
             "endpoint": sub["endpoint"],
             "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
         }
         try:
-            webpush(
+            resp = webpush(
                 subscription_info=subscription_info,
                 data=payload,
                 vapid_private_key=VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": VAPID_SUBJECT},
             )
+            success_count += 1
+            print(f"[send_web_push] 发送成功 endpoint={sub['endpoint'][:50]}... status={getattr(resp, 'status_code', '?')}")
         except WebPushException as e:
             status = getattr(e.response, "status_code", None)
+            body_text = getattr(e.response, "text", None)
+            log_error("send_web_push", f"WebPushException endpoint={sub['endpoint'][:50]}... status={status} body={body_text} err={e}")
             if status in (404, 410):
                 # 订阅已失效，清理掉，别让它一直占着位置每次都失败
                 try:
                     delete_push_subscription(sub["endpoint"])
                 except Exception as cleanup_err:
                     log_error("send_web_push:cleanup", cleanup_err)
-            else:
-                log_error("send_web_push", f"endpoint={sub['endpoint'][:40]}... status={status} {e}")
         except Exception as e:
-            log_error("send_web_push", e)
+            log_error("send_web_push", f"未知异常 endpoint={sub['endpoint'][:50]}... {e}")
+
+    print(f"[send_web_push] 完成，成功 {success_count}/{len(subs)}")
 
 
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
