@@ -1,3 +1,10 @@
+import sys
+# 强制stdout/stderr无缓冲：Render等容器化平台运行时，Python检测到stdout不是终端会自动切换成
+# 块缓冲（block buffering），导致print()内容一直攒在内存里不实时写出，甚至长期看不到。
+# 这里在最开头就重新包装一次，保证后面所有print()都是行缓冲、立刻可见，不用每个print单独加flush=True。
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 import subprocess
 subprocess.run(["pip", "install", "requests", "pywebpush"], capture_output=True)
 
@@ -1195,7 +1202,7 @@ def send_web_push(title, body, url=None, icon=None):
     一台设备失败（比如订阅已过期）不影响给其他设备推送。
     endpoint返回410/404说明订阅已失效（用户卸载了/长期未用被浏览器厂商清理），
     顺手从数据库里删掉，避免以后每次推送都对着一个死endpoint重试浪费请求。"""
-    print(f"[send_web_push] called, title={title!r}")
+    print(f"[send_web_push] called, title={title!r}", flush=True)
 
     if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
         log_error("send_web_push", "VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY 未配置")
@@ -1204,7 +1211,7 @@ def send_web_push(title, body, url=None, icon=None):
     from pywebpush import webpush, WebPushException
 
     subs = load_push_subscriptions()
-    print(f"[send_web_push] 已注册订阅设备数量: {len(subs)}")
+    print(f"[send_web_push] 已注册订阅设备数量: {len(subs)}", flush=True)
     if not subs:
         log_error("send_web_push", "没有任何已注册的推送订阅设备")
         return
@@ -1230,7 +1237,7 @@ def send_web_push(title, body, url=None, icon=None):
                 vapid_claims={"sub": VAPID_SUBJECT},
             )
             success_count += 1
-            print(f"[send_web_push] 发送成功 endpoint={sub['endpoint'][:50]}... status={getattr(resp, 'status_code', '?')}")
+            print(f"[send_web_push] 发送成功 endpoint={sub['endpoint'][:50]}... status={getattr(resp, 'status_code', '?')}", flush=True)
         except WebPushException as e:
             status = getattr(e.response, "status_code", None)
             body_text = getattr(e.response, "text", None)
@@ -1244,7 +1251,7 @@ def send_web_push(title, body, url=None, icon=None):
         except Exception as e:
             log_error("send_web_push", f"未知异常 endpoint={sub['endpoint'][:50]}... {e}")
 
-    print(f"[send_web_push] 完成，成功 {success_count}/{len(subs)}")
+    print(f"[send_web_push] 完成，成功 {success_count}/{len(subs)}", flush=True)
 
 
 def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
