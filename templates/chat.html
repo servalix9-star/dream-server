@@ -123,12 +123,12 @@
   }
   
   /* ---- 酷黑渐变 Header ---- */
-  #header {
+  #header, #moments-header {
     padding: 20px 24px 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0;
     display: flex; align-items: center; gap: 14px; position: relative;
     background: linear-gradient(to right, #000000 0%, #000000 52%, rgba(26, 18, 30, 0.9) 62%, #cf7d90 85%, #ffb3c1 100%);
   }
-  #header::before {
+  #header::before, #moments-header::before {
     content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 65%;
     background-image: radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%), radial-gradient(rgba(255, 255, 255, 0.28) 15%, transparent 15.5%);
     background-size: 11px 11px; background-position: 0 0, 5.5px 5.5px;
@@ -158,11 +158,11 @@
 
   #header-avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
   #header-text { position: relative; z-index: 1; min-width: 0; }
-  #header .brand {
+  #header .brand, #moments-header .brand {
     font-family: "Georgia", "Songti SC", serif; font-size: 26px; font-style: italic; letter-spacing: 3px; color: #e599a9; font-weight: 500; line-height: 1.2; text-transform: uppercase;
     text-shadow: 0 0 10px rgba(229, 153, 169, 0.8), 0 0 20px rgba(229, 153, 169, 0.4);
   }
-  #header .sub { font-size: 11px; color: rgba(255, 255, 255, 0.7); letter-spacing: 1px; margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+  #header .sub, #moments-header .sub { font-size: 11px; color: rgba(255, 255, 255, 0.7); letter-spacing: 1px; margin-top: 3px; display: flex; align-items: center; gap: 6px; }
   .status-badge { background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); padding: 1px 7px; border-radius: 5px; font-size: 10px; color: #ffffff; display: inline-flex; align-items: center; gap: 4px; }
   #model-select { font-size: 10px; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 5px; padding: 1px 4px; max-width: 150px; outline: none; }
   #model-select option { color: #000; }
@@ -208,9 +208,7 @@
   }
   .bubble.pending { opacity: 0.5; }
 
-  /* 打字指示器：流式回复真正开始收到第一个字之前的等待态，三个圆点依次跳动，
-     比空气泡（宽度塌陷成一条线）或静态"…"更接近真实聊天App"对方正在输入"的感觉。
-     等第一个字符到达，JS会把.typing-dots整个替换成文字内容，这个类就不再用到。 */
+  /* 打字指示器 */
   .typing-dots { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; }
   .typing-dots span {
     width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.4;
@@ -223,8 +221,7 @@
     30% { transform: translateY(-4px); opacity: 0.9; }
   }
 
-  /* 行内编辑模式：气泡本身变可编辑，需要覆盖默认的user-select:none/cursor:pointer，
-     否则光标无法进入、文字也选不中。虚线描边给出"正在编辑"的明确视觉信号。 */
+  /* 行内编辑模式 */
   .bubble.editing-bubble {
     -webkit-user-select: text; user-select: text; cursor: text;
     outline: 2px dashed rgba(255, 255, 255, 0.65); outline-offset: 2px;
@@ -255,10 +252,6 @@
     font-size: 10px; color: rgba(226, 203, 212, 0.55); padding: 4px 12px 2px; width: 100%;
     text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); user-select: none;
   }
-  /* 模型来源标记：气泡右下角，纯白文字不加任何背景/图标装饰。
-     默认opacity:0（占位但不可见，双击有淡入淡出过渡，不是生硬的显隐切换）。
-     align-self: flex-end 让它在charon消息里跟整列的flex-start方向相反，贴到右边去，
-     视觉上呼应"气泡右下角"这个位置要求。 */
   .model-tag {
     font-size: 9px; color: #ffffff; margin: 2px 4px 0; align-self: flex-end;
     opacity: 0; transition: opacity 0.2s ease; user-select: none; pointer-events: none;
@@ -302,24 +295,22 @@
     font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 (FlowLayout 自然流式排版，完整不裁切，靠负边距压角) --- */
+  /* --- 仿真实物便利贴堆叠留言板 --- */
   .sticky-note-stack {
     position: relative; width: 100%; display: flex; flex-direction: column;
     margin-top: 15px; margin-bottom: 18px; z-index: 1;
-    /* 不设置任何 max-height / overflow，让内容自然撑开容器高度，每张便签都完整可读 */
   }
   .sticky-note-card {
     position: relative;
-    border: none; /* 零边框，只靠投影和底色区分层级 */
+    border: none; 
     border-radius: 3px 14px 14px 14px;
     padding: 12px 11px 12px 11px;
-    width: 88%; /* 横宽收窄，不再撑满panel整个可用宽度，露出左右呼吸感 */
-    aspect-ratio: 1 / 0.572; /* 字号收小、行高收紧后，5行文字精确铺满的比例，整体更矮 */
+    width: 88%; 
+    aspect-ratio: 1 / 0.572; 
     box-shadow: 0 8px 20px rgba(120, 80, 95, 0.18), 0 2px 5px rgba(120, 80, 95, 0.1);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     -webkit-user-select: none; user-select: none; cursor: pointer;
     flex-shrink: 0;
-    /* margin-top 由JS按便签id动态计算（含左右随机水平位移），这里不再写死，避免覆盖冲突 */
   }
   .sticky-note-card:first-child { margin-top: 0; }
   .sticky-note-card:nth-child(1) { z-index: 20; }
@@ -336,20 +327,18 @@
   }
   .sticky-note-text {
     font-size: 12.5px; line-height: 1.42; font-family: "Songti SC", serif; word-wrap: break-word;
-    /* 不再垂直居中：文字从卡片顶部padding之后自然开始排列 */
   }
-  /* 纯正精致的荧光樱花粉标星按钮 */
   .note-star-btn {
     position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
     opacity: 0.5; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
   }
   .note-star-btn:hover { transform: scale(1.15); }
   .note-star-btn.active {
-    opacity: 1; color: #ff8fa3 !important; /* 纯樱花粉 */
+    opacity: 1; color: #ff8fa3 !important; 
     filter: drop-shadow(0 2px 5px rgba(255, 143, 163, 0.45));
   }
 
-  /* --- 秘密小抽屉收纳盒 (移动到底部，文字排版对齐) --- */
+  /* --- 秘密小抽屉收纳盒 --- */
   .drawer-wrapper { 
     display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px;
   }
@@ -386,6 +375,72 @@
     text-shadow: 0 0 6px #fff, 0 0 12px #ff5e84; animation: star-pulse 1.2s infinite ease-in-out; pointer-events: none;
   }
 
+  /* --- 朋友圈 (Moments) UI 样式 --- */
+  #moments-wrapper {
+    flex: 1; min-width: 0; display: none; flex-direction: column;
+    background: rgba(255, 255, 255, 0.35); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    border-radius: 28px; box-shadow: 0 12px 40px rgba(184, 118, 138, 0.10); overflow: hidden; position: relative;
+  }
+  #moments-wrapper::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%), radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%);
+    background-size: 10px 10px; background-position: 0 0, 5px 5px; pointer-events: none; z-index: 0;
+  }
+  .publish-btn {
+    background: linear-gradient(135deg, #f3b0c3, #e593a4); border: none; border-radius: 14px;
+    padding: 8px 16px; color: #fff; font-size: 13px; font-weight: bold; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(229, 147, 164, 0.3); transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px; z-index: 2;
+  }
+  .publish-btn:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 6px 16px rgba(229, 147, 164, 0.4); }
+  
+  #moments-feed {
+    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px;
+    -webkit-overflow-scrolling: touch; position: relative; z-index: 1;
+  }
+  .moment-card {
+    background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-radius: 20px; padding: 20px; box-shadow: 0 8px 24px rgba(184, 118, 138, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.9); position: relative;
+    background-image: radial-gradient(rgba(229,153,169,0.06) 1px, transparent 1px); background-size: 10px 10px;
+  }
+  .moment-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .moment-author { font-family: "Georgia", serif; font-size: 15px; font-weight: bold; color: #a66275; }
+  .moment-time { font-family: "Courier New", monospace; font-size: 11px; color: #b08d98; margin-top: 2px; }
+  .moment-content {
+    font-size: 15px; line-height: 1.7; color: #4a3742; margin-bottom: 16px; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .moment-actions {
+    display: flex; gap: 16px; align-items: center; padding-top: 12px; border-top: 1px dashed rgba(229,153,169,0.2);
+  }
+  .action-btn {
+    background: none; border: none; padding: 4px 8px; font-size: 13px; color: #b08d98; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; border-radius: 8px; transition: all 0.2s;
+  }
+  .action-btn:hover { background: rgba(255, 255, 255, 0.6); color: #ff5e84; }
+  .action-btn.liked { color: #ff5e84; }
+  
+  .moment-likes {
+    background: rgba(255, 238, 241, 0.45); border-radius: 10px; padding: 8px 12px; margin-top: 12px;
+    font-size: 12px; color: #a66275; display: flex; align-items: center; gap: 6px;
+  }
+  .moment-likes span { font-family: "Dancing Script", cursive; font-size: 14px; }
+  
+  .moment-comments {
+    margin-top: 8px; background: rgba(255, 255, 255, 0.4); border-radius: 12px; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .comment-item { font-size: 13px; line-height: 1.5; color: #5a4550; }
+  .comment-author { font-weight: bold; color: #a66275; margin-right: 4px; }
+  
+  .comment-input-area { display: none; margin-top: 12px; align-items: center; gap: 8px; }
+  .comment-input-area.active { display: flex; }
+  .comment-input {
+    flex: 1; border: 1px solid rgba(229,153,169,0.4); border-radius: 16px; padding: 8px 12px;
+    background: rgba(255,255,255,0.8); font-size: 13px; outline: none;
+    color: #5a4550;
+  }
+
   /* --- 手机自适应底部毛玻璃 Tab 导航栏 --- */
   #bottom-tabs { display: none; }
   @media (max-width: 768px) {
@@ -394,8 +449,8 @@
       height: 100vh; height: 100dvh; display: block; overflow: hidden;
     }
     #nav { display: none !important; }
-    #main, #panel { display: none; width: 100% !important; height: 100% !important; margin: 0 !important; border-radius: 20px !important; }
-    #app.tab-chat #main, #app.tab-desk #panel { display: flex; }
+    #main, #panel, #moments-wrapper { display: none; width: 100% !important; height: 100% !important; margin: 0 !important; border-radius: 20px !important; }
+    #app.tab-chat #main, #app.tab-desk #panel, #app.tab-moments #moments-wrapper { display: flex; }
     
     #bottom-tabs {
       display: flex; position: fixed; bottom: 0; left: 0; right: 0;
@@ -418,8 +473,8 @@
     .tab-item.active .tab-icon { filter: grayscale(0%); filter: drop-shadow(0 0 4px rgba(255, 94, 132, 0.4)); }
   }
 
-  /* --- 秘密小抽屉/档案箱/日历/人设编辑弹窗 --- */
-  #letter-modal, #archive-modal, #drawer-notes-modal, #calendar-modal, #persona-modal {
+  /* --- 弹窗等 --- */
+  #letter-modal, #archive-modal, #drawer-notes-modal, #calendar-modal, #persona-modal, #publish-modal {
     display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(26, 18, 30, 0.65); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
     z-index: 2000; align-items: center; justify-content: center; padding: 20px; animation: modal-fade 0.3s ease;
@@ -443,7 +498,6 @@
   .letter-act-group { display: flex; gap: 8px; align-items: center; }
   .letter-del-btn { background: none; border: none; color: #a66275; font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
   .letter-del-btn:hover { color: #ff5e84; background-color: rgba(255, 94, 132, 0.08); }
-  /* 列表里的标星按钮也换成纯粉色星芒 */
   .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; }
   .note-act-btn.star-btn.active { color: #ff5e84; filter: drop-shadow(0 1px 3px rgba(255, 94, 132, 0.45)); }
   .letter-text { white-space: pre-wrap; font-style: italic; }
@@ -478,8 +532,15 @@
 
   <!-- 1. 左侧波点玻璃舱导航栏 (白透白底，樱花粉 SVG 指标，干净物理投影) -->
   <div id="nav">
-    <a class="nav-icon" href="/" title="聊天">
+    <a class="nav-icon" href="javascript:void(0)" onclick="switchMainView('chat')" title="聊天">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </a>
+    <a class="nav-icon" href="javascript:void(0)" onclick="switchMainView('moments')" title="朋友圈">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
     </a>
     <a class="nav-icon" href="javascript:void(0)" onclick="openPeriodCalendar()" title="月经生理日历">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -529,6 +590,26 @@
     </div>
   </div>
 
+  <!-- 2.5 朋友圈视图 (Moments Wrapper) -->
+  <div id="moments-wrapper">
+    <div id="moments-header">
+      <div id="header-text">
+        <div class="brand">MOMENTS</div>
+        <div class="sub">私密双人朋友圈</div>
+      </div>
+      <button class="publish-btn" onclick="openPublishModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        写动态
+      </button>
+    </div>
+    <div id="moments-feed">
+      <div style="text-align:center; color:#b08d98; margin-top:40px;">正在加载我们的朋友圈...</div>
+    </div>
+  </div>
+
   <!-- 3. 右侧状态面板 (Desk 手账区) -->
   <div id="panel">
     <div class="panel-child panel-title">DESK</div>
@@ -562,6 +643,16 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
     </span>
     <span class="tab-label">CHAT</span>
+  </div>
+  <div class="tab-item" onclick="switchTab('moments')">
+    <span class="tab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    </span>
+    <span class="tab-label">MOMENTS</span>
   </div>
   <div class="tab-item" onclick="switchTab('desk')">
     <span class="tab-icon">
@@ -660,6 +751,22 @@
   <button class="day-action-btn cancel-action" onclick="hideDayActionPopup()">取消</button>
 </div>
 
+<!-- 朋友圈发布弹窗 -->
+<div id="publish-modal">
+  <div class="letter-container" style="max-width: 440px;">
+    <div class="letter-header">
+      <div class="letter-title">✏️ 记录此刻</div>
+      <button class="close-modal" onclick="closePublishModal()">×</button>
+    </div>
+    <div class="letter-content-area" style="background-position: 0 0;">
+      <textarea id="moment-input-textarea" placeholder="写点什么..." style="width:100%; min-height:160px; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:10px; padding:14px; font-family:'Songti SC', serif; font-size:14px; line-height:1.7; color:#4a3742; background:rgba(255,255,255,0.6); resize:none; outline:none;"></textarea>
+      <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+        <button id="moment-save-btn" onclick="submitMoment()" style="background:#ff5e84; color:#fff; border:none; border-radius:8px; padding:9px 22px; font-size:13px; font-weight:bold; cursor:pointer; letter-spacing:1px;">发布</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const CODE = {{ code_param | tojson }};
 const AVATAR_CHARON = {{ avatar_charon | tojson }};
@@ -681,7 +788,7 @@ let selectedDateStr = "";
 let currentActiveMsgId = null;
 let currentActiveRowEl = null;
 
-// 核心功能：原生兼容的双击事件绑定器 (用于全局无按键触发悬浮菜单)
+// 核心功能：原生兼容的双击事件绑定器
 function addDoubleTapListener(element, callback) {
   let lastTap = 0;
   element.addEventListener('click', function(e) {
@@ -714,13 +821,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
   if (createdAt) row.dataset.createdAt = createdAt;
-  // model：这条消息（如果是charon发的）实际是哪个模型生成的，纯记录用途，
-  // 不在气泡上直接显示，只挂在dataset里，双击唤出菜单时可以读出来展示成一行小字。
   if (model) row.dataset.model = model;
-  // isFailed：这是一条"调用模型失败"的临时提示气泡，不是数据库里真实存在的消息，
-  // 没有msgId，撤回/重新生成这些依赖msgId的操作对它天然无效——之前没有专门标记这种情况，
-  // 双击它要么什么反应都没有、要么按钮点了报"找不到这条消息"，只能刷新页面让它消失。
-  // 现在打上这个标记，双击菜单会识别出来，只提供"清除这条提示"（纯前端移除，不用查数据库）。
   if (isFailed) row.dataset.failed = '1';
 
   const avatarWrap = document.createElement('div');
@@ -765,10 +866,6 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
   }
   col.appendChild(bubble);
 
-  // 模型来源标记：只有charon的消息、且这条消息确实记录了model字段（老消息可能没有）才生成。
-  // 常驻在DOM里但默认透明不占视觉注意力（不是display:none，是opacity:0，
-  // 这样双击切换时有过渡动画，不是生硬地"消失/出现"）。纯白色文字，不加任何图标/背景装饰，
-  // 位置在气泡右下角，不在气泡内部——所以是col的子元素、跟bubble平级，不是bubble的子元素。
   let modelTagEl = null;
   if (role !== 'user' && model) {
     modelTagEl = document.createElement('div');
@@ -785,33 +882,28 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
   timeEl.textContent = formatTime(createdAt);
   timeRow.appendChild(timeEl);
 
+  timeRow.appendChild(timeEl);
   col.appendChild(timeRow);
   row.appendChild(col);
 
-  // 全新双击触发菜单逻辑（编辑状态下暂停响应，避免编辑时快速点字词被误判成双击唤出菜单）
   addDoubleTapListener(bubble, (e) => {
     if (row.classList.contains('editing')) return;
     currentActiveRowEl = row;
     showContextMenu(bubble, msgId, role, content, model, isFailed);
-    // 双击时只负责"显示"模型标记（不做toggle）。隐藏统一交给hideWeChatMenu处理——
-    // 这样"点空白隐藏菜单"和"标记消失"永远同步，不用再双击第二次才能让标记消失。
     if (modelTagEl) modelTagEl.classList.add('visible');
   });
 
   return row;
 }
 
-// 行内编辑模式：气泡变成可编辑文本，旁边冒出"发送/取消"两个小按钮。
-// 确认后调用/api/chat-edit-resend，真正做到"编辑这条→截断它之后的所有对话→重新生成回复"，
-// 而不是旧版那种"把文字填回输入框，用户再手动发一遍，记录里留下重复消息"的做法。
+// 行内编辑模式
 function enterEditMode(row, bubble, msgId, originalContent) {
-  if (row.classList.contains('editing')) return; // 防止双击等重复触发时进入两次编辑态
+  if (row.classList.contains('editing')) return;
   row.classList.add('editing');
 
   bubble.contentEditable = 'true';
   bubble.classList.add('editing-bubble');
   bubble.focus();
-  // 光标定位到文本末尾，而不是全选或停在开头，编辑体验更符合直觉
   const range = document.createRange();
   range.selectNodeContents(bubble);
   range.collapse(false);
@@ -845,8 +937,6 @@ function enterEditMode(row, bubble, msgId, originalContent) {
   cancelBtn.onclick = () => exitEditMode(originalContent);
 
   sendBtn.onclick = async () => {
-    // contenteditable换行后浏览器可能插入<div>/<br>而不是纯文本\n，textContent会把这些
-    // 换行结构压没；先把<br>和块级换行统一转成\n，再取纯文本，避免多行内容被拼成一行。
     const rawHtml = bubble.innerHTML.replace(/<div>/gi, '\n').replace(/<\/div>/gi, '').replace(/<br\s*\/?>/gi, '\n');
     const tempEl = document.createElement('div');
     tempEl.innerHTML = rawHtml;
@@ -871,9 +961,6 @@ function enterEditMode(row, bubble, msgId, originalContent) {
         exitEditMode(originalContent);
         return;
       }
-      // 成功：这条消息文字定格为新内容；它之后的所有消息（不管是这一轮的旧回复，
-      // 还是编辑点之后用户又追加发过的任何内容）从视图里一并移除，插入新的Charon回复，
-      // 对话真正收束到编辑的这个点，不会留下任何重复或残留。
       bubble.textContent = newContent;
       bubble.classList.remove('pending');
       actionBar.remove();
@@ -896,24 +983,17 @@ function enterEditMode(row, bubble, msgId, originalContent) {
   };
 }
 
-// 全局上下文菜单管理 (双击唤出)
+// 全局上下文菜单管理
 function showContextMenu(targetElement, id, typeOrRole, textContent = "", model = "", isFailed = false) {
   const rect = targetElement.getBoundingClientRect();
-  // 先在不可见状态下重建内容并测量尺寸，避免"旧位置菜单闪现→跳到新位置"这个中间态被误触，
-  // 这正是"要点两次才生效"的卡顿感来源：第一次点击其实点在了闪现的旧位置上。
   contextMenu.style.visibility = 'hidden';
   contextMenu.style.display = 'flex';
   contextMenu.innerHTML = '';
 
-  // buttonsRow：真正装按钮的横向容器。最外层contextMenu现在是纵向排列（column），
-  // 这样上面能插一行不可点击的model提示文字，下面跟着一整排按钮，互不干扰。
   const buttonsRow = document.createElement('div');
   buttonsRow.className = 'bubble-menu-buttons-row';
 
   if (isFailed) {
-    // ---- 失败占位气泡专属菜单：这条消息在数据库里根本不存在，没有msgId，
-    // 撤回/重新生成/编辑这些操作对它没有意义（后端会直接404）。
-    // 只给"清除这条提示"——纯前端把这个气泡从画面上移除，不需要访问后端。
     const clearBtn = document.createElement('button');
     clearBtn.className = 'menu-btn';
     clearBtn.textContent = '🗑️ 清除这条提示';
@@ -934,7 +1014,6 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
   }
 
   if (typeOrRole === 'user' || typeOrRole === 'charon') {
-    // ---- 聊天气泡专属双击选项 ----
     const copyBtn = document.createElement('button');
     copyBtn.className = 'menu-btn';
     copyBtn.textContent = '📄 复制';
@@ -977,7 +1056,6 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
       buttonsRow.appendChild(recallBtn);
     }
   } else if (typeOrRole === 'desk-note') {
-    // ---- 桌面便签专属双击选项 ----
     const moveBtn = document.createElement('button');
     moveBtn.className = 'menu-btn';
     moveBtn.textContent = '📥 移入抽屉';
@@ -988,7 +1066,6 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
     delBtn.className = 'menu-btn';
     delBtn.textContent = '🗑️ 撕掉丢弃';
     delBtn.onclick = () => {
-      // 物理撕下并揉碎动画
       targetElement.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
       targetElement.style.transform = 'translateY(60px) scale(0.7) rotate(20deg)';
       targetElement.style.opacity = '0';
@@ -1000,8 +1077,6 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
 
   contextMenu.appendChild(buttonsRow);
 
-  // 内容已重建完毕，用requestAnimationFrame等浏览器完成一次布局计算后再测量尺寸，
-  // 这样offsetWidth/offsetHeight才是本次菜单内容真正的尺寸，不会拿到上一次残留的值。
   requestAnimationFrame(() => {
     const menuWidth = contextMenu.offsetWidth || 200;
     const menuHeight = contextMenu.offsetHeight || 34;
@@ -1014,12 +1089,6 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
 function hideWeChatMenu() {
   contextMenu.style.display = 'none';
   contextMenu.style.visibility = 'visible';
-  // 菜单隐藏的同时，把当前这一行的模型标记也收起来（如果它正显示着的话）。
-  // 之前"双击显示模型标记"和"点空白隐藏菜单"是两套互不知道对方存在的逻辑：
-  // 双击气泡时菜单和标记一起显现，但点击空白只让菜单消失，标记留在原地，
-  // 必须再双击一次气泡（触发toggle）才会隐藏——体验上像是"要点两次"。
-  // 现在把"隐藏模型标记"归并到hideWeChatMenu里统一处理，不管从哪个入口触发隐藏
-  // （点空白、点复制、点撤回……），标记都会跟着菜单一起消失，不再需要额外一次双击。
   if (currentActiveRowEl) {
     const tagEl = currentActiveRowEl.querySelector('.model-tag');
     if (tagEl) tagEl.classList.remove('visible');
@@ -1036,8 +1105,6 @@ document.addEventListener('click', (e) => {
 });
 
 async function deleteMessage(msgId, rowEl) {
-  // 点击菜单里的"撤回"本身已经是一次明确的决定动作，原生confirm()是多余的二次确认，
-  // 且原生弹窗的黑白系统样式跟整体视觉风格不搭，去掉后操作会干脆很多。
   try {
     const res = await fetch(apiUrl('/api/chat-delete'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msgId })
@@ -1073,9 +1140,6 @@ async function regenerateMessage(msgId, rowEl) {
 
 function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
-// 历史消息分页：oldestLoadedAt记录当前已加载的最早一条消息的created_at，
-// 上滑到顶部时拿它作为before参数去要更早的一页；hasMoreHistory是后端给的提示，
-// 到底了就不再触发请求，避免用户在顶端反复滚动时发送大量空查询。
 let oldestLoadedAt = null;
 let hasMoreHistory = true;
 let isLoadingMoreHistory = false;
@@ -1094,9 +1158,6 @@ async function loadHistory() {
   } catch (e) { messagesEl.innerHTML = '<div id="empty-hint">网络错误</div>'; }
 }
 
-// 上滑到顶部时调用：取比oldestLoadedAt更早的一页，插到消息列表最前面。
-// 插入前先记住当前滚动位置对应的"内容高度"，插入后把scrollTop往下补偿同样的增量，
-// 这样视口里正看着的那几条消息不会因为顶部突然多出内容而跳来跳去。
 async function loadMoreHistory() {
   if (isLoadingMoreHistory || !hasMoreHistory || !oldestLoadedAt) return;
   isLoadingMoreHistory = true;
@@ -1115,13 +1176,11 @@ async function loadMoreHistory() {
     oldestLoadedAt = data.messages[0].created_at;
     hasMoreHistory = !!data.has_more;
   } catch (e) {
-    // 静默失败：下次滚动到顶部会自然重试，不用打断阅读体验弹提示
   } finally {
     isLoadingMoreHistory = false;
   }
 }
 
-// 滚动到接近顶部（40px阈值，留点余量避免刚好卡在0时抖动触发不了）就尝试加载更早的消息
 messagesEl.addEventListener('scroll', () => {
   if (messagesEl.scrollTop < 40) loadMoreHistory();
 });
@@ -1134,9 +1193,6 @@ function escapeHtml(str) {
 
 // ---- 便签相关的操作与数据同步函数 ----
 async function deleteNote(id, sourceStr = "desk") {
-  // 本地直接移除对应卡片，不再等后端返回后重新拉整个列表——这才是"丢弃便签"反应慢的
-  // 主要原因：以前是"等写入完成→再整表重新查询→重新渲染"两轮网络往返，现在只有一次写入请求，
-  // 界面即时响应。
   const card = document.getElementById(`drawer-note-card-${id}`) || document.getElementById(`archive-note-card-${id}`);
   if (card) card.remove();
   try {
@@ -1150,7 +1206,6 @@ async function deleteNote(id, sourceStr = "desk") {
 }
 
 async function moveNote(id, targetStatus, sourceStr) {
-  // 同样做本地即时移除：移动的本质是"从当前列表消失"，不需要为了这个去重新拉全量数据。
   const card = document.getElementById(`drawer-note-card-${id}`) || document.getElementById(`archive-note-card-${id}`);
   if (card) card.remove();
   try {
@@ -1169,15 +1224,6 @@ async function moveNote(id, targetStatus, sourceStr) {
 }
 
 async function starNote(id, isStarredNow, sourceStr, btnEl) {
-  // 乐观更新：不等后端返回就先把当前按钮的图标/状态切换过去，
-  // 网络请求在背后悄悄发；失败了再退回原状态。避免"点一下要等一轮网络往返+整表重绘"的迟钝感。
-  //
-  // 之前这里用字符串选择器`.star-btn[onclick*="starNote(${id},"]`去反查按钮，
-  // 但同一个便签的收藏按钮在抽屉(drawer)和档案箱(archive)视图里各自独立渲染了一份，
-  // 两份DOM可能同时存在（只是一个显示一个隐藏），querySelector只返回第一个匹配项，
-  // 导致"点击的那个按钮"和"代码实际更新的那个按钮"不是同一个——看起来就是点了没反应，
-  // 刷新之后（重新整个渲染过）才会显示正确状态。现在改成直接接收btnEl（就是被点击的
-  // 按钮元素本身，通过onclick="...(this)"传进来），精确对应，不会有歧义。
   const btn = btnEl;
   const newStarred = !isStarredNow;
   if (btn) {
@@ -1192,7 +1238,6 @@ async function starNote(id, isStarredNow, sourceStr, btnEl) {
     });
     const data = await res.json();
     if (!data.ok && btn) {
-      // 后端拒绝了，退回原状态
       btn.textContent = isStarredNow ? '★' : '☆';
       btn.classList.toggle('active', isStarredNow);
       btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}', this)`);
@@ -1207,14 +1252,13 @@ async function starNote(id, isStarredNow, sourceStr, btnEl) {
   }
 }
 
-// 仿真手账 5种纯色底色与5种纹理的随机碰撞算法
 function getPersonalizedStyle(id, index) {
   const colors = [
-    { bg: '#ffe3e7', grad: '#ffd1d7', text: '#7a5a65', name: 'sakura' },  // 樱花粉
-    { bg: '#e8f5e9', grad: '#d4eed8', text: '#4e5a50', name: 'mint' },    // 薄荷绿
-    { bg: '#fffde7', grad: '#fff9c4', text: '#6b6450', name: 'cream' },   // 奶油黄
-    { bg: '#e3f2fd', grad: '#bbdefb', text: '#455160', name: 'sky' },     // 天蓝色
-    { bg: '#efebe9', grad: '#d7ccc8', text: '#5c443f', name: 'coffee' }   // 奶咖色
+    { bg: '#ffe3e7', grad: '#ffd1d7', text: '#7a5a65', name: 'sakura' },  
+    { bg: '#e8f5e9', grad: '#d4eed8', text: '#4e5a50', name: 'mint' },    
+    { bg: '#fffde7', grad: '#fff9c4', text: '#6b6450', name: 'cream' },   
+    { bg: '#e3f2fd', grad: '#bbdefb', text: '#455160', name: 'sky' },     
+    { bg: '#efebe9', grad: '#d7ccc8', text: '#5c443f', name: 'coffee' }   
   ];
   
   const color = colors[id % 5];
@@ -1222,19 +1266,14 @@ function getPersonalizedStyle(id, index) {
   
   const textureType = index % 5;
   if (textureType === 0) {
-    // 1. Polka-dots
     bgStyle = `background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), ${color.bg}; background-size: 8px 8px, 8px 8px; background-position: 0 0, 4px 4px;`;
   } else if (textureType === 1) {
-    // 2. Horizontal Lines
     bgStyle = `background: repeating-linear-gradient(transparent, transparent 15px, rgba(90, 69, 80, 0.05) 15px, rgba(90, 69, 80, 0.05) 16px), ${color.bg}; background-position: 0 0;`;
   } else if (textureType === 2) {
-    // 3. Grid/Plaid
     bgStyle = `background: repeating-linear-gradient(transparent, transparent 15px, rgba(90, 69, 80, 0.04) 15px, rgba(90, 69, 80, 0.04) 16px), repeating-linear-gradient(90deg, transparent, transparent 15px, rgba(90, 69, 80, 0.04) 15px, rgba(90, 69, 80, 0.04) 16px), ${color.bg};`;
   } else if (textureType === 3) {
-    // 4. Solid Color
     bgStyle = `background: ${color.bg};`;
   } else {
-    // 5. Gradient
     bgStyle = `background: linear-gradient(135deg, ${color.bg} 0%, ${color.grad} 100%);`;
   }
   
@@ -1251,7 +1290,6 @@ async function loadStatus() {
     statusLabel.textContent = data.status_label || '在线';
     document.getElementById('status-dot').className = 'status-dot' + (data.mood_score < 50 ? ' low' : '');
 
-    // 渲染桌面仿真层叠流便签 (微小重叠，自然流式排版，不挡文字)
     const container = document.getElementById('sticky-container');
     container.innerHTML = '';
     
@@ -1262,9 +1300,6 @@ async function loadStatus() {
         const card = document.createElement('div');
         card.className = `sticky-note-card`;
 
-        // 自然手写纸错落效果：用更强的位运算哈希打散便签id，避免连续id（1,2,3...）
-        // 算出的随机值也是线性递增/顺拐的问题——之前用简单同余公式时，连续id的偏移量会平滑递增，
-        // 视觉上所有便签都往同一边斜，现在换成位混合哈希，让角度和位移都能真正交替、忽左忽右。
         function hashNoteId(n, salt) {
           n = (n ^ salt) >>> 0;
           n = Math.imul(n ^ (n >>> 16), 0x45d9f3b) >>> 0;
@@ -1274,18 +1309,16 @@ async function loadStatus() {
         }
         const h1 = hashNoteId(note.id, 0);
         const h2 = hashNoteId(note.id, 7919);
-        const rotateDeg = ((h1 / 1000) * 10 - 5).toFixed(1);   // -5° ~ 5°，正负交替更明显
-        const shiftX = ((h2 / 1000) * 32 - 16).toFixed(1);      // -16px ~ 16px，左右都会明显偏移
+        const rotateDeg = ((h1 / 1000) * 10 - 5).toFixed(1);   
+        const shiftX = ((h2 / 1000) * 32 - 16).toFixed(1);      
         card.style.transform = `rotate(${rotateDeg}deg) translateX(${shiftX}px)`;
-        card.style.margin = index === 0 ? '0 auto' : '-27px auto 0'; // 横向居中收窄后，靠auto margin保持基准位置，再叠加transform做左右错落
+        card.style.margin = index === 0 ? '0 auto' : '-27px auto 0'; 
         card.style.zIndex = 15 - index;
         
-        // 动态注入 5x5 的个生化手账底纹色
         const styleObj = getPersonalizedStyle(note.id, index);
         card.style.cssText += styleObj.bgStyle;
         card.style.color = styleObj.textColor;
 
-        // 桌面满警告
         if (isDeskFull) {
           card.style.boxShadow = '0 0 15px rgba(255, 94, 132, 0.4), inset 0 0 0 1px rgba(255,255,255,1)';
         }
@@ -1293,13 +1326,11 @@ async function loadStatus() {
         const starIcon = note.is_starred ? '★' : '☆';
         const starClass = note.is_starred ? 'active' : '';
 
-        // 彻底清空杂乱图标，只在右下角保留一个荧光樱花粉标星按钮
         card.innerHTML = `
           <div class="sticky-note-text" style="color: ${styleObj.textColor};">${escapeHtml(note.message)}</div>
           <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk', this)" title="标星收藏">${starIcon}</button>
         `;
 
-        // 绑定双击触发微信风格悬浮撕毁/整理菜单
         addDoubleTapListener(card, (e) => {
           showContextMenu(card, note.id, "desk-note");
         });
@@ -1314,7 +1345,6 @@ async function loadStatus() {
       `;
     }
 
-    // 抽屉容量与霓虹红框警报
     const notesBtn = document.getElementById('drawer-notes-btn');
     const lettersBtn = document.getElementById('drawer-letters-btn');
     
@@ -1348,14 +1378,6 @@ async function loadStatus() {
 
     document.getElementById('new-letter-indicator').style.display = data.has_new_letter ? 'inline' : 'none';
 
-    // 双端静默同步自适应月经文字
-    const formattedPeriodText = data.period_context 
-      ? escapeHtml(data.period_context).replace(/\\n/g, '<br>') 
-      : "目前没有您的月经生理期记录。<br>如果有需要，请在日历中随时记录。";
-      
-    document.getElementById('period-status-text').innerHTML = formattedPeriodText;
-    document.getElementById('desktop-period-status-text').innerHTML = formattedPeriodText;
-
   } catch (e) { console.error("状态加载失败", e); }
 }
 
@@ -1371,9 +1393,6 @@ async function sendMessage() {
   messagesEl.appendChild(pendingRow);
   scrollToBottom();
 
-  // 流式回复期间，Charon这条气泡的文字直接在这个DOM节点上原地追加，
-  // 不需要每收到一个字就重新renderMsgRow整行替换（那样会丢失/重建头像、模型标签等元素，
-  // 也更容易在快速追加时出现闪烁）。
   const pendingBubble = pendingRow.querySelector('.bubble');
 
   try {
@@ -1395,8 +1414,6 @@ async function sendMessage() {
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      // SSE事件以"\n\n"分隔，一次read()可能拿到不完整的一个事件，
-      // 也可能一次拿到好几个事件粘在一起，这里按分隔符切开，最后剩的不完整片段留到下一轮拼接。
       const parts = buffer.split('\n\n');
       buffer = parts.pop();
 
@@ -1411,8 +1428,6 @@ async function sendMessage() {
           pendingBubble.textContent += evt.delta;
           scrollToBottom();
         } else if (evt.error) {
-          // 中途出错：不立刻打断显示，等done事件里的最终态一起处理
-          // （done事件一定会在error之后紧跟着发送，见后端generate()的实现）
         } else if (evt.done) {
           sawDone = true;
           if (evt.reply) {
@@ -1426,8 +1441,6 @@ async function sendMessage() {
     }
 
     if (!sawDone) {
-      // 流被提前截断（比如网络中断），但至少已经收到的文字不会凭空消失，
-      // 把当前已经拼出来的内容原样定型成一条失败态消息（没有msgId，不能撤回/重新生成）。
       const partial = pendingBubble.textContent;
       pendingRow.replaceWith(renderMsgRow('charon', partial || '（连接中断，没能收到完整回复）', nowIso, false, null, null, true));
     }
@@ -1499,7 +1512,6 @@ async function openLoveLetters() {
   modal.style.display = 'flex';
   area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在拉开情书匣...</div>';
   
-  // 消除提示星芒红点标志
   fetch(apiUrl('/api/love-letters/mark-read'), {method: 'POST'}).then(() => loadStatus());
 
   try {
@@ -1535,7 +1547,6 @@ async function openLoveLetters() {
 }
 function closeLoveLetters() { document.getElementById('letter-modal').style.display = 'none'; }
 
-// 归档单封情书函数
 async function archiveLetter(id) {
   const card = document.getElementById(`letter-card-${id}`);
   if (card) card.remove();
@@ -1549,7 +1560,6 @@ async function archiveLetter(id) {
   } catch(e) { alert('网络错误'); }
 }
 
-// 物理丢弃单封情书函数
 async function deleteLetter(id) {
   if (!confirm('确定要彻底丢弃这封情书吗？它将被永久删除。')) return;
   const card = document.getElementById(`letter-card-${id}`) || document.getElementById(`archive-letter-card-${id}`);
@@ -1564,9 +1574,6 @@ async function deleteLetter(id) {
 }
 
 async function starLetter(id, isStarredNow, sourceStr, btnEl) {
-  // 同starNote的修复：直接用点击触发时传入的按钮元素本身，
-  // 不再用字符串选择器猜测（drawer/archive视图可能同时存在同一封信id的按钮，
-  // 选择器只会命中第一个，导致点的按钮和被更新的按钮对不上）。
   const btn = btnEl;
   const newStarred = !isStarredNow;
   if (btn) {
@@ -1595,10 +1602,7 @@ async function starLetter(id, isStarredNow, sourceStr, btnEl) {
   }
 }
 
-
-// ==========================================
-// ---- 3. 恋爱档案箱 (容量 200) 前端功能 ----
-// ==========================================
+// ---- 3. 恋爱档案箱 (容量 200) ----
 async function openArchiveBox() {
   const modal = document.getElementById('archive-modal');
   const area = document.getElementById('archive-content-area');
@@ -1717,11 +1721,185 @@ async function savePersona() {
   }
 }
 
+// ---- 朋友圈 (Moments) JS 功能 ----
 
+function switchMainView(view) {
+  const mainEl = document.getElementById('main');
+  const momentsEl = document.getElementById('moments-wrapper');
+  
+  if (view === 'moments') {
+    mainEl.style.display = 'none';
+    momentsEl.style.display = 'flex';
+    fetchMoments();
+  } else {
+    mainEl.style.display = 'flex';
+    momentsEl.style.display = 'none';
+    if (view === 'chat') {
+      scrollToBottom();
+    }
+  }
+}
 
-// ==========================================
-// ---- 日历逻辑略 (保持上一版本完美不变) ----
-// ==========================================
+function openPublishModal() {
+  document.getElementById('publish-modal').style.display = 'flex';
+  document.getElementById('moment-input-textarea').value = '';
+}
+
+function closePublishModal() {
+  document.getElementById('publish-modal').style.display = 'none';
+}
+
+async function fetchMoments() {
+  const feed = document.getElementById('moments-feed');
+  feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在加载朋友圈...</div>';
+  
+  try {
+    const res = await fetch(apiUrl('/api/moments'));
+    const data = await res.json();
+    if (data.ok) {
+      renderMoments(data.moments);
+    } else {
+      feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">加载朋友圈失败</div>';
+    }
+  } catch (e) {
+    feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">网络错误，无法加载朋友圈</div>';
+  }
+}
+
+function renderMoments(moments) {
+  const feed = document.getElementById('moments-feed');
+  feed.innerHTML = '';
+  
+  if (!moments || moments.length === 0) {
+    feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">空间空空的，发条动态吧。</div>';
+    return;
+  }
+
+  moments.forEach(m => {
+    const isUser = m.author === 'user';
+    const authorName = isUser ? 'Seraphina' : 'Charon';
+    const avatar = isUser ? AVATAR_USER : AVATAR_CHARON;
+    const isLikedByUser = m.likes && m.likes.includes('user');
+    
+    let likesHtml = '';
+    if (m.likes && m.likes.length > 0) {
+      const likeNames = m.likes.map(l => l === 'user' ? 'Seraphina' : 'Charon').join(', ');
+      likesHtml = `<div class="moment-likes">♥ <span>${likeNames} 觉得很赞</span></div>`;
+    }
+
+    let commentsHtml = '';
+    if (m.comments && m.comments.length > 0) {
+      commentsHtml = `<div class="moment-comments">`;
+      m.comments.forEach(c => {
+        const cName = c.author === 'user' ? 'Seraphina' : 'Charon';
+        commentsHtml += `<div class="comment-item"><span class="comment-author">${cName}:</span>${escapeHtml(c.content)}</div>`;
+      });
+      commentsHtml += `</div>`;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'moment-card';
+    card.innerHTML = `
+      <div class="moment-header">
+        <div class="avatar-wrapper ${isUser ? 'user' : 'charon'}" style="width:36px; height:36px;">
+          <img class="msg-avatar" src="${avatar}">
+          <span class="star-accent">✦</span>
+        </div>
+        <div style="margin-left: 10px;">
+          <div class="moment-author">${authorName}</div>
+          <div class="moment-time">${formatTime(m.created_at)}</div>
+        </div>
+      </div>
+      <div class="moment-content">${escapeHtml(m.content)}</div>
+      
+      <div class="moment-actions">
+        <button class="action-btn ${isLikedByUser ? 'liked' : ''}" onclick="toggleLike('${m.id}', ${isLikedByUser})">
+          ♥ ${isLikedByUser ? '已赞' : '点赞'}
+        </button>
+        <button class="action-btn" onclick="document.getElementById('comment-box-${m.id}').classList.toggle('active')">
+          💬 评论
+        </button>
+      </div>
+      
+      ${likesHtml}
+      ${commentsHtml}
+      
+      <div class="comment-input-area" id="comment-box-${m.id}">
+        <input type="text" class="comment-input" placeholder="写下温和的评论..." id="comment-input-${m.id}">
+        <button class="publish-btn" style="padding: 6px 12px; font-size: 11px;" onclick="submitComment('${m.id}')">发送</button>
+      </div>
+    `;
+    feed.appendChild(card);
+  });
+}
+
+async function submitMoment() {
+  const text = document.getElementById('moment-input-textarea').value.trim();
+  if (!text) return;
+  const saveBtn = document.getElementById('moment-save-btn');
+  saveBtn.disabled = true;
+  
+  try {
+    const res = await fetch(apiUrl('/api/moments'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      closePublishModal();
+      fetchMoments();
+      loadStatus();
+    } else {
+      alert('发布失败：' + (data.error || '未知错误'));
+    }
+  } catch (e) {
+    alert('发布失败：网络错误');
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+async function toggleLike(id, isLiked) {
+  try {
+    const res = await fetch(apiUrl('/api/moments/like'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      fetchMoments();
+    }
+  } catch (e) {
+    alert('网络错误');
+  }
+}
+
+async function submitComment(id) {
+  const input = document.getElementById(`comment-input-${id}`);
+  const text = input.value.trim();
+  if (!text) return;
+  
+  try {
+    const res = await fetch(apiUrl('/api/moments/comment'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, content: text })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      input.value = '';
+      fetchMoments();
+    } else {
+      alert('评论失败：' + (data.error || '未知错误'));
+    }
+  } catch (e) {
+    alert('评论失败：网络错误');
+  }
+}
+
+// ---- 日历逻辑 ----
 async function openPeriodCalendar() {
   document.getElementById('calendar-modal').style.display = 'flex';
   await fetchPeriodData(currentYear);
@@ -1839,7 +2017,6 @@ inputEl.addEventListener('input', () => {
 });
 
 const modelSelect = document.getElementById('model-select');
-// 部分模型id显示成更短的名字，下拉框空间有限，纯技术名太长会被截断；没在这里配置的模型会直接显示原始id
 const MODEL_DISPLAY_NAME = {
   'gemai-gpt-4o-mini': 'gpt-4o-mini',
   'gemai-gpt-4.1-mini': 'gpt-4.1-mini',
@@ -1861,11 +2038,8 @@ async function loadModelSelector() {
     const data = await res.json();
     if (!data.ok) return;
     modelSelect.innerHTML = '';
-    // model_health: 每个模型最近的健康状态，healthy=false说明连续失败次数够多，
-    // 大概率这个渠道挂了。存起来supabase existing风格照抄心情状态的圆点样式（.status-dot/.low），
-    // 不在option文字里加符号（原生select的option样式很受限，加emoji反而不好看）。
     const health = data.model_health || {};
-    window._modelHealthMap = health; // 供切换模型时同步更新圆点用
+    window._modelHealthMap = health; 
     data.available_models.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m;
@@ -1882,8 +2056,6 @@ async function loadModelSelector() {
 }
 
 function updateModelStatusDot(modelId) {
-  // 圆点样式跟心情状态那个完全复用：绿色=健康，粉色（.low）=最近连续失败次数够多。
-  // 没有健康记录（这个模型还没被调用过）时默认按健康处理，不提前判它有问题。
   const dotEl = document.getElementById('model-status-dot');
   if (!dotEl) return;
   const h = (window._modelHealthMap || {})[modelId];
@@ -1906,30 +2078,30 @@ modelSelect.addEventListener('change', async () => {
 // 手机端自适应 Tab 切换逻辑
 function switchTab(tabName) {
   const appEl = document.getElementById('app');
-  appEl.classList.remove('tab-chat', 'tab-desk');
+  appEl.classList.remove('tab-chat', 'tab-desk', 'tab-moments');
   appEl.classList.add('tab-' + tabName);
 
   document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
-  if (window.event && window.event.currentTarget) {
-    window.event.currentTarget.classList.add('active');
-  } else {
-    const indexMap = {'chat': 0, 'desk': 1};
-    document.querySelectorAll('.tab-item')[indexMap[tabName]].classList.add('active');
+  
+  const tabItems = document.querySelectorAll('.tab-item');
+  if (tabName === 'chat') {
+    tabItems[0].classList.add('active');
+    switchMainView('chat');
+  } else if (tabName === 'moments') {
+    tabItems[1].classList.add('active');
+    switchMainView('moments');
+  } else if (tabName === 'desk') {
+    tabItems[2].classList.add('active');
   }
-  if (tabName === 'chat') scrollToBottom();
 }
 if (window.innerWidth <= 768) { document.getElementById('app').classList.add('tab-chat'); }
 
 loadHistory();
 loadStatus();
 loadModelSelector();
-// 每2分钟刷新一次模型菜单，让健康状态（哪个模型最近失败了）保持新鲜，
-// 不用你手动刷新页面才能看到最新的红绿点状态。
 setInterval(loadModelSelector, 120000);
 
 // ---- Web Push 订阅 ----
-// urlBase64转Uint8Array：pushManager.subscribe()要求applicationServerKey是这个格式，
-// 而后端给的VAPID公钥是urlsafe-base64字符串，这一步是标准转换写法。
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -1940,20 +2112,16 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function setupPushNotifications() {
-  // 必要条件都不满足就直接跳过，不报错打扰用户：
-  // 1) 浏览器得支持service worker和push  2) 得是https或localhost  3) 得是"添加到主屏幕"后独立打开的PWA
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
   try {
     const registration = await navigator.serviceWorker.register('/service-worker.js');
 
-    if (Notification.permission === 'denied') return; // 用户明确拒绝过，不再打扰
+    if (Notification.permission === 'denied') return; 
 
     let subscription = await registration.pushManager.getSubscription();
-    if (subscription) return; // 已经订阅过，不用重复走一遍
+    if (subscription) return; 
 
-    // 还没订阅、权限也还没明确granted：露出小铃铛按钮，等用户主动点击再触发权限请求
-    // （iOS要求权限请求必须由用户手势触发，不能页面一加载就自动弹窗）
     const btn = document.getElementById('push-enable-btn');
     if (btn) btn.style.display = 'block';
 
@@ -1987,8 +2155,6 @@ async function subscribeToPush(registration) {
   }
 }
 
-// 手动触发入口：iOS要求权限请求必须由用户点击触发，不能页面一加载就自动弹窗。
-// 挂在window上，方便你在页面上加一个"开启通知"按钮时直接调用 enablePushNotifications()。
 window.enablePushNotifications = async function() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     alert('当前浏览器不支持推送通知');
