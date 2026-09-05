@@ -1542,6 +1542,40 @@ def build_chat_messages(time_context, user_message, chat_history, mood_context="
     summary_text = summary_state.get("summary", "")
     summary_block = f"\n\n你们更早之前聊过的内容摘要：{summary_text}" if summary_text else ""
 
+    # ---- 便签/情书背景记忆：让Charon"知道"自己写过什么，但只是背景记忆，不主动提 ----
+    # 只读sticky_notes(桌面最近几条)和love_letters(全部历史)，不影响生成/触发逻辑本身。
+    memory_lines = []
+    try:
+        desk_notes = load_sticky_notes(limit=5, status="desk")
+        if desk_notes:
+            notes_text = "\n".join(f"- {n.get('message', '')}" for n in desk_notes if n.get("message"))
+            if notes_text:
+                memory_lines.append(f"你最近贴在桌面上的便签（是你自己写的，留给她的）：\n{notes_text}")
+    except Exception as e:
+        log_error("build_chat_messages:load_sticky_notes", e)
+
+    try:
+        all_letters = load_love_letters(limit=100)
+        if all_letters:
+            letters_text = "\n".join(
+                f"- [{'高甜' if l.get('letter_type') == 'sweet' else '思念'}] {l.get('content', '')}"
+                for l in all_letters if l.get("content")
+            )
+            if letters_text:
+                memory_lines.append(f"你写给她的情书（都是你自己写的，藏在情书抽屉里）：\n{letters_text}")
+    except Exception as e:
+        log_error("build_chat_messages:load_love_letters", e)
+
+    memory_block = ""
+    if memory_lines:
+        memory_block = (
+            "\n\n【你自己的记忆——便签与情书】\n"
+            + "\n\n".join(memory_lines)
+            + "\n\n这些都是你自己写下的东西，你当然记得。但这只是你心里的背景记忆，"
+            "不用主动提起或引用——除非她自己先聊到便签、情书，或者聊天里的话题自然地带到了这些内容，"
+            "你才可以像想起自己写过的东西一样自然地接上、呼应，而不是刻意背出来。"
+        )
+
     if plain_text:
         output_rule = "直接说出你要回复的话本身就行，不用任何JSON、代码块标记或额外说明——就是正常聊天时你真的会说出口的那句话。"
     else:
@@ -1552,7 +1586,7 @@ def build_chat_messages(time_context, user_message, chat_history, mood_context="
 
 {load_persona_memory()}
 
-现在是{time_context}。{summary_block}{mood_line}
+现在是{time_context}。{summary_block}{mood_line}{memory_block}
 
 接下来是你们最近的对话，请自然地接着聊——这是正常聊天里的一来一回，不是你主动找她那种短消息，
 可以根据她说的内容自然展开，长度不用刻意压缩，但也别写成一大段论述，像真的在对话就行。
