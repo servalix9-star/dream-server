@@ -225,16 +225,30 @@
 
   /* ---- 全局悬浮操作菜单 ---- */
   #bubble-menu {
-    display: none; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
+    display: none; flex-direction: column; position: absolute; z-index: 1000; background: rgba(26, 18, 30, 0.95);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 8px; padding: 6px 4px;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); animation: menu-pop 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
+  .bubble-menu-buttons-row { display: flex; }
   @keyframes menu-pop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
   .menu-btn {
     background: none; border: none; color: #e2cbd4; font-size: 12px; padding: 6px 12px; cursor: pointer; font-family: inherit; transition: color 0.15s;
   }
   .menu-btn:hover { color: #ffb3c1; }
   .menu-btn:not(:last-child) { border-right: 1px solid rgba(255, 255, 255, 0.15); }
+  .menu-model-hint {
+    font-size: 10px; color: rgba(226, 203, 212, 0.55); padding: 4px 12px 2px; width: 100%;
+    text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); user-select: none;
+  }
+  /* 模型来源标记：气泡右下角，纯白文字不加任何背景/图标装饰。
+     默认opacity:0（占位但不可见，双击有淡入淡出过渡，不是生硬的显隐切换）。
+     align-self: flex-end 让它在charon消息里跟整列的flex-start方向相反，贴到右边去，
+     视觉上呼应"气泡右下角"这个位置要求。 */
+  .model-tag {
+    font-size: 9px; color: #ffffff; margin: 2px 4px 0; align-self: flex-end;
+    opacity: 0; transition: opacity 0.2s ease; user-select: none; pointer-events: none;
+  }
+  .model-tag.visible { opacity: 0.85; }
 
   #input-bar {
     display: flex; gap: 10px; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
@@ -680,11 +694,14 @@ function formatTime(isoStr) {
   return h + ':' + m;
 }
 
-function renderMsgRow(role, content, createdAt, pending, msgId) {
+function renderMsgRow(role, content, createdAt, pending, msgId, model) {
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
   if (createdAt) row.dataset.createdAt = createdAt;
+  // model：这条消息（如果是charon发的）实际是哪个模型生成的，纯记录用途，
+  // 不在气泡上直接显示，只挂在dataset里，双击唤出菜单时可以读出来展示成一行小字。
+  if (model) row.dataset.model = model;
 
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
@@ -724,6 +741,18 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   bubble.textContent = content;
   col.appendChild(bubble);
 
+  // 模型来源标记：只有charon的消息、且这条消息确实记录了model字段（老消息可能没有）才生成。
+  // 常驻在DOM里但默认透明不占视觉注意力（不是display:none，是opacity:0，
+  // 这样双击切换时有过渡动画，不是生硬地"消失/出现"）。纯白色文字，不加任何图标/背景装饰，
+  // 位置在气泡右下角，不在气泡内部——所以是col的子元素、跟bubble平级，不是bubble的子元素。
+  let modelTagEl = null;
+  if (role !== 'user' && model) {
+    modelTagEl = document.createElement('div');
+    modelTagEl.className = 'model-tag';
+    modelTagEl.textContent = model;
+    col.appendChild(modelTagEl);
+  }
+
   const timeRow = document.createElement('div');
   timeRow.className = 'msg-time-row';
 
@@ -739,7 +768,10 @@ function renderMsgRow(role, content, createdAt, pending, msgId) {
   addDoubleTapListener(bubble, (e) => {
     if (row.classList.contains('editing')) return;
     currentActiveRowEl = row;
-    showContextMenu(bubble, msgId, role, content);
+    showContextMenu(bubble, msgId, role, content, model);
+    // 双击的同时，把模型标记切换一下显示状态（双击一次显现，再双击一次隐藏），
+    // 跟"双击唤出菜单"是同一个手势触发，不需要额外交互成本。
+    if (modelTagEl) modelTagEl.classList.toggle('visible');
   });
 
   return row;
@@ -830,7 +862,7 @@ function enterEditMode(row, bubble, msgId, originalContent) {
         toRemove.remove();
       }
 
-      messagesEl.appendChild(renderMsgRow('charon', data.reply, new Date().toISOString(), false, data.charon_msg_id));
+      messagesEl.appendChild(renderMsgRow('charon', data.reply, new Date().toISOString(), false, data.charon_msg_id, data.model));
       scrollToBottom();
       loadStatus();
     } catch (e) {
@@ -841,13 +873,19 @@ function enterEditMode(row, bubble, msgId, originalContent) {
 }
 
 // 全局上下文菜单管理 (双击唤出)
-function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
+function showContextMenu(targetElement, id, typeOrRole, textContent = "", model = "") {
   const rect = targetElement.getBoundingClientRect();
   // 先在不可见状态下重建内容并测量尺寸，避免"旧位置菜单闪现→跳到新位置"这个中间态被误触，
   // 这正是"要点两次才生效"的卡顿感来源：第一次点击其实点在了闪现的旧位置上。
   contextMenu.style.visibility = 'hidden';
   contextMenu.style.display = 'flex';
   contextMenu.innerHTML = '';
+
+  // buttonsRow：真正装按钮的横向容器。最外层contextMenu现在是纵向排列（column），
+  // 这样上面能插一行不可点击的model提示文字，下面跟着一整排按钮，互不干扰。
+  const buttonsRow = document.createElement('div');
+  buttonsRow.className = 'bubble-menu-buttons-row';
+
   if (typeOrRole === 'user' || typeOrRole === 'charon') {
     // ---- 聊天气泡专属双击选项 ----
     const copyBtn = document.createElement('button');
@@ -856,7 +894,7 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
     copyBtn.onclick = () => {
       navigator.clipboard.writeText(textContent).then(() => hideWeChatMenu());
     };
-    contextMenu.appendChild(copyBtn);
+    buttonsRow.appendChild(copyBtn);
 
     if (id) {
       if (typeOrRole === 'user') {
@@ -870,7 +908,7 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
           }
           hideWeChatMenu();
         };
-        contextMenu.appendChild(editBtn);
+        buttonsRow.appendChild(editBtn);
       } else if (typeOrRole === 'charon') {
         const regenBtn = document.createElement('button');
         regenBtn.className = 'menu-btn';
@@ -879,7 +917,7 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
           if (currentActiveRowEl) regenerateMessage(id, currentActiveRowEl);
           hideWeChatMenu();
         };
-        contextMenu.appendChild(regenBtn);
+        buttonsRow.appendChild(regenBtn);
       }
 
       const recallBtn = document.createElement('button');
@@ -889,7 +927,7 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
         if (currentActiveRowEl) deleteMessage(id, currentActiveRowEl);
         hideWeChatMenu();
       };
-      contextMenu.appendChild(recallBtn);
+      buttonsRow.appendChild(recallBtn);
     }
   } else if (typeOrRole === 'desk-note') {
     // ---- 桌面便签专属双击选项 ----
@@ -897,7 +935,7 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
     moveBtn.className = 'menu-btn';
     moveBtn.textContent = '📥 移入抽屉';
     moveBtn.onclick = () => { moveNote(id, 'drawer', 'desk'); hideWeChatMenu(); };
-    contextMenu.appendChild(moveBtn);
+    buttonsRow.appendChild(moveBtn);
 
     const delBtn = document.createElement('button');
     delBtn.className = 'menu-btn';
@@ -910,8 +948,10 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "") {
       setTimeout(() => { deleteNote(id, 'desk'); }, 400);
       hideWeChatMenu();
     };
-    contextMenu.appendChild(delBtn);
+    buttonsRow.appendChild(delBtn);
   }
+
+  contextMenu.appendChild(buttonsRow);
 
   // 内容已重建完毕，用requestAnimationFrame等浏览器完成一次布局计算后再测量尺寸，
   // 这样offsetWidth/offsetHeight才是本次菜单内容真正的尺寸，不会拿到上一次残留的值。
@@ -959,7 +999,7 @@ async function regenerateMessage(msgId, rowEl) {
     });
     const data = await res.json();
     if (data.ok) {
-      rowEl.replaceWith(renderMsgRow('charon', data.reply, createdAt, false, msgId));
+      rowEl.replaceWith(renderMsgRow('charon', data.reply, createdAt, false, msgId, data.model));
       loadStatus();
     } else {
       if (bubble) { bubble.textContent = originalText; bubble.classList.remove('pending'); }
@@ -987,7 +1027,7 @@ async function loadHistory() {
     messagesEl.innerHTML = '';
     if (!data.ok) { messagesEl.innerHTML = '<div id="empty-hint">加载失败</div>'; return; }
     if (!data.messages || data.messages.length === 0) { messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>'; return; }
-    data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id)));
+    data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id, m.model)));
     oldestLoadedAt = data.messages[0].created_at;
     hasMoreHistory = !!data.has_more;
     scrollToBottom();
@@ -1009,7 +1049,7 @@ async function loadMoreHistory() {
     }
     const prevScrollHeight = messagesEl.scrollHeight;
     const frag = document.createDocumentFragment();
-    data.messages.forEach(m => frag.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id)));
+    data.messages.forEach(m => frag.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id, m.model)));
     messagesEl.insertBefore(frag, messagesEl.firstChild);
     messagesEl.scrollTop += (messagesEl.scrollHeight - prevScrollHeight);
     oldestLoadedAt = data.messages[0].created_at;
@@ -1068,16 +1108,22 @@ async function moveNote(id, targetStatus, sourceStr) {
   } catch(e) { alert('网络错误，移动便签失败'); }
 }
 
-async function starNote(id, isStarredNow, sourceStr) {
+async function starNote(id, isStarredNow, sourceStr, btnEl) {
   // 乐观更新：不等后端返回就先把当前按钮的图标/状态切换过去，
   // 网络请求在背后悄悄发；失败了再退回原状态。避免"点一下要等一轮网络往返+整表重绘"的迟钝感。
-  const btn = document.querySelector(`.star-btn[onclick*="starNote(${id},"]`)
-    || document.querySelector(`.star-btn[onclick*="starLetter(${id},"]`);
+  //
+  // 之前这里用字符串选择器`.star-btn[onclick*="starNote(${id},"]`去反查按钮，
+  // 但同一个便签的收藏按钮在抽屉(drawer)和档案箱(archive)视图里各自独立渲染了一份，
+  // 两份DOM可能同时存在（只是一个显示一个隐藏），querySelector只返回第一个匹配项，
+  // 导致"点击的那个按钮"和"代码实际更新的那个按钮"不是同一个——看起来就是点了没反应，
+  // 刷新之后（重新整个渲染过）才会显示正确状态。现在改成直接接收btnEl（就是被点击的
+  // 按钮元素本身，通过onclick="...(this)"传进来），精确对应，不会有歧义。
+  const btn = btnEl;
   const newStarred = !isStarredNow;
   if (btn) {
     btn.textContent = newStarred ? '★' : '☆';
     btn.classList.toggle('active', newStarred);
-    btn.setAttribute('onclick', `starNote(${id}, ${newStarred}, '${sourceStr}')`);
+    btn.setAttribute('onclick', `starNote(${id}, ${newStarred}, '${sourceStr}', this)`);
   }
   try {
     const res = await fetch(apiUrl('/api/sticky-notes/star'), {
@@ -1089,13 +1135,13 @@ async function starNote(id, isStarredNow, sourceStr) {
       // 后端拒绝了，退回原状态
       btn.textContent = isStarredNow ? '★' : '☆';
       btn.classList.toggle('active', isStarredNow);
-      btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}')`);
+      btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}', this)`);
     }
   } catch(e) {
     if (btn) {
       btn.textContent = isStarredNow ? '★' : '☆';
       btn.classList.toggle('active', isStarredNow);
-      btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}')`);
+      btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}', this)`);
     }
     alert('网络错误，星标可能没有保存成功');
   }
@@ -1190,7 +1236,7 @@ async function loadStatus() {
         // 彻底清空杂乱图标，只在右下角保留一个荧光樱花粉标星按钮
         card.innerHTML = `
           <div class="sticky-note-text" style="color: ${styleObj.textColor};">${escapeHtml(note.message)}</div>
-          <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk')" title="标星收藏">${starIcon}</button>
+          <button class="note-star-btn ${starClass}" onclick="event.stopPropagation(); starNote(${note.id}, ${note.is_starred}, 'desk', this)" title="标星收藏">${starIcon}</button>
         `;
 
         // 绑定双击触发微信风格悬浮撕毁/整理菜单
@@ -1275,7 +1321,7 @@ async function sendMessage() {
     if (data.ok) {
       pendingBubble.textContent = data.reply; pendingBubble.classList.remove('pending');
       userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id));
+      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id, data.model));
     } else {
       pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
       pendingBubble.classList.remove('pending');
@@ -1321,7 +1367,7 @@ async function openDrawerNotes() {
             <div class="letter-time-row">
               <span class="letter-time">💌 ${formatTime(note.created_at)} · ${note.created_at.substring(0,10)}</span>
               <div class="letter-act-group">
-                <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'drawer')">${starIcon}</button>
+                <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'drawer', this)">${starIcon}</button>
                 <button class="letter-del-btn" style="color: #ff5e84;" onclick="moveNote(${note.id}, 'archive', 'drawer')" title="珍藏入恋爱档案箱">🗃️ 归档</button>
                 <button class="letter-del-btn" onclick="deleteNote(${note.id}, 'drawer')" title="丢弃便签">🗑️ 丢弃</button>
               </div>
@@ -1365,7 +1411,7 @@ async function openLoveLetters() {
             <div class="letter-time-row">
               <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
               <div class="letter-act-group">
-                <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'drawer')">${starIcon}</button>
+                <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'drawer', this)">${starIcon}</button>
                 <button class="letter-del-btn" style="color: #ff5e84;" onclick="archiveLetter(${letter.id})" title="珍藏入恋爱档案箱">🗃️ 归档</button>
                 <button class="letter-del-btn" onclick="deleteLetter(${letter.id})" title="丢弃这封信">🗑️ 丢弃</button>
               </div>
@@ -1412,13 +1458,16 @@ async function deleteLetter(id) {
   } catch (e) { alert('网络错误'); }
 }
 
-async function starLetter(id, isStarredNow, sourceStr) {
-  const btn = document.querySelector(`.star-btn[onclick*="starLetter(${id},"]`);
+async function starLetter(id, isStarredNow, sourceStr, btnEl) {
+  // 同starNote的修复：直接用点击触发时传入的按钮元素本身，
+  // 不再用字符串选择器猜测（drawer/archive视图可能同时存在同一封信id的按钮，
+  // 选择器只会命中第一个，导致点的按钮和被更新的按钮对不上）。
+  const btn = btnEl;
   const newStarred = !isStarredNow;
   if (btn) {
     btn.textContent = newStarred ? '★' : '☆';
     btn.classList.toggle('active', newStarred);
-    btn.setAttribute('onclick', `starLetter(${id}, ${newStarred}, '${sourceStr}')`);
+    btn.setAttribute('onclick', `starLetter(${id}, ${newStarred}, '${sourceStr}', this)`);
   }
   try {
     const res = await fetch(apiUrl('/api/love-letters/star'), {
@@ -1429,13 +1478,13 @@ async function starLetter(id, isStarredNow, sourceStr) {
     if (!data.ok && btn) {
       btn.textContent = isStarredNow ? '★' : '☆';
       btn.classList.toggle('active', isStarredNow);
-      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}')`);
+      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}', this)`);
     }
   } catch(e) {
     if (btn) {
       btn.textContent = isStarredNow ? '★' : '☆';
       btn.classList.toggle('active', isStarredNow);
-      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}')`);
+      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}', this)`);
     }
     alert('网络错误，星标可能没有保存成功');
   }
@@ -1472,7 +1521,7 @@ async function openArchiveBox() {
               <div class="letter-time-row">
                 <span class="letter-time">📌 ${formatTime(note.created_at)} · ${note.created_at.substring(0,10)}</span>
                 <div class="letter-act-group">
-                  <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'archive')">${starIcon}</button>
+                  <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'archive', this)">${starIcon}</button>
                   <button class="letter-del-btn" style="color: #a66275;" onclick="moveNote(${note.id}, 'drawer', 'archive')" title="取出，移回便签抽屉">📤 取出</button>
                   <button class="letter-del-btn" onclick="deleteNote(${note.id}, 'archive')" title="永久删除">🗑️ 丢弃</button>
                 </div>
@@ -1494,7 +1543,7 @@ async function openArchiveBox() {
               <div class="letter-time-row">
                 <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
                 <div class="letter-act-group">
-                  <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'archive')">${starIcon}</button>
+                  <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'archive', this)">${starIcon}</button>
                   <button class="letter-del-btn" onclick="deleteLetter(${letter.id})" title="永久删除">🗑️ 丢弃</button>
                 </div>
               </div>
