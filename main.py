@@ -83,133 +83,186 @@ def _supabase_request(method, table, params=None, json_body=None, headers_extra=
 # 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
 # 和 deepseek-v4-pro（深度推理，更贵，开启思考模式，回复慢一点但推理更深）。
 # thinking 状态跟着选中的模型自动联动，见 get_thinking_config()。
-# gemai-* 系列是接入的 gemai.cc 代理站模型，纯粹作为备选，走独立的供应商配置（见 MODEL_PROVIDER_MAP）。
+# gemai-* 系列是接入的 gemai.cc 代理站模型，纯粹作为备选，走独立的供应商配置（见 DEFAULT_MODEL_REGISTRY）。
 # 这类代理站的具体渠道时常变动（之前接的[官逆]gemini-2.5-pro出现过503 model_not_found，渠道下线），
 # 所以这里一次接入9个当前指定的型号，覆盖GPT/Gemini/Grok三个系列，哪个能用切哪个。
 # 其中gemini-2.5-pro有[满血A][满血D]两条渠道，gemini-3.1-pro-preview有[官逆]和[满血A]+thinking两条渠道，
 # 内部id用 -a / -d / -thinking 后缀区分，real_model原样保留完整前缀标注（渠道识别用）。
-AVAILABLE_MODELS = [
-    "deepseek-v4-flash", "deepseek-v4-pro",
-    "gemai-gpt-4o-mini", "gemai-gpt-4.1-mini", "gemai-gpt-5-mini",
-    "gemai-gemini-2.5-flash-a", "gemai-gemini-2.5-pro-a", "gemai-gemini-2.5-pro-d",
-    "gemai-gemini-3.1-pro", "gemai-gemini-3.1-pro-thinking",
-    "gemai-grok-4",
-    "gemini-official-flash", "gemini-official-pro"
-]
-DEFAULT_MODEL = "deepseek-v4-flash"
-# 每个模型对应的思考模式：flash关闭（快、且temperature等参数能生效），pro开启（慢、但推理更深）
-# gemai系列不支持DeepSeek的thinking参数，这里给个占位值，实际调用时会被跳过（见call_deepseek里的分流逻辑）
-MODEL_THINKING_MAP = {
-    "deepseek-v4-flash": "disabled",
-    "deepseek-v4-pro": "enabled",
-    "gemai-gpt-4o-mini": "disabled",
-    "gemai-gpt-4.1-mini": "disabled",
-    "gemai-gpt-5-mini": "disabled",
-    "gemai-gemini-2.5-flash-a": "disabled",
-    "gemai-gemini-2.5-pro-a": "disabled",
-    "gemai-gemini-2.5-pro-d": "disabled",
-    "gemai-gemini-3.1-pro": "disabled",
-    "gemai-gemini-3.1-pro-thinking": "disabled",
-    "gemai-grok-4": "disabled",
-    # 走OpenAI兼容端点，不支持DeepSeek的thinking参数，占位值同gemai系列
-    "gemini-official-flash": "disabled",
-    "gemini-official-pro": "disabled"
-}
-
-# 每个模型对应的真实供应商配置：base_url（接口地址）、api_key（读哪个环境变量）、
-# real_model（发给上游时真正用的模型名，代理站渠道识别要用，前缀方括号必须原样保留，
-# 跟下面前端下拉框显示的"去掉前缀"的名字是两回事，不要混着改）、
-# supports_thinking（是否要在请求体里带thinking字段）。
-# 新增供应商/模型以后，只需要在这里加一条映射，call_deepseek/run_once里的分流逻辑不用改。
-MODEL_PROVIDER_MAP = {
+# ==========================================================================
+# 模型注册表（动态配置管理）
+# ==========================================================================
+# 历史上这里是三个平行的硬编码字典（AVAILABLE_MODELS / MODEL_THINKING_MAP /
+# MODEL_PROVIDER_MAP），每次某个gemai.cc代理站渠道挂了/换了，都要改代码重新部署。
+#
+# 现在改成：这份字典只是"出厂默认值"（DEFAULT_MODEL_REGISTRY），真正生效的配置
+# 优先从 Supabase app_config 表的 model_registry 这个key读取（见下面get_model_registry）。
+# 数据库里没配置过时，自动回退到这份默认值，保证第一次上线/数据库还没初始化时不会挂。
+#
+# 结构：每个模型id对应一条完整配置：
+#   - active: 是否启用。false的模型不会出现在前端下拉菜单，也不能被选中。
+#     公益站渠道挂了，不用改代码，直接去Supabase把对应条目的active改成false即可。
+#   - base_url: 接口地址
+#   - api_key_env: 该用哪个环境变量的值作为api_key（不直接存密钥本身，密钥仍然
+#     只放在Render环境变量里；这样即使Supabase数据泄露，密钥也不会跟着泄露）。
+#   - real_model: 发给上游时真正用的模型名（代理站渠道识别用，前缀方括号必须原样保留）
+#   - supports_thinking: 是否要在请求体里带DeepSeek风格的thinking字段
+#   - thinking: 该模型的思考模式（disabled/enabled），仅supports_thinking=True时生效
+#   - api_style: "openai_compatible"（默认，DeepSeek官方/gemai.cc代理站都是这种messages结构）
+#     或 "gemini_native"（Google官方原生接口，contents/parts结构，key走x-goog-api-key header）
+#
+# 新增模型/供应商：不用改代码，直接去Supabase的app_config表编辑model_registry这条JSON即可，
+# 改完最多60秒生效（见MODEL_REGISTRY_TTL缓存）。
+DEFAULT_MODEL_REGISTRY = {
     "deepseek-v4-flash": {
+        "active": True,
         "base_url": "https://api.deepseek.com/chat/completions",
-        "api_key": DEEPSEEK_API_KEY,
+        "api_key_env": "DEEPSEEK_API_KEY",
         "real_model": "deepseek-v4-flash",
         "supports_thinking": True,
+        "thinking": "disabled",
     },
     "deepseek-v4-pro": {
+        "active": True,
         "base_url": "https://api.deepseek.com/chat/completions",
-        "api_key": DEEPSEEK_API_KEY,
+        "api_key_env": "DEEPSEEK_API_KEY",
         "real_model": "deepseek-v4-pro",
         "supports_thinking": True,
+        "thinking": "enabled",
     },
     "gemai-gpt-4o-mini": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[官逆]gpt-4o-mini",  # 官逆渠道
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-gpt-4.1-mini": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[官逆]gpt-4.1-mini",  # 官逆渠道
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-gpt-5-mini": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[官逆]gpt-5-mini",  # 官逆渠道
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-gemini-2.5-flash-a": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[满血A]gemini-2.5-flash",  # 满血A渠道
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-gemini-2.5-pro-a": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[满血A]gemini-2.5-pro",  # 满血A渠道
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-gemini-2.5-pro-d": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[满血D]gemini-2.5-pro",  # 满血D渠道
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-gemini-3.1-pro": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[官逆]gemini-3.1-pro-preview",  # 官逆渠道
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-gemini-3.1-pro-thinking": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "[满血A]gemini-3.1-pro-preview-thinking-128",  # 满血A渠道，开启深度思考
         "supports_thinking": False,
+        "thinking": "disabled",
     },
     "gemai-grok-4": {
+        "active": True,
         "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key": GEMAI_API_KEY,
+        "api_key_env": "GEMAI_API_KEY",
         "real_model": "grok-4",  # 无前缀标注
         "supports_thinking": False,
+        "thinking": "disabled",
     },
-    # Google官方Gemini API（AI Studio申请的key），走原生Gemini接口，
-    # 不经过任何第三方代理站，稳定性和可用性都远高于gemai.cc系列，
-    # 适合作为"保底模型"——公益站集体不可用时依然能正常工作。
+    # Google官方Gemini API（AI Studio申请的key），走原生Gemini接口。
     # 注意：2026年Google把AI Studio新发的key格式从AIza换成了AQ.，
     # AQ.格式key在OpenAI兼容端点（/v1beta/openai/chat/completions）会返回401，
     # 但在原生端点（generativelanguage.googleapis.com，用x-goog-api-key header传key）工作正常，
-    # 所以这两个模型必须走原生格式，不能像其他供应商一样用OpenAI兼容payload。
+    # 所以这两个模型走api_style=gemini_native，不能用openai_compatible的payload格式。
+    # 已实测确认：gemini-official-flash 技术上能通，但Google官方内容审核对亲密向对话
+    # 容易判定为PROHIBITED_CONTENT直接拦截；gemini-official-pro 在免费层配额为0（quota limit: 0），
+    # 需要项目开通计费才能用。这里先默认关闭（active=False），等后续视情况决定是否启用，
+    # 保留配置是为了不用重新写一遍，改一下active就能试。
     "gemini-official-flash": {
+        "active": False,
         "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
-        "api_key": GEMINI_API_KEY,
+        "api_key_env": "GEMINI_API_KEY",
         "real_model": "gemini-3.6-flash",
         "supports_thinking": False,
+        "thinking": "disabled",
         "api_style": "gemini_native",
     },
     "gemini-official-pro": {
+        "active": False,
         "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent",
-        "api_key": GEMINI_API_KEY,
+        "api_key_env": "GEMINI_API_KEY",
         "real_model": "gemini-3.1-pro-preview",
         "supports_thinking": False,
+        "thinking": "disabled",
         "api_style": "gemini_native",
     },
 }
+
+DEFAULT_MODEL = "deepseek-v4-flash"
+
+# model_registry从Supabase读出来后缓存在内存里，避免每次对话都查一次数据库。
+# TTL设置得短（60秒），改了配置不用重启服务，最多等1分钟就生效。
+MODEL_REGISTRY_TTL = 60
+_model_registry_cache = {"data": None, "at": 0}
+
+
+def get_model_registry():
+    """获取当前生效的模型注册表：优先读Supabase app_config表的model_registry这个key，
+    没配置过（或读取失败）就回退到DEFAULT_MODEL_REGISTRY，保证不会因为数据库问题导致模型全部不可用。
+    带60秒内存缓存，避免每次call_deepseek/查询可用模型列表都打一次Supabase。"""
+    now = time.time()
+    if _model_registry_cache["data"] is None or now - _model_registry_cache["at"] > MODEL_REGISTRY_TTL:
+        _model_registry_cache["data"] = get_app_config("model_registry", DEFAULT_MODEL_REGISTRY)
+        _model_registry_cache["at"] = now
+    return _model_registry_cache["data"]
+
+
+def get_available_models():
+    """返回当前active=true的模型id列表，按注册表里的原始顺序，供前端下拉菜单展示。"""
+    registry = get_model_registry()
+    return [mid for mid, cfg in registry.items() if cfg.get("active")]
+
+
+def resolve_api_key(cfg):
+    """从模型配置里的api_key_env字段，读出对应环境变量的真实密钥值。
+    数据库里只存环境变量名字（比如"GEMAI_API_KEY"），不存密钥明文本身，
+    这样即使Supabase权限设置疏漏导致数据被看到，密钥依然安全，只有Render后台能看到真实值。"""
+    env_name = cfg.get("api_key_env")
+    if not env_name:
+        return None
+    return os.environ.get(env_name)
 
 
 def get_app_config(key, default):
@@ -238,10 +291,12 @@ def set_app_config(key, value):
 
 def get_current_model():
     """读取当前选用的模型，存在 Supabase app_config 表的 model_config key 里，没配置过就用默认值。
-    存服务端而不是浏览器本地，这样换设备打开聊天页选择依然一致。"""
+    存服务端而不是浏览器本地，这样换设备打开聊天页选择依然一致。
+    这里校验用的是当前生效的注册表（get_available_models，只含active=true的模型），
+    如果之前选中的模型后来被停用了，会自动回退到DEFAULT_MODEL，不会调用一个已下线的渠道。"""
     data = get_app_config("model_config", {"model": DEFAULT_MODEL})
     model = data.get("model") if isinstance(data, dict) else None
-    if model in AVAILABLE_MODELS:
+    if model in get_available_models():
         return model
     return DEFAULT_MODEL
 
@@ -251,12 +306,13 @@ def get_thinking_config():
     flash用disabled保持快速直接、且temperature等参数生效；
     pro用enabled真正发挥深度推理能力（此时temperature等参数会被静默忽略，这是预期代价）。"""
     model = get_current_model()
-    thinking_type = MODEL_THINKING_MAP.get(model, "disabled")
+    cfg = get_model_registry().get(model, {})
+    thinking_type = cfg.get("thinking", "disabled")
     return {"type": thinking_type}
 
 
 def set_current_model(model):
-    if model not in AVAILABLE_MODELS:
+    if model not in get_available_models():
         raise ValueError(f"不支持的模型: {model}")
     set_app_config("model_config", {"model": model})
 
@@ -1603,16 +1659,18 @@ def check_and_run_checkin():
 def call_deepseek(prompt):
     """纯粹的模型调用，返回生成的文本，不涉及事件/日记这些副作用。
     函数名保留call_deepseek是历史原因（早期只接了DeepSeek一家），
-    现在实际会根据当前选中的模型，从MODEL_PROVIDER_MAP查到对应的供应商配置，
+    现在实际会根据当前选中的模型，从get_model_registry()查到对应的供应商配置
+    （优先读Supabase里的动态配置，没配置过就用代码里的默认值兜底），
     可能打DeepSeek官方接口，也可能打gemai.cc代理站，也可能打Gemini官方原生接口——
-    调用方完全不用关心这个分流，只要模型在AVAILABLE_MODELS里、在MODEL_PROVIDER_MAP里配置好，
+    调用方完全不用关心这个分流，只要模型在注册表里配置好且active=true，
     这里就能自动选对地址和请求格式。"""
     model = get_current_model()
-    provider = MODEL_PROVIDER_MAP.get(model)
+    provider = get_model_registry().get(model)
     if not provider:
         raise RuntimeError(f"模型 {model} 没有配置对应的供应商信息")
-    if not provider["api_key"]:
-        raise RuntimeError(f"模型 {model} 对应的 API key 未设置（环境变量缺失）")
+    api_key = resolve_api_key(provider)
+    if not api_key:
+        raise RuntimeError(f"模型 {model} 对应的 API key 未设置（环境变量缺失：{provider.get('api_key_env')}）")
 
     # api_style默认是openai_compatible（DeepSeek官方 / gemai.cc代理站都是这种，
     # messages结构 + Authorization: Bearer头）。Gemini官方原生接口结构不同，
@@ -1627,7 +1685,7 @@ def call_deepseek(prompt):
         resp = requests.post(
             provider["base_url"],
             headers={
-                "x-goog-api-key": provider["api_key"],
+                "x-goog-api-key": api_key,
                 "Content-Type": "application/json",
             },
             json=payload,
@@ -1660,7 +1718,7 @@ def call_deepseek(prompt):
     resp = requests.post(
         provider["base_url"],
         headers={
-            "Authorization": f"Bearer {provider['api_key']}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         },
         json=payload,
@@ -1738,13 +1796,15 @@ def chat_status():
 
 @app.route("/api/chat-model", methods=["GET"])
 def get_chat_model():
-    """给网页的模型选择器用：返回当前用的模型 + 全部可选模型列表。"""
+    """给网页的模型选择器用：返回当前用的模型 + 全部可选模型列表。
+    available_models现在是动态的（来自Supabase的model_registry，只含active=true的模型），
+    某个渠道在后台被禁用后，前端菜单会自动不再显示它，不需要重新部署。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     return jsonify({
         "ok": True,
         "current_model": get_current_model(),
-        "available_models": AVAILABLE_MODELS
+        "available_models": get_available_models()
     })
 
 
@@ -1755,8 +1815,9 @@ def set_chat_model():
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     data = request.json or {}
     model = data.get("model", "")
-    if model not in AVAILABLE_MODELS:
-        return jsonify({"ok": False, "error": f"不支持的模型，可选：{', '.join(AVAILABLE_MODELS)}"}), 400
+    available = get_available_models()
+    if model not in available:
+        return jsonify({"ok": False, "error": f"不支持的模型，可选：{', '.join(available)}"}), 400
     try:
         set_current_model(model)
         return jsonify({"ok": True, "current_model": model})
