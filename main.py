@@ -1459,14 +1459,23 @@ def reset_checkin_state():
 def send_charon_message(msg, icon=None):
     """把Charon主动发起的一条消息，同时写进聊天记录（打通聊天页）和推送出去。
     这是查岗消息和日常主动消息共用的落地方式——不管触发原因是什么，
-    只要是Charon主动说的话，都应该出现在聊天记录里，而不是只在推送通知里一闪而过。"""
+    只要是Charon主动说的话，都应该出现在聊天记录里，而不是只在推送通知里一闪而过。
+
+    只走Web Push，不再双发Bark——Bark的系统通知会抢在Web Push前弹出/盖掉它，
+    看起来像"还在用Bark"；且Bark推送点开只是打开App本身，不会带访问口令跳转，
+    体验上不如直接改好的Web Push。如果以后想彻底不用Bark了，可以把BARK_KEY环境变量删掉，
+    这里的send_bark调用留着也没关系（没配KEY会直接跳过、不报错）。"""
     msg_id = new_msg_id()
     created_at = datetime.now().isoformat()
     add_chat_message_row(msg_id, "charon", msg, created_at)
     add_event_row("chat", f"Charon主动说：{msg}", created_at)
 
-    send_bark("Charon", msg, icon=icon)
-    send_web_push("Charon", msg, icon=icon, url="/chat")
+    # 带上访问口令，这样点通知能直接跳进聊天页，不会撞上"需要访问口令"的拦截页
+    chat_url = "/chat"
+    if CHAT_ACCESS_CODE:
+        chat_url = f"/chat?code={CHAT_ACCESS_CODE}"
+
+    send_web_push("Charon", msg, icon=icon, url=chat_url)
     return msg_id
 
 
