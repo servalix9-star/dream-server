@@ -1612,10 +1612,18 @@ def call_deepseek(prompt):
 
 def _check_chat_auth(req):
     """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
-    配置了的话要求query参数或header里带code，两种都支持方便不同客户端调用。"""
+    配置了的话按优先级检查三个来源：query参数 > header > Cookie。
+    Cookie这一条是专门为PWA场景加的：iOS"添加到主屏幕"时会把当时地址栏的URL
+    原样存成快捷方式的固定启动地址，如果添加那一刻URL没带上?code=，
+    这个PWA图标就会永远从不带code的地址启动，光靠URL参数校验会导致它永久卡在口令页。
+    加上Cookie之后，只要用户曾经用带code的链接访问成功过一次，之后没带code也能凭Cookie放行。"""
     if not CHAT_ACCESS_CODE:
         return True
-    provided = req.args.get("code") or req.headers.get("X-Chat-Code")
+    provided = (
+        req.args.get("code")
+        or req.headers.get("X-Chat-Code")
+        or req.cookies.get("chat_code")
+    )
     return provided == CHAT_ACCESS_CODE
 
 
@@ -2359,12 +2367,22 @@ def chat_page():
 
     code_param = request.args.get("code", "")
 
-    return render_template(
+    resp = app.make_response(render_template(
         "chat.html",
         avatar_charon=CHAT_AVATAR_CHARON,
         avatar_user=CHAT_AVATAR_USER,
         code_param=code_param,
-    )
+    ))
+
+    # 只要这次是靠URL参数里的code校验通过的，就顺手把它写进Cookie（一年有效期）。
+    # 这样"添加到主屏幕"生成的PWA快捷方式，即便固定用的是不带code的URL启动，
+    # 之后也能靠这个Cookie自动放行，不会永久卡在口令页。
+    # httponly=False是必须的：Service Worker和前端fetch都可能需要读取/依赖这个状态，
+    # 且这不是敏感的登录凭证系统，只是个人使用的轻量访问口令，风险可接受。
+    if CHAT_ACCESS_CODE and code_param == CHAT_ACCESS_CODE:
+        resp.set_cookie("chat_code", CHAT_ACCESS_CODE, max_age=365 * 24 * 3600, samesite="Lax")
+
+    return resp
 
 
 @app.route("/test-trigger", methods=["GET"])
