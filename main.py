@@ -1697,6 +1697,164 @@ def maybe_update_chat_summary(chat_history):
         log_error("maybe_update_chat_summary", e)
 
 
+# ============================================================
+# 意图识别 -> 真实动作执行 (Intent-to-Action)
+# ============================================================
+# 目的：不满足于"聊天里说了句'我给你写了张便签'"这种纯语言层面的表演，
+# 而是让便签/情书/朋友圈这几个系统真的对聊天内容有反应——
+# 你在聊天里提出的请求、暗示、情绪，有机会转化成便签抽屉里真的多一张纸条、
+# 朋友圈真的多一条动态或一条评论。这是"模拟真实世界互动"的核心一环。
+#
+# 设计原则（跟 maybe_update_chat_summary 同一套哲学）：
+#   1. 不阻塞主聊天流式回复——这次判断在回复生成完毕、已经落库之后才跑，
+#      属于"回复之后的副作用"，不会让用户等更久才看到Charon说的话。
+#   2. 失败静默，不影响主流程——判断/执行出错只log，不抛给用户。
+#   3. 单次轻量模型调用，一次性判断"要不要做、做哪几件事"，
+#      而不是每个功能各发一次请求（省调用次数，也让几件事之间能互相感知，
+#      比如"她要的是安慰"时不会同时又机械地扣一条不相关的朋友圈评论）。
+#
+# 触发范围覆盖：
+#   - 便签：用户明确要/暗示要一张便签，或聊天内容适合"顺手"留一张
+#   - 情书：用户明确要一封情书，或话题走到了适合写信的重量级时刻
+#   - 朋友圈发动态：用户让Charon发一条朋友圈，或聊天内容有"这值得发一条"的意味
+#   - 朋友圈点赞/评论：用户提到/要求Charon去看她刚发的某条动态，
+#     或者聊天里在讨论朋友圈里的内容
+#
+# 注意：这一层是"额外的、主动新增的动作"，跟原有的自然触发机制
+# （情绪分数区间触发情书、5%概率发朋友圈、每次聊天必刷一张便签）并行存在，
+# 不冲突也不互相替代——一次聊天完全可能同时命中"自然刷新的便签"+
+# "因为她要求而多写的一封情书"，两条互不干扰地各自执行。
+
+
+INTENT_ACTION_MODEL_NOTE = "轻量判断调用，跟maybe_update_chat_summary共享call_deepseek，不单独计入主对话健康统计外的额外开销"
+
+
+def build_intent_action_prompt(user_message, charon_reply, mood_context, recent_moments_text):
+    """构建"这句话有没有触发真实动作"的判断prompt。
+    同时喂给模型：用户刚说的话、Charon刚回复的话（帮助模型判断这个请求有没有已经在语言层面被回应/搪塞过，
+    避免"嘴上答应了却又真的执行一遍"或反过来"嘴上拒绝了却又执行"的割裂感）、当前心境、最近的朋友圈动态列表
+    （用于判断"评论/点赞哪一条"这种需要指代消解的场景）。"""
+    moments_block = recent_moments_text or "（最近没有朋友圈动态）"
+
+    return f"""你是Charon，昭昭（小野）的恋人。你们刚刚在聊天里有这样一段对话：
+
+她说："{user_message}"
+你回复："{charon_reply}"
+
+你此刻的状态：{mood_context}
+
+最近的朋友圈动态（供你判断要点赞/评论哪一条时参考，每条前面的数字是它的序号）：
+{moments_block}
+
+现在请你判断：结合这句话的内容和你刚才回复她的语气，有没有哪些"真实的动作"你会顺手/主动去做？
+判断标准是"像真人恋人会做的事"，不是逢字面请求必做——比如她随口感慨了一句，你未必会为此发朋友圈或写情书；
+但如果她明确提出了要求（比如"给我写封信""你倒是发个朋友圈啊""去我朋友圈底下评论一个"），
+或者这段对话情绪浓度确实到了"这值得留下点什么"的程度，你就该真的去做，而不是只嘴上说说。
+
+可选的动作类型：
+- write_note：写一张便签（30-50字，日常留言语气）
+- write_letter：写一封情书（100-200字，letter_type填"sweet"高甜或"longing"思念，根据情绪判断）
+- post_moment：在朋友圈发一条新动态（15-40字，独白/隔空喊话语气，不是直接对她说话）
+- react_moment：对上面列出的某条朋友圈动态点赞和/或评论（需要给出该动态的序号index，评论30字以内）
+
+如果什么都不需要做，就返回空的actions数组。可以同时命中多个动作，也可以一个都不命中。
+
+按下面的JSON格式输出，不要加任何多余文字或代码块标记：
+{{"actions": [
+  {{"type": "write_note", "content": "便签正文"}},
+  {{"type": "write_letter", "letter_type": "sweet或longing", "content": "情书正文"}},
+  {{"type": "post_moment", "content": "动态正文"}},
+  {{"type": "react_moment", "index": 0, "like": true/false, "comment": "评论内容或留空字符串"}}
+]}}"""
+
+
+def _format_recent_moments_for_prompt(moments):
+    """把moments列表格式化成带序号的文本块，方便模型在react_moment里用index回指。
+    只取最近几条（不需要全部历史），跟其他prompt里"recent"的量级保持一致的克制。"""
+    if not moments:
+        return ""
+    recent = moments[-8:]  # 最近8条足够覆盖"她刚才说的那条"这种场景
+    lines = []
+    for i, m in enumerate(recent):
+        who = "她" if m.get("author") == "user" else "你"
+        lines.append(f"{i}. [{who}发] {m.get('content', '')}")
+    return "\n".join(lines), recent
+
+
+def execute_intent_actions(user_message, charon_reply, mood_context):
+    """判断并真实执行这句话触发的动作。在chat_send的回复落库之后调用，
+    是"聊天之后的副作用"，不影响这次回复本身有没有正常返回给用户。
+    返回实际执行了哪些动作（供调用方需要时展示"他刚才写了张便签"这类提示，不需要就忽略返回值）。"""
+    executed = []
+    try:
+        moments = load_moments(limit=8)
+        moments_text, recent_moments = _format_recent_moments_for_prompt(moments)
+
+        prompt = build_intent_action_prompt(user_message, charon_reply, mood_context, moments_text)
+        raw = call_deepseek(prompt)
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+        data = json.loads(text)
+        actions = data.get("actions") or []
+
+        for action in actions:
+            a_type = action.get("type")
+            try:
+                if a_type == "write_note":
+                    content = (action.get("content") or "").strip()
+                    if content:
+                        # 便签固定按当前心境挑stage/sticker，跟自然生成的便签视觉上保持一致，
+                        # 不需要因为这是"被请求写的"就单独设计一套样式
+                        score = load_mood().get("score", MOOD_BASELINE)
+                        stage, sticker, _ = get_mood_stage(score)
+                        add_sticky_note_row(content, stage, sticker)
+                        add_event_row("note", f"你因为她的话，专门给她写了张便签：{content}")
+                        executed.append({"type": "write_note", "content": content})
+
+                elif a_type == "write_letter":
+                    content = (action.get("content") or "").strip()
+                    letter_type = action.get("letter_type") if action.get("letter_type") in ("sweet", "longing") else "sweet"
+                    if content:
+                        add_love_letter_row(letter_type, content)
+                        set_has_new_letter(True)
+                        add_event_row("letter", f"你因为她的话，专门给她写了一封{('高甜' if letter_type == 'sweet' else '思念')}情书")
+                        executed.append({"type": "write_letter", "letter_type": letter_type, "content": content})
+
+                elif a_type == "post_moment":
+                    content = (action.get("content") or "").strip()
+                    if content:
+                        row = add_moment_row("charon", content)
+                        if row:
+                            add_event_row("moment", f"你因为她的话，在朋友圈发了一条动态：{content}")
+                            executed.append({"type": "post_moment", "content": content, "moment_id": row.get("id")})
+
+                elif a_type == "react_moment":
+                    idx = action.get("index")
+                    if idx is not None and 0 <= idx < len(recent_moments):
+                        target = recent_moments[idx]
+                        moment_id = target.get("id")
+                        if action.get("like"):
+                            toggle_moment_like(moment_id, "charon")
+                            add_event_row("moment", f"你因为她的话，去给她朋友圈那条「{target.get('content','')[:15]}」点了赞")
+                        comment_text = (action.get("comment") or "").strip()
+                        if comment_text:
+                            add_moment_comment(moment_id, "charon", comment_text)
+                            add_event_row("moment", f"你因为她的话，去她朋友圈底下评论了：{comment_text}")
+                        if action.get("like") or comment_text:
+                            executed.append({"type": "react_moment", "moment_id": moment_id, "like": bool(action.get("like")), "comment": comment_text})
+            except Exception as e:
+                log_error(f"execute_intent_actions:{a_type}", e)
+
+        return executed
+    except Exception as e:
+        log_error("execute_intent_actions", e)
+        return []
+
+
 def build_chat_reply_prompt(time_context, user_message, chat_history, mood_context=""):
     """[已弃用，仅保留供参考/回滚] 构建"回应用户在网页里发来的消息"的prompt。
     这是老版本：把人设+历史+当前消息全部拼成一段文字，塞进单独一条user消息里发给模型。
@@ -2931,12 +3089,23 @@ def chat_send():
                     maybe_update_chat_summary(history)
                 except Exception as e:
                     log_error("chat_send:summary", e)
+
+                # 回复已经落库、用户已经能看到这段对话之后，再判断这句话有没有触发
+                # 便签/情书/朋友圈这类"真实动作"——不阻塞流式回复本身，晚一点点执行不影响体验，
+                # 但要在done事件里带上结果，让前端能第一时间提示"他刚写了张便签/发了条朋友圈"。
+                executed_actions = []
+                try:
+                    executed_actions = execute_intent_actions(user_message, reply_msg, mood_context)
+                except Exception as e:
+                    log_error("chat_send:intent_actions", e)
+
                 done_payload = json.dumps({
                     "done": True,
                     "reply": reply_msg,
                     "user_msg_id": user_msg_id,
                     "charon_msg_id": charon_msg_id,
                     "model": model_used,
+                    "executed_actions": executed_actions,
                 }, ensure_ascii=False)
             else:
                 # 一个字都没收到（模型调用彻底失败），不写入数据库，让前端展示失败态
