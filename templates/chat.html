@@ -1702,9 +1702,23 @@ async function loadModelSelector() {
     const data = await res.json();
     if (!data.ok) return;
     modelSelect.innerHTML = '';
+    // model_health: 每个模型最近的健康状态。healthy=false说明最近连续失败次数够多，
+    // 大概率是这个渠道挂了。用emoji加在名字前面（原生select的option不支持自定义颜色/图标，
+    // emoji是唯一能跨浏览器稳定显示的办法）：✅正常 ⚠️最近老失败，选它之前心里有数。
+    const health = data.model_health || {};
     data.available_models.forEach(m => {
-      const opt = document.createElement('option'); opt.value = m; opt.textContent = MODEL_DISPLAY_NAME[m] || m;
-      if (m === data.current_model) opt.selected = true; modelSelect.appendChild(opt);
+      const opt = document.createElement('option');
+      opt.value = m;
+      const label = MODEL_DISPLAY_NAME[m] || m;
+      const h = health[m];
+      const dot = h && h.healthy === false ? '⚠️ ' : '✅ ';
+      opt.textContent = dot + label;
+      if (h && h.healthy === false && h.last_error) {
+        // title属性：鼠标悬停能看到具体失败原因，不用跳去别的地方查
+        opt.title = '最近失败：' + h.last_error;
+      }
+      if (m === data.current_model) opt.selected = true;
+      modelSelect.appendChild(opt);
     });
   } catch (e) {}
 }
@@ -1739,6 +1753,9 @@ if (window.innerWidth <= 768) { document.getElementById('app').classList.add('ta
 loadHistory();
 loadStatus();
 loadModelSelector();
+// 每2分钟刷新一次模型菜单，让健康状态（哪个模型最近失败了）保持新鲜，
+// 不用你手动刷新页面才能看到最新的红绿点状态。
+setInterval(loadModelSelector, 120000);
 
 // ---- Web Push 订阅 ----
 // urlBase64转Uint8Array：pushManager.subscribe()要求applicationServerKey是这个格式，
