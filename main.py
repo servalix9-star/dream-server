@@ -452,9 +452,11 @@ def delete_event_row(created_at, content_substr):
 def load_chat_history(limit=200, before=None):
     """从 Supabase chat_messages 表读limit条，旧->新顺序。
     before：传入某条消息的created_at时间戳，只取比它更早的记录——用于前端"上滑加载更早的历史"，
-    不传就是原来的行为（取最新的limit条）。"""
+    不传就是原来的行为（取最新的limit条）。
+    model字段：这条消息（如果是charon发的）实际是哪个模型生成的，纯记录用途，
+    前端默认不展示在聊天气泡上，只在双击消息的详情/菜单里可以看到，用户消息这个字段是null。"""
     try:
-        params = {"select": "id,role,content,created_at", "order": "created_at.desc", "limit": limit}
+        params = {"select": "id,role,content,created_at,model", "order": "created_at.desc", "limit": limit}
         if before:
             params["created_at"] = f"lt.{before}"
         rows = _supabase_request("GET", "chat_messages", params=params)
@@ -464,18 +466,28 @@ def load_chat_history(limit=200, before=None):
         return []
 
 
-def add_chat_message_row(msg_id, role, content, created_at=None):
-    _supabase_request("POST", "chat_messages", json_body={
+def add_chat_message_row(msg_id, role, content, created_at=None, model=None):
+    """新增一条聊天消息。model参数只有role="charon"时才有意义
+    （记录这条回复实际是用哪个模型生成的），用户消息不传就是None。"""
+    body = {
         "id": msg_id,
         "role": role,
         "content": content,
         "created_at": created_at or datetime.now().isoformat()
-    })
+    }
+    if model:
+        body["model"] = model
+    _supabase_request("POST", "chat_messages", json_body=body)
 
 
-def update_chat_message_row(msg_id, content):
-    """重新生成功能用：原地覆盖某条消息的content，不新增行、不删旧行。"""
-    _supabase_request("PATCH", "chat_messages", params={"id": f"eq.{msg_id}"}, json_body={"content": content})
+def update_chat_message_row(msg_id, content, model=None):
+    """重新生成功能用：原地覆盖某条消息的content，不新增行、不删旧行。
+    model参数：重新生成回复时，顺手把这次实际用的模型也更新一下
+    （原来的model记录会被覆盖成这次重新生成用的模型，符合"这条消息现在的内容是谁生成的"这个语义）。"""
+    body = {"content": content}
+    if model:
+        body["model"] = model
+    _supabase_request("PATCH", "chat_messages", params={"id": f"eq.{msg_id}"}, json_body=body)
 
 
 def delete_chat_message_row(msg_id):
@@ -499,7 +511,7 @@ def get_chat_message_row(msg_id):
     """按id查单条消息，重新生成/撤回时需要先确认这条消息存在、拿到它的created_at和content。"""
     rows = _supabase_request(
         "GET", "chat_messages",
-        params={"select": "id,role,content,created_at", "id": f"eq.{msg_id}", "limit": 1}
+        params={"select": "id,role,content,created_at,model", "id": f"eq.{msg_id}", "limit": 1}
     )
     return rows[0] if rows else None
 
@@ -2166,46 +2178,52 @@ def chat_edit_resend():
         target_created_at = target.get("created_at", "")
         old_content = target.get("content", "")
 
-        # 截断：删掉这条消息之后的所有对话（用户后续消息+Charon的所有回复），
-        # 同步清理events里对应时间段的记录，避免Charon下次自动醒来时还惦记着已经被覆盖的旧对话。
-        delete_chat_messages_after(target_created_at)
-        delete_events_after(target_created_at)
+        # ---- 关键修复：先尝试生成新回复，成功了才真正动数据库 ----
+        # 之前的写法是"先删除+覆盖，再调用模型"，如果模型调用失败（比如选中的渠道挂了），
+        # 前面的删除/覆盖已经真实生效、无法撤销，但请求整体返回失败，导致前端界面
+        # 显示"看起来没变"（因为回滚了文字），实际数据库里已经被破坏性修改——
+        # 表现出来就是"当下看着没反应，一刷新才发现消息真的被改/删了，还卡住动不了"。
+        # 现在改成：先用"假设编辑已完成"的历史（截断到这条消息、且这条消息内容已经是新的）
+        # 去调用模型，模型调用失败就直接返回错误、什么都不改；只有拿到新回复之后，
+        # 才真正执行删除和覆盖，保证"要么完全成功，要么完全不动"。
+        history_before_edit = load_chat_history()
+        target_index = next((i for i, m in enumerate(history_before_edit) if m.get("id") == msg_id), None)
+        preceding = history_before_edit[:target_index] if target_index is not None else []
+        # 模拟编辑后的这一条，拼进历史供prompt构建使用（不影响数据库，只是内存里的临时列表）
+        simulated_history = preceding + [{"role": "user", "content": new_content, "created_at": target_created_at}]
 
-        # 原地覆盖这条用户消息的内容，不新增行、不改created_at（保持它在时间线上的原有位置）
-        update_chat_message_row(msg_id, new_content)
-
-        # 同步更新events里这条消息自己的记录内容（如果存在的话），跟chat_delete的做法对称
-        delete_event_row(target_created_at, old_content)
-        add_event_row("chat", f"她在网页里说：{new_content}", target_created_at)
-
-        # 用截断后的历史（不含被替换的旧内容和旧回复）构建prompt，生成新的Charon回复。
-        # 编辑重发不额外加情绪分——这是"把已经说过的话修正一下"，不是一次新的互动，
-        # 原消息发送时已经加过一次分，这里只读当前分数（走自然衰减），不再调用recover_mood。
-        history = load_chat_history()  # 此时target这条已经是新内容了，之后的都已删除
         mood_score = apply_mood_decay()
         chat_hours_gap = get_hours_since_last_chat()
         mood_context = get_mood_context(mood_score, chat_hours_gap)
 
+        hour = datetime.now().hour
+        time_context = get_time_context(hour)
+        prompt = build_chat_reply_prompt(time_context, new_content, preceding, mood_context)
+        raw = call_deepseek(prompt)  # 失败会在这里直接抛异常，下面的删除/覆盖都不会执行
+        _, reply_msg = parse_reason_message(raw)
+
+        # ---- 到这里说明模型调用成功，才真正开始动数据库 ----
+        delete_chat_messages_after(target_created_at)
+        delete_events_after(target_created_at)
+        update_chat_message_row(msg_id, new_content)
+        delete_event_row(target_created_at, old_content)
+        add_event_row("chat", f"她在网页里说：{new_content}", target_created_at)
+
         maybe_trigger_sweet_letter(mood_context)
         maybe_trigger_longing_letter(mood_context)
 
-        hour = datetime.now().hour
-        time_context = get_time_context(hour)
-        prompt = build_chat_reply_prompt(time_context, new_content, history, mood_context)
-        raw = call_deepseek(prompt)
-        _, reply_msg = parse_reason_message(raw)
-
         charon_msg_id = new_msg_id()
-        add_chat_message_row(charon_msg_id, "charon", reply_msg)
+        add_chat_message_row(charon_msg_id, "charon", reply_msg, model=get_current_model())
 
-        maybe_update_chat_summary(history)
+        maybe_update_chat_summary(simulated_history)
 
         return jsonify({
             "ok": True,
             "user_msg_id": msg_id,
             "new_content": new_content,
             "reply": reply_msg,
-            "charon_msg_id": charon_msg_id
+            "charon_msg_id": charon_msg_id,
+            "model": get_current_model()
         })
     except Exception as e:
         log_error("chat_edit_resend", e)
@@ -2260,7 +2278,7 @@ def chat_send():
         _, reply_msg = parse_reason_message(raw)
 
         charon_msg_id = new_msg_id()
-        add_chat_message_row(charon_msg_id, "charon", reply_msg)
+        add_chat_message_row(charon_msg_id, "charon", reply_msg, model=get_current_model())
 
         # 顺手检查一下要不要更新滚动摘要（只在对话变长之后才会真正触发，不影响每次的响应速度）
         maybe_update_chat_summary(history)
@@ -2269,7 +2287,8 @@ def chat_send():
             "ok": True,
             "reply": reply_msg,
             "user_msg_id": user_msg_id,
-            "charon_msg_id": charon_msg_id
+            "charon_msg_id": charon_msg_id,
+            "model": get_current_model()
         })
     except Exception as e:
         log_error("chat_send", e)
@@ -2320,9 +2339,9 @@ def chat_regenerate():
         _, reply_msg = parse_reason_message(raw)
 
         # 原地覆盖这条消息的内容，不新增行
-        update_chat_message_row(msg_id, reply_msg)
+        update_chat_message_row(msg_id, reply_msg, model=get_current_model())
 
-        return jsonify({"ok": True, "id": msg_id, "reply": reply_msg})
+        return jsonify({"ok": True, "id": msg_id, "reply": reply_msg, "model": get_current_model()})
     except Exception as e:
         log_error("chat_regenerate", e)
         return jsonify({"ok": False, "error": str(e)}), 500
