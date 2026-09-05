@@ -205,16 +205,40 @@ DEFAULT_MODEL_REGISTRY = {
     # 注意：2026年Google把AI Studio新发的key格式从AIza换成了AQ.，
     # AQ.格式key在OpenAI兼容端点（/v1beta/openai/chat/completions）会返回401，
     # 但在原生端点（generativelanguage.googleapis.com，用x-goog-api-key header传key）工作正常，
-    # 所以这两个模型走api_style=gemini_native，不能用openai_compatible的payload格式。
-    # 已实测确认：gemini-official-flash 技术上能通，但Google官方内容审核对亲密向对话
-    # 容易判定为PROHIBITED_CONTENT直接拦截；gemini-official-pro 在免费层配额为0（quota limit: 0），
-    # 需要项目开通计费才能用。这里先默认关闭（active=False），等后续视情况决定是否启用，
-    # 保留配置是为了不用重新写一遍，改一下active就能试。
+    # 所以这几个模型都走api_style=gemini_native，不能用openai_compatible的payload格式。
+    #
+    # 之前实测gemini-official-flash（用gemini-3.6-flash）连接完全正常，只是有一次被判定为
+    # PROHIBITED_CONTENT拦截，怀疑是对话内容触发了默认的安全过滤级别。现在在_call_model_raw里
+    # 给gemini_native分支统一加了safety_settings（四个类别都设为BLOCK_NONE，见下方GEMINI_SAFETY_SETTINGS），
+    # 尝试放宽过滤。需要说明：Google对"色情内容"这一类别的过滤，即使设了BLOCK_NONE，
+    # 在某些情况下也不保证完全不拦截（这是Google侧的策略，不是代码能完全控制的），
+    # 所以这几个模型仍建议留一个非Gemini的备选，别完全依赖它们。
+    #
+    # pro系列（gemini-3.1-pro-preview）之前实测在免费层配额为0（quota limit: 0），
+    # 需要项目开通计费才能用，这里继续保持关闭。
     "gemini-official-flash": {
-        "active": False,
+        "active": True,
         "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
         "api_key_env": "GEMINI_API_KEY",
         "real_model": "gemini-3.6-flash",
+        "supports_thinking": False,
+        "thinking": "disabled",
+        "api_style": "gemini_native",
+    },
+    "gemini-3.5-flash": {
+        "active": True,
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+        "api_key_env": "GEMINI_API_KEY",
+        "real_model": "gemini-3.5-flash",
+        "supports_thinking": False,
+        "thinking": "disabled",
+        "api_style": "gemini_native",
+    },
+    "gemini-3.5-flash-lite": {
+        "active": True,
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "api_key_env": "GEMINI_API_KEY",
+        "real_model": "gemini-3.5-flash-lite",
         "supports_thinking": False,
         "thinking": "disabled",
         "api_style": "gemini_native",
@@ -229,6 +253,16 @@ DEFAULT_MODEL_REGISTRY = {
         "api_style": "gemini_native",
     },
 }
+
+# Gemini原生接口的安全过滤设置：四个类别统一设为BLOCK_NONE（不拦截）。
+# 说明：Google对HARM_CATEGORY_SEXUALLY_EXPLICIT这一类的过滤，即使设了BLOCK_NONE，
+# 也不保证在所有情况下都完全放行——这是Google服务端策略决定的，代码层面能做的只有这么多。
+GEMINI_SAFETY_SETTINGS = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+]
 
 DEFAULT_MODEL = "deepseek-v4-flash"
 
@@ -1677,6 +1711,7 @@ def _call_model_raw(prompt):
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 1.2},
+            "safetySettings": GEMINI_SAFETY_SETTINGS,
         }
         resp = requests.post(
             provider["base_url"],
