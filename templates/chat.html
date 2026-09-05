@@ -164,8 +164,9 @@
   }
   #header .sub { font-size: 11px; color: rgba(255, 255, 255, 0.7); letter-spacing: 1px; margin-top: 3px; display: flex; align-items: center; gap: 6px; }
   .status-badge { background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); padding: 1px 7px; border-radius: 5px; font-size: 10px; color: #ffffff; display: inline-flex; align-items: center; gap: 4px; }
-  #model-select { margin-left: 6px; font-size: 10px; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 5px; padding: 1px 4px; max-width: 150px; outline: none; }
+  #model-select { font-size: 10px; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 5px; padding: 1px 4px; max-width: 150px; outline: none; }
   #model-select option { color: #000; }
+  .model-select-wrap { display: inline-flex; align-items: center; gap: 4px; }
   .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #84cc9a; display: inline-block; box-shadow: 0 0 6px #84cc9a; }
   .status-dot.low { background: #c3a1ad; box-shadow: 0 0 6px #c3a1ad; }
   
@@ -475,7 +476,7 @@
         <div class="brand">CHARON</div>
         <div class="sub">
           <span class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></span>
-          <span class="status-badge"><span class="status-dot" id="model-status-dot"></span><select id="model-select" title="选择模型"></select></span>
+          <span class="model-select-wrap"><span class="status-dot" id="model-status-dot"></span><select id="model-select" title="选择模型"></select></span>
         </div>
       </div>
       <div class="header-signature-wrap">
