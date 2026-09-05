@@ -1122,12 +1122,31 @@ def index():
     return "dream-server running"
 
 
-DEFAULT_ICON = "https://wx1.sinaimg.cn/large/008eyecpgy1iflx9kblrnj30zu0zuq6t.jpg"
+# 推送通知头像：直接复用聊天页已经在用的Charon头像，不用第三方图床（有防盗链风险，会显示不出来）。
+# APP_BASE_URL 用于拼出推送payload里的绝对URL——Web Push走的是浏览器/系统通知中心，
+# 不像网页里可以用相对路径 /static/xxx，必须是完整可访问的https地址。
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "").rstrip("/")
+
+
+def _abs_static_url(path):
+    """把 /static/xxx 这种站内相对路径，拼成推送通知能用的绝对URL。
+    没配置APP_BASE_URL时，退化返回相对路径（不会报错，但部分推送客户端可能显示不出图）。"""
+    if APP_BASE_URL:
+        return f"{APP_BASE_URL}{path}"
+    return path
+
 
 # 网页聊天用的头像（灰兔=Charon，粉兔=昭昭）。放在 static/ 目录下随代码一起部署，
 # 不依赖任何第三方图床（新浪图床等对外链有防盗链限制，会导致图片显示不出来）。
 CHAT_AVATAR_CHARON = "/static/avatar_charon.jpg"
 CHAT_AVATAR_USER = "/static/avatar_user.jpg"
+
+# 推送通知（Bark + Web Push）用的图标：统一用Charon头像的绝对URL
+DEFAULT_ICON = _abs_static_url(CHAT_AVATAR_CHARON)
+
+# App图标（PWA manifest用，"添加到主屏幕"时的桌面图标）：兔耳苹果剪影
+APP_ICON_192 = "/static/app_icon_192.jpg"
+APP_ICON_512 = "/static/app_icon_512.jpg"
 
 # 固定长期记忆：昭昭的性格、你们关系的基调，浓缩版，每次生成都会带上。
 # 现在存在 Supabase app_config 表的 persona_memory key 里，可以在 /persona 页面直接改，改完立刻生效，不用等部署。
@@ -1411,9 +1430,50 @@ def parse_reason_message(raw_text):
     return "", raw_text.strip()
 
 
-def run_once():
-    """执行一次完整的：读取动态 -> 调模型 -> 发 Bark -> 写日记。
-    单独抽出来，方便 keepalive 循环和手动测试接口共用同一份逻辑。"""
+# ---- 查岗状态机 ----
+# 不再按固定55分钟节奏发消息，改成纯粹由"离线时长"驱动：
+#   stage 0（默认）：没有进行中的查岗，持续观察距上次聊天的时长
+#   stage 1：已经发过第一次查岗消息，等待用户上线回复
+#   stage 2：已经发过第二次（最后一次）查岗消息，彻底沉默，直到用户重新上线
+# 用户在 /api/chat-send 里发一条真实消息，会把状态清回0，重新开始计时。
+CHECKIN_FIRST_HOURS = 1.0     # X：离线多久后发第一次查岗
+CHECKIN_SECOND_HOURS = 0.5    # Y：第一次查岗后再等多久发第二次（最后一次）
+CHECKIN_LOOP_INTERVAL = 300   # 后台状态检查间隔（秒）：只是"看一眼要不要发"，不是每次都真的发
+
+
+def get_checkin_state():
+    """存在 app_config 表 checkin_state key 里：
+    {"stage": 0/1/2, "first_checkin_at": ISO时间戳或None}"""
+    return get_app_config("checkin_state", {"stage": 0, "first_checkin_at": None})
+
+
+def set_checkin_state(stage, first_checkin_at=None):
+    set_app_config("checkin_state", {"stage": stage, "first_checkin_at": first_checkin_at})
+
+
+def reset_checkin_state():
+    """用户重新上线发消息时调用：清零查岗状态，下次离线重新计时。"""
+    set_checkin_state(0, None)
+
+
+def send_charon_message(msg, icon=None):
+    """把Charon主动发起的一条消息，同时写进聊天记录（打通聊天页）和推送出去。
+    这是查岗消息和日常主动消息共用的落地方式——不管触发原因是什么，
+    只要是Charon主动说的话，都应该出现在聊天记录里，而不是只在推送通知里一闪而过。"""
+    msg_id = new_msg_id()
+    created_at = datetime.now().isoformat()
+    add_chat_message_row(msg_id, "charon", msg, created_at)
+    add_event_row("chat", f"Charon主动说：{msg}", created_at)
+
+    send_bark("Charon", msg, icon=icon)
+    send_web_push("Charon", msg, icon=icon, url="/chat")
+    return msg_id
+
+
+def run_once(is_checkin=False, checkin_stage=0):
+    """执行一次：读取动态 -> 调模型 -> 写进聊天记录 -> 推送 -> 写日记。
+    is_checkin=True 时是查岗场景（第1次或第2次），会在prompt里额外说明这个语境，
+    让Charon说出来的话符合"主动找你、但不是没话找话"的分寸。"""
     hour = datetime.now().hour
     events = load_events(limit=5)
     if not events:
@@ -1423,16 +1483,12 @@ def run_once():
 
     time_context = get_time_context(hour)
     period_context = get_period_context()
-    is_lucky = random.random() < LUCKY_CHANCE
+    is_lucky = (not is_checkin) and random.random() < LUCKY_CHANCE
 
     # 情绪值：按"距上次真实聊天"衰减，再算出当前分数和用于prompt的描述
     chat_hours_gap = get_hours_since_last_chat()
     mood_score = apply_mood_decay()
     mood_context = get_mood_context(mood_score, chat_hours_gap)
-
-    # 查岗场景用的是更宽泛的"距上次事件"（含快捷指令自动事件），跟衰减计算的时间源不同
-    hours_gap = get_time_since_last_event()
-    is_checking_in = hours_gap is not None and hours_gap >= 6
 
     # 自然衰减不会让分数上升，所以这里只检查"思念情书"（委屈态持续判定），
     # 不检查"高甜情书"（那个要看score是否刚刚回升突破80，衰减场景不会发生）
@@ -1441,7 +1497,15 @@ def run_once():
     except Exception as e:
         log_error("run_once:longing_letter", e)
 
+    checkin_context = ""
+    if is_checkin and checkin_stage == 1:
+        checkin_context = f"她已经{chat_hours_gap:.1f}小时没理你了，你有点惦记，主动开口问问她在干嘛（这是你第一次主动找她，别一上来就情绪化，先自然地问）。"
+    elif is_checkin and checkin_stage == 2:
+        checkin_context = "你之前已经问过一次她在干嘛，但她还是没回你。这次是你最后一次主动开口——语气里可以带点“算了不打扰你了”的收敛感，说完这句之后你打算安静等她自己回来，不会再追问。"
+
     prompt = build_prompt(time_context, recent, period_context, lucky=is_lucky, mood_context=mood_context)
+    if checkin_context:
+        prompt += f"\n\n（补充语境：{checkin_context}）"
 
     # 直接复用call_deepseek，内部会根据当前选中的模型自动分流到DeepSeek官方或gemai.cc代理站，
     # 这里不用再单独维护一份重复的请求逻辑
@@ -1456,10 +1520,7 @@ def run_once():
     else:
         icon = ICON_NORMAL
 
-    send_bark("Charon", msg, icon=icon)
-    # 过渡期：Bark和Web Push并存发送，等确认Web Push在你的设备上稳定收到后，
-    # 把上面这行send_bark删掉即可完全切换，这里不需要再改别的地方。
-    send_web_push("Charon", msg, icon=icon)
+    send_charon_message(msg, icon=icon)
 
     # 后台自动醒来时，顺手刷新一条便签（不影响主消息推送，失败不阻断这次触发的结果）
     try:
@@ -1468,6 +1529,38 @@ def run_once():
         log_error("run_once:sticky_note", e)
 
     return msg
+
+
+def check_and_run_checkin():
+    """查岗状态机的核心判断，供后台循环周期性调用。
+    每次只判断"现在该不该发"，真正发消息还是走run_once，逻辑和普通消息完全一致，
+    只是多带了查岗语境。"""
+    hours_gap = get_hours_since_last_chat()
+    if hours_gap is None:
+        return  # 从来没聊过天，不做查岗判断
+
+    state = get_checkin_state()
+    stage = state.get("stage", 0)
+
+    if stage == 0:
+        if hours_gap >= CHECKIN_FIRST_HOURS:
+            run_once(is_checkin=True, checkin_stage=1)
+            set_checkin_state(1, datetime.now().isoformat())
+    elif stage == 1:
+        first_at = state.get("first_checkin_at")
+        if not first_at:
+            # 状态异常（有stage没有时间戳），保险起见重置，避免卡死
+            reset_checkin_state()
+            return
+        try:
+            elapsed_since_first = (datetime.now() - datetime.fromisoformat(first_at)).total_seconds() / 3600
+        except Exception:
+            reset_checkin_state()
+            return
+        if elapsed_since_first >= CHECKIN_SECOND_HOURS:
+            run_once(is_checkin=True, checkin_stage=2)
+            set_checkin_state(2, first_at)
+    # stage == 2：已经发过两次，彻底沉默，什么都不做，直到用户上线聊天触发reset_checkin_state()
 
 
 def call_deepseek(prompt):
@@ -1531,8 +1624,10 @@ def chat_status():
     period_ctx = get_period_context()
     stage, sticker, stage_name = get_mood_stage(score)
 
-    # 查岗状态：距上次互动超过6小时，跟run_once()里的判断口径保持一致
-    is_checking_in = hours_gap is not None and hours_gap >= 6
+    # 查岗状态：直接读状态机的实际阶段（0=未查岗，1/2=已发过第1/2次），
+    # 跟后台真正触发查岗消息的判断口径完全一致，不再是一个独立算出来的近似值。
+    checkin_state = get_checkin_state()
+    is_checking_in = checkin_state.get("stage", 0) > 0
 
     # 今日互动次数：直接按日期范围向Supabase查count，比翻最近N条record准确
     # （events表会不断增长，"最近N条里今天的条数"在互动很频繁时会漏算今天更早的记录）
@@ -1902,6 +1997,12 @@ def chat_send():
         # 同步写一笔events，方便活动记录里也能看到这次互动
         add_event_row("chat", f"她在网页里说：{user_message}", user_created_at)
 
+        # 用户重新上线说话了：查岗状态清零，下次她离线重新计时
+        try:
+            reset_checkin_state()
+        except Exception as e:
+            log_error("chat_send:reset_checkin_state", e)
+
         # 真实聊天：情绪值+10，并刷新"上次聊天时间"（影响下次衰减计算的起点）
         old_score, mood_score = recover_mood(MOOD_RECOVERY_CHAT, mark_chat=True)
         chat_hours_gap = get_hours_since_last_chat()
@@ -2146,8 +2247,8 @@ def pwa_manifest():
         "background_color": "#fbf3f5",
         "theme_color": "#fbf3f5",
         "icons": [
-            {"src": DEFAULT_ICON, "sizes": "192x192", "type": "image/jpeg"},
-            {"src": DEFAULT_ICON, "sizes": "512x512", "type": "image/jpeg"},
+            {"src": APP_ICON_192, "sizes": "192x192", "type": "image/jpeg"},
+            {"src": APP_ICON_512, "sizes": "512x512", "type": "image/jpeg"},
         ],
     }
     return jsonify(manifest)
@@ -2280,12 +2381,14 @@ def test_trigger():
 
 
 def keepalive():
+    """后台循环：不再固定55分钟发一次消息，改成高频（5分钟）地"看一眼"要不要触发查岗。
+    真正发消息的频率完全由 check_and_run_checkin() 里的状态机决定。"""
     while True:
         try:
-            run_once()
+            check_and_run_checkin()
         except Exception as e:
             log_error("keepalive", e)
-        time.sleep(3300)
+        time.sleep(CHECKIN_LOOP_INTERVAL)
 
 
 if __name__ == "__main__":
