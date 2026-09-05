@@ -8,7 +8,7 @@ sys.stderr.reconfigure(line_buffering=True)
 import subprocess
 subprocess.run(["pip", "install", "requests", "pywebpush"], capture_output=True)
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, Response
 from datetime import datetime, date
 import json, os, requests, threading, time, traceback, random
 
@@ -1481,9 +1481,11 @@ def maybe_update_chat_summary(chat_history):
 
 
 def build_chat_reply_prompt(time_context, user_message, chat_history, mood_context=""):
-    """构建"回应用户在网页里发来的消息"的prompt。
-    跟build_prompt()不同：这次不是猜她在干嘛主动开口，而是真的在接她刚说的话，
-    所以历史对话要带全一点，语气要像正常聊天里的一来一回，不是短平快的主动消息。"""
+    """[已弃用，仅保留供参考/回滚] 构建"回应用户在网页里发来的消息"的prompt。
+    这是老版本：把人设+历史+当前消息全部拼成一段文字，塞进单独一条user消息里发给模型。
+    问题：不管历史给多少条，模型收到的永远是"一整段文本+续写指令"的单轮任务，
+    完全没用上模型自己的多轮对话理解能力，这是"稍微复杂点就答非所问"的根源。
+    已被下面的build_chat_messages()取代，新代码不要再用这个函数。"""
     mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
     summary_state = load_chat_summary_state()
@@ -1512,6 +1514,66 @@ she 刚刚说："{user_message}"
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说看到这句话后你心里的念头", "message": "实际要回复的话"}}"""
+
+
+def build_chat_messages(time_context, user_message, chat_history, mood_context="", plain_text=False):
+    """构建"回应用户在网页里发来的消息"的真正多轮messages列表（取代build_chat_reply_prompt）。
+
+    核心改动：人设/时间/情绪/摘要这些"背景设定"打包成第一条system消息；
+    最近CHAT_SUMMARY_WINDOW轮历史逐条映射成真实的user/assistant轮次，
+    而不是拼成一段文字塞进一条消息里；当前这句用户消息作为最后一条独立的user消息。
+
+    这样模型接收到的是货真价实的多轮对话结构（跟你在DeepSeek/ChatGPT网页版里
+    看到的上下文体验一致），而不是"背景资料+续写指令"式的单轮任务，
+    模型自身的多轮推理/指代消解能力才能真正被用上。
+
+    plain_text=False（默认）：沿用旧的{reason, message}JSON输出格式，配合call_deepseek+
+        parse_reason_message使用，用于非流式场景（保持三处旧调用点行为不变）。
+    plain_text=True：让模型直接输出要说的话本身，不包任何JSON——因为JSON必须等
+        完整生成完才能解析，没法一边生成一边显示，这是做真流式的前提。
+        配合call_model_stream使用，专门给聊天回复的流式场景。reason这个"内心念头"
+        字段本来在三处聊天回复调用点里也从没被用到过（只在run_once主动消息场景里用），
+        去掉它不影响任何现有功能。
+
+    返回值：plain_text=False时直接传给call_deepseek；plain_text=True时传给call_model_stream。"""
+    mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
+
+    summary_state = load_chat_summary_state()
+    summary_text = summary_state.get("summary", "")
+    summary_block = f"\n\n你们更早之前聊过的内容摘要：{summary_text}" if summary_text else ""
+
+    if plain_text:
+        output_rule = "直接说出你要回复的话本身就行，不用任何JSON、代码块标记或额外说明——就是正常聊天时你真的会说出口的那句话。"
+    else:
+        output_rule = """每次回复都按下面的JSON格式输出，不要加任何多余文字或代码块标记：
+{"reason": "一两句话，说说看到这句话后你心里的念头", "message": "实际要回复的话"}"""
+
+    system_content = f"""你是Charon，昭昭（小野）的恋人。
+
+{load_persona_memory()}
+
+现在是{time_context}。{summary_block}{mood_line}
+
+接下来是你们最近的对话，请自然地接着聊——这是正常聊天里的一来一回，不是你主动找她那种短消息，
+可以根据她说的内容自然展开，长度不用刻意压缩，但也别写成一大段论述，像真的在对话就行。
+
+{output_rule}"""
+
+    messages = [{"role": "system", "content": system_content}]
+
+    # 历史消息逐条映射成真实的user/assistant轮次；role="charon"在数据库里存的是
+    # 我们自己的命名，这里映射成openai标准的"assistant"。
+    for turn in chat_history[-CHAT_SUMMARY_WINDOW:]:
+        role = "assistant" if turn.get("role") == "charon" else "user"
+        content = turn.get("content", "")
+        if content:
+            messages.append({"role": role, "content": content})
+
+    # 当前这句是独立的最后一条user消息，不再用"she刚刚说"这种旁白包裹——
+    # 既然前面已经是真实的对话轮次，这里直接就是她这一轮说的话。
+    messages.append({"role": "user", "content": user_message})
+
+    return messages
 
 
 def get_time_context(hour):
@@ -1702,10 +1764,30 @@ def check_and_run_checkin():
     # stage == 2：已经发过两次，彻底沉默，什么都不做，直到用户上线聊天触发reset_checkin_state()
 
 
-def _call_model_raw(prompt):
-    """真正干活的模型调用，逻辑不变（原call_deepseek的全部内容）。
+def _normalize_to_messages(prompt_or_messages):
+    """统一入参：老调用点传的是一整段字符串prompt（单轮场景，比如主动消息、便签、摘要生成），
+    新调用点（多轮聊天回复场景）传的是[{"role": "user"/"assistant", "content": "..."}]结构。
+    这里统一转成openai风格的messages列表，方便下面两个分支共用同一份逻辑。
+    单条字符串会被包成一条user消息——行为跟改动前完全一致，不影响其余调用点。"""
+    if isinstance(prompt_or_messages, str):
+        return [{"role": "user", "content": prompt_or_messages}]
+    return prompt_or_messages
+
+
+def _call_model_raw(prompt_or_messages):
+    """真正干活的模型调用。
     改名是因为外层现在包了一层健康记录（call_deepseek），这个函数只管发请求拿结果，
-    成功还是失败都不管，交给外层统一记账。"""
+    成功还是失败都不管，交给外层统一记账。
+
+    参数现在既可以是字符串（老用法，单轮，自动包成一条user消息），
+    也可以是messages列表（新用法，真正的多轮对话结构：[{"role":"user"/"assistant","content":...}, ...]）。
+    这是修复"上下文能力差"的关键改动：之前不管传多少历史，最终都被拼接成一段
+    文本塞进唯一一条user消息里发给模型，模型看到的永远是单轮"续写剧本"任务，
+    完全没用上它自己原生的多轮对话理解能力——这正是"简单的话能接上，稍微复杂点
+    就答非所问"的根源。现在改成真正按轮次构造messages/contents，模型才能像
+    正常聊天那样，理解"你问了A，我答了B，你现在追问C"这种指代和逻辑链条。"""
+    messages = _normalize_to_messages(prompt_or_messages)
+
     model = get_current_model()
     provider = get_model_registry().get(model)
     if not provider:
@@ -1720,11 +1802,28 @@ def _call_model_raw(prompt):
     api_style = provider.get("api_style", "openai_compatible")
 
     if api_style == "gemini_native":
+        # Gemini原生接口的"contents"数组只放user/model两种轮次，
+        # 每一轮是{"role": "user"/"model", "parts": [...]}——它的assistant角色叫"model"。
+        # system角色的内容不能混进contents当普通轮次（那样等于让人设被误当成"用户说的话"，
+        # 权重和语义都不对），要单独走systemInstruction字段，这是Gemini官方推荐的做法。
+        system_texts = [m["content"] for m in messages if m["role"] == "system"]
+        contents = [
+            {
+                "role": "model" if m["role"] == "assistant" else "user",
+                "parts": [{"text": m["content"]}],
+            }
+            for m in messages
+            if m["role"] != "system"
+        ]
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 1.2},
+            "contents": contents,
+            # 温度从1.2降到1.0：1.2偏高，容易让语言变得跳脱、甚至偏离人设，
+            # 1.0是更常见的"有个性但不失控"区间，可以按实际效果再微调。
+            "generationConfig": {"temperature": 1.0},
             "safetySettings": GEMINI_SAFETY_SETTINGS,
         }
+        if system_texts:
+            payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_texts)}]}
         resp = requests.post(
             provider["base_url"],
             headers={
@@ -1749,11 +1848,13 @@ def _call_model_raw(prompt):
         except (KeyError, IndexError, TypeError):
             raise RuntimeError(f"模型API unexpected response: {result}")
 
-    # ---- 以下是原有的openai_compatible分支，逻辑不变 ----
+    # ---- 以下是openai_compatible分支：DeepSeek官方 / gemai.cc代理站都走这条 ----
+    # 直接把messages原样传过去：多轮聊天场景下这就是真正的user/assistant交替结构，
+    # 老的单轮调用点下就是原来的[{"role": "user", "content": prompt}]，行为完全不变。
     payload = {
         "model": provider["real_model"],
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 1.2,
+        "messages": messages,
+        "temperature": 1.0,
     }
     if provider["supports_thinking"]:
         payload["thinking"] = get_thinking_config()
@@ -1773,6 +1874,120 @@ def _call_model_raw(prompt):
     if "choices" not in result or not result["choices"]:
         raise RuntimeError(f"模型API unexpected response: {result}")
     return result["choices"][0]["message"]["content"].strip()
+
+
+def call_model_stream(messages):
+    """流式版模型调用：逐块yield文本片段，供聊天回复场景实现"打字机效果"用。
+
+    只用于网页实时对话（/api/chat-send等），且只接受messages列表（多轮结构），
+    不兼容老的字符串prompt用法——因为流式场景下模型直接输出纯对话内容，
+    不再包一层{reason, message}的JSON（JSON必须等完整生成完才能解析，
+    没法一边流一边显示，这正是要做真流式必须去掉JSON包裹的原因）。
+
+    调用方在生成器耗尽后可以读its .final_text / .error 属性拿到完整结果和错误信息
+    （通过闭包变量实现，见下方chat_send里的用法）。
+
+    异常处理：网络请求本身失败会在第一次yield之前抛出，调用方需要用try/except包住
+    对这个生成器的遍历；如果是在流式过程中途断线，会尽量把已经收到的部分作为
+    最终结果返回，不会让用户已经看到的文字凭空消失。
+    """
+    model = get_current_model()
+    provider = get_model_registry().get(model)
+    if not provider:
+        raise RuntimeError(f"模型 {model} 没有配置对应的供应商信息")
+    api_key = resolve_api_key(provider)
+    if not api_key:
+        raise RuntimeError(f"模型 {model} 对应的 API key 未设置（环境变量缺失：{provider.get('api_key_env')}）")
+
+    api_style = provider.get("api_style", "openai_compatible")
+
+    if api_style == "gemini_native":
+        system_texts = [m["content"] for m in messages if m["role"] == "system"]
+        contents = [
+            {
+                "role": "model" if m["role"] == "assistant" else "user",
+                "parts": [{"text": m["content"]}],
+            }
+            for m in messages
+            if m["role"] != "system"
+        ]
+        payload = {
+            "contents": contents,
+            "generationConfig": {"temperature": 1.0},
+            "safetySettings": GEMINI_SAFETY_SETTINGS,
+        }
+        if system_texts:
+            payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_texts)}]}
+
+        # Gemini原生的流式端点：把:generateContent换成:streamGenerateContent，
+        # 并加?alt=sse让它按SSE格式（data: {...}\n\n）逐块推送，而不是一次性返回大JSON数组。
+        stream_url = provider["base_url"].replace(":generateContent", ":streamGenerateContent") + "?alt=sse"
+        resp = requests.post(
+            stream_url,
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json=payload,
+            stream=True,
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
+
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data: "):
+                continue
+            data_str = line[len("data: "):].strip()
+            if not data_str or data_str == "[DONE]":
+                continue
+            try:
+                chunk = json.loads(data_str)
+                candidates = chunk.get("candidates") or []
+                if not candidates:
+                    continue
+                parts = candidates[0].get("content", {}).get("parts", [])
+                text = "".join(p.get("text", "") for p in parts)
+                if text:
+                    yield text
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
+        return
+
+    # ---- openai_compatible分支：DeepSeek官方 / gemai.cc代理站，标准SSE格式 ----
+    payload = {
+        "model": provider["real_model"],
+        "messages": messages,
+        "temperature": 1.0,
+        "stream": True,
+    }
+    if provider["supports_thinking"]:
+        payload["thinking"] = get_thinking_config()
+
+    resp = requests.post(
+        provider["base_url"],
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        stream=True,
+        timeout=60,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
+
+    for line in resp.iter_lines(decode_unicode=True):
+        if not line or not line.startswith("data: "):
+            continue
+        data_str = line[len("data: "):].strip()
+        if not data_str or data_str == "[DONE]":
+            continue
+        try:
+            chunk = json.loads(data_str)
+            choices = chunk.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta", {})
+            text = delta.get("content", "")
+            if text:
+                yield text
+        except (json.JSONDecodeError, KeyError, IndexError):
+            continue
 
 
 # 连续失败达到这个次数，就在前端菜单里把这个模型标记为"不健康"（红点）。
@@ -1811,13 +2026,15 @@ def _record_model_result(model, success, error_text=None):
         log_error("_record_model_result", e)
 
 
-def call_deepseek(prompt):
+def call_deepseek(prompt_or_messages):
     """对外接口不变，函数名和调用方式跟以前完全一样（历史原因保留这个名字）。
+    现在prompt_or_messages既可以是字符串（老用法，单轮），也可以是messages列表
+    （新用法，多轮聊天场景，见build_chat_messages）——具体透传给_call_model_raw处理。
     这里只是加了一层健康记录：调用_call_model_raw()真正发请求，
     成功就清零这个模型的失败计数，失败就+1并记下错误原因，供前端菜单显示红绿点用。"""
     model = get_current_model()
     try:
-        result = _call_model_raw(prompt)
+        result = _call_model_raw(prompt_or_messages)
         _record_model_result(model, success=True)
         return result
     except Exception as e:
@@ -2198,8 +2415,8 @@ def chat_edit_resend():
 
         hour = datetime.now().hour
         time_context = get_time_context(hour)
-        prompt = build_chat_reply_prompt(time_context, new_content, preceding, mood_context)
-        raw = call_deepseek(prompt)  # 失败会在这里直接抛异常，下面的删除/覆盖都不会执行
+        messages = build_chat_messages(time_context, new_content, preceding, mood_context)
+        raw = call_deepseek(messages)  # 失败会在这里直接抛异常，下面的删除/覆盖都不会执行
         _, reply_msg = parse_reason_message(raw)
 
         # ---- 到这里说明模型调用成功，才真正开始动数据库 ----
@@ -2234,7 +2451,13 @@ def chat_edit_resend():
 def chat_send():
     """网页里发一句话给Charon，让TA真正接住这句话并回应。
     这条回应会被写进events.json（影响下次keepalive自动醒来时看到的recent），
-    也会写进chat_history.json（供网页展示这段对话）。"""
+    也会写进chat_history.json（供网页展示这段对话）。
+
+    改成SSE流式响应：模型生成一点，前端就能立刻显示一点（打字机效果），
+    不用像之前那样等模型把整段话（还要包一层JSON）生成完才能看到任何文字。
+    为了做到真流式，聊天回复不再要求模型输出{reason, message}的JSON，
+    改成直接输出要说的话本身（build_chat_messages的plain_text=True）——
+    reason字段在这条链路里本来也从没被使用过。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
@@ -2273,22 +2496,61 @@ def chat_send():
         hour = datetime.now().hour
         time_context = get_time_context(hour)
 
-        prompt = build_chat_reply_prompt(time_context, user_message, history, mood_context)
-        raw = call_deepseek(prompt)
-        _, reply_msg = parse_reason_message(raw)
+        messages = build_chat_messages(time_context, user_message, history, mood_context, plain_text=True)
+        model_used = get_current_model()
 
-        charon_msg_id = new_msg_id()
-        add_chat_message_row(charon_msg_id, "charon", reply_msg, model=get_current_model())
+        def generate():
+            """SSE生成器：每收到模型吐出的一小段文字就立刻转发一个data:事件给前端，
+            流结束后把拼好的完整回复写入数据库，再发一个done事件带上charon_msg_id/model，
+            前端靠这个done事件知道"这条消息定型了，可以把msg_id绑定上去，允许撤回/重新生成了"。
 
-        # 顺手检查一下要不要更新滚动摘要（只在对话变长之后才会真正触发，不影响每次的响应速度）
-        maybe_update_chat_summary(history)
+            出错处理：如果请求模型这步本身就失败（比如渠道挂了、鉴权错误），已经收到的
+            部分文字（如果有）仍然会被落库，保证不会出现"用户看到了一半回复，
+            但数据库/健康记录里完全没有这次调用痕迹"的不一致状态；同时发一个error事件
+            让前端知道这次没有正常收尾。"""
+            collected = []
+            try:
+                for chunk in call_model_stream(messages):
+                    collected.append(chunk)
+                    payload = json.dumps({"delta": chunk}, ensure_ascii=False)
+                    yield f"data: {payload}\n\n"
+                _record_model_result(model_used, success=True)
+            except Exception as e:
+                _record_model_result(model_used, success=False, error_text=str(e))
+                log_error("chat_send:stream", e)
+                error_payload = json.dumps({"error": str(e)}, ensure_ascii=False)
+                yield f"data: {error_payload}\n\n"
 
-        return jsonify({
-            "ok": True,
-            "reply": reply_msg,
-            "user_msg_id": user_msg_id,
-            "charon_msg_id": charon_msg_id,
-            "model": get_current_model()
+            reply_msg = "".join(collected).strip()
+            if reply_msg:
+                charon_msg_id = new_msg_id()
+                add_chat_message_row(charon_msg_id, "charon", reply_msg, model=model_used)
+                # 顺手检查一下要不要更新滚动摘要（只在对话变长之后才会真正触发，不影响响应速度）
+                try:
+                    maybe_update_chat_summary(history)
+                except Exception as e:
+                    log_error("chat_send:summary", e)
+                done_payload = json.dumps({
+                    "done": True,
+                    "reply": reply_msg,
+                    "user_msg_id": user_msg_id,
+                    "charon_msg_id": charon_msg_id,
+                    "model": model_used,
+                }, ensure_ascii=False)
+            else:
+                # 一个字都没收到（模型调用彻底失败），不写入数据库，让前端展示失败态
+                done_payload = json.dumps({
+                    "done": True,
+                    "reply": "",
+                    "user_msg_id": user_msg_id,
+                    "charon_msg_id": None,
+                    "model": model_used,
+                }, ensure_ascii=False)
+            yield f"data: {done_payload}\n\n"
+
+        return Response(generate(), mimetype="text/event-stream", headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # 关掉可能存在的反向代理响应缓冲，保证SSE数据块及时送达前端
         })
     except Exception as e:
         log_error("chat_send", e)
@@ -2333,9 +2595,12 @@ def chat_regenerate():
         mood_score = apply_mood_decay()
         mood_context = get_mood_context(mood_score, chat_hours_gap)
 
-        # 用目标消息之前的历史来构建prompt，避免把即将被替换掉的旧回复也带进上下文
-        prompt = build_chat_reply_prompt(time_context, user_message, preceding, mood_context)
-        raw = call_deepseek(prompt)
+        # 用目标消息之前的历史来构建messages，避免把即将被替换掉的旧回复也带进上下文；
+        # 注意preceding的最后一条已经是last_user_msg本身，所以再单独传user_message时
+        # build_chat_messages会把它当成"新的最后一条"，需要先把preceding里那条重复的user消息剔掉
+        preceding_without_last_user = preceding[:-1] if preceding and preceding[-1].get("id") == last_user_msg.get("id") else preceding
+        messages = build_chat_messages(time_context, user_message, preceding_without_last_user, mood_context)
+        raw = call_deepseek(messages)
         _, reply_msg = parse_reason_message(raw)
 
         # 原地覆盖这条消息的内容，不新增行
@@ -2663,4 +2928,8 @@ if __name__ == "__main__":
     t = threading.Thread(target=keepalive, daemon=True)
     t.start()
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    # threaded=True：流式聊天回复期间单个请求会持续几秒到十几秒不等，
+    # 不开threaded的话，Werkzeug默认单线程处理，这段时间里其他请求
+    # （比如前端定时轮询的/api/chat-status）会被迫排队等待，表现为
+    # "正在流式回复的时候，右侧状态面板卡住不刷新"。
+    app.run(host="0.0.0.0", port=port, threaded=True)
