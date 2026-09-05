@@ -1656,14 +1656,10 @@ def check_and_run_checkin():
     # stage == 2：已经发过两次，彻底沉默，什么都不做，直到用户上线聊天触发reset_checkin_state()
 
 
-def call_deepseek(prompt):
-    """纯粹的模型调用，返回生成的文本，不涉及事件/日记这些副作用。
-    函数名保留call_deepseek是历史原因（早期只接了DeepSeek一家），
-    现在实际会根据当前选中的模型，从get_model_registry()查到对应的供应商配置
-    （优先读Supabase里的动态配置，没配置过就用代码里的默认值兜底），
-    可能打DeepSeek官方接口，也可能打gemai.cc代理站，也可能打Gemini官方原生接口——
-    调用方完全不用关心这个分流，只要模型在注册表里配置好且active=true，
-    这里就能自动选对地址和请求格式。"""
+def _call_model_raw(prompt):
+    """真正干活的模型调用，逻辑不变（原call_deepseek的全部内容）。
+    改名是因为外层现在包了一层健康记录（call_deepseek），这个函数只管发请求拿结果，
+    成功还是失败都不管，交给外层统一记账。"""
     model = get_current_model()
     provider = get_model_registry().get(model)
     if not provider:
@@ -1732,6 +1728,56 @@ def call_deepseek(prompt):
     return result["choices"][0]["message"]["content"].strip()
 
 
+# 连续失败达到这个次数，就在前端菜单里把这个模型标记为"不健康"（红点）。
+# 不是失败一次就标红，是为了避免网络抖动这种偶发问题就被误判为模型挂了。
+MODEL_UNHEALTHY_THRESHOLD = 3
+
+
+def get_model_health():
+    """读取所有模型的健康记录：{model_id: {"consecutive_failures": int, "last_error": str,
+    "last_success_at": str, "last_failure_at": str}}。跟model_registry一样存在app_config表里，
+    key叫model_health，没有记录的模型视为"健康"（毕竟还没调用过，谈不上坏）。"""
+    return get_app_config("model_health", {})
+
+
+def _record_model_result(model, success, error_text=None):
+    """每次call_deepseek调用结束（不管成功失败）都记一笔，用于前端菜单显示健康状态。
+    成功：把这个模型的连续失败次数清零。
+    失败：连续失败次数+1，同时记下最新一次的错误信息，方便你在状态页面里看出个大概原因。
+    这里用try/except包起来且不重新抛出：记账逻辑本身出问题，不应该影响真正的模型调用结果。"""
+    try:
+        health = get_app_config("model_health", {})
+        entry = health.get(model, {"consecutive_failures": 0})
+        now_str = datetime.now().isoformat()
+        if success:
+            entry["consecutive_failures"] = 0
+            entry["last_success_at"] = now_str
+        else:
+            entry["consecutive_failures"] = entry.get("consecutive_failures", 0) + 1
+            entry["last_failure_at"] = now_str
+            # 错误信息可能很长（比如完整的API报错JSON），只截取前200字，
+            # 够看出个大概原因（401/429/模型下线之类），不需要存全文。
+            entry["last_error"] = (error_text or "")[:200]
+        health[model] = entry
+        set_app_config("model_health", health)
+    except Exception as e:
+        log_error("_record_model_result", e)
+
+
+def call_deepseek(prompt):
+    """对外接口不变，函数名和调用方式跟以前完全一样（历史原因保留这个名字）。
+    这里只是加了一层健康记录：调用_call_model_raw()真正发请求，
+    成功就清零这个模型的失败计数，失败就+1并记下错误原因，供前端菜单显示红绿点用。"""
+    model = get_current_model()
+    try:
+        result = _call_model_raw(prompt)
+        _record_model_result(model, success=True)
+        return result
+    except Exception as e:
+        _record_model_result(model, success=False, error_text=str(e))
+        raise
+
+
 def _check_chat_auth(req):
     """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
     配置了的话按优先级检查三个来源：query参数 > header > Cookie。
@@ -1796,15 +1842,31 @@ def chat_status():
 
 @app.route("/api/chat-model", methods=["GET"])
 def get_chat_model():
-    """给网页的模型选择器用：返回当前用的模型 + 全部可选模型列表。
-    available_models现在是动态的（来自Supabase的model_registry，只含active=true的模型），
-    某个渠道在后台被禁用后，前端菜单会自动不再显示它，不需要重新部署。"""
+    """给网页的模型选择器用：返回当前用的模型 + 全部可选模型列表 + 每个模型的健康状态。
+    available_models是动态的（来自Supabase的model_registry，只含active=true的模型）。
+    model_health里每个模型标一个healthy（true/false）：
+    连续失败次数达到MODEL_UNHEALTHY_THRESHOLD（默认3次）就是false，前端可以画红点/绿点。
+    还附带last_error（最近一次失败原因，截取前200字）方便你排查具体是什么问题。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
+    available = get_available_models()
+    health_raw = get_model_health()
+    model_health = {}
+    for mid in available:
+        entry = health_raw.get(mid, {})
+        failures = entry.get("consecutive_failures", 0)
+        model_health[mid] = {
+            "healthy": failures < MODEL_UNHEALTHY_THRESHOLD,
+            "consecutive_failures": failures,
+            "last_error": entry.get("last_error"),
+            "last_success_at": entry.get("last_success_at"),
+            "last_failure_at": entry.get("last_failure_at"),
+        }
     return jsonify({
         "ok": True,
         "current_model": get_current_model(),
-        "available_models": get_available_models()
+        "available_models": available,
+        "model_health": model_health
     })
 
 
