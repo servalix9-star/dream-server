@@ -40,6 +40,9 @@ os.makedirs(os.path.dirname(ERROR_LOG) or ".", exist_ok=True)
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 GEMAI_API_KEY = os.environ.get("GEMAI_API_KEY")
+# AI Studio申请的Gemini官方API key，走Google官方OpenAI兼容端点，
+# 稳定性远高于gemai.cc这类第三方代理站，作为保底/备选模型接入。
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BARK_KEY = os.environ.get("BARK_KEY")
 # 网页聊天的访问口令，不设置的话 /chat 页面直接放行（不建议生产环境这样用）
 CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
@@ -90,7 +93,8 @@ AVAILABLE_MODELS = [
     "gemai-gpt-4o-mini", "gemai-gpt-4.1-mini", "gemai-gpt-5-mini",
     "gemai-gemini-2.5-flash-a", "gemai-gemini-2.5-pro-a", "gemai-gemini-2.5-pro-d",
     "gemai-gemini-3.1-pro", "gemai-gemini-3.1-pro-thinking",
-    "gemai-grok-4"
+    "gemai-grok-4",
+    "gemini-official-flash", "gemini-official-pro"
 ]
 DEFAULT_MODEL = "deepseek-v4-flash"
 # 每个模型对应的思考模式：flash关闭（快、且temperature等参数能生效），pro开启（慢、但推理更深）
@@ -106,7 +110,10 @@ MODEL_THINKING_MAP = {
     "gemai-gemini-2.5-pro-d": "disabled",
     "gemai-gemini-3.1-pro": "disabled",
     "gemai-gemini-3.1-pro-thinking": "disabled",
-    "gemai-grok-4": "disabled"
+    "gemai-grok-4": "disabled",
+    # 走OpenAI兼容端点，不支持DeepSeek的thinking参数，占位值同gemai系列
+    "gemini-official-flash": "disabled",
+    "gemini-official-pro": "disabled"
 }
 
 # 每个模型对应的真实供应商配置：base_url（接口地址）、api_key（读哪个环境变量）、
@@ -180,6 +187,27 @@ MODEL_PROVIDER_MAP = {
         "api_key": GEMAI_API_KEY,
         "real_model": "grok-4",  # 无前缀标注
         "supports_thinking": False,
+    },
+    # Google官方Gemini API（AI Studio申请的key），走原生Gemini接口，
+    # 不经过任何第三方代理站，稳定性和可用性都远高于gemai.cc系列，
+    # 适合作为"保底模型"——公益站集体不可用时依然能正常工作。
+    # 注意：2026年Google把AI Studio新发的key格式从AIza换成了AQ.，
+    # AQ.格式key在OpenAI兼容端点（/v1beta/openai/chat/completions）会返回401，
+    # 但在原生端点（generativelanguage.googleapis.com，用x-goog-api-key header传key）工作正常，
+    # 所以这两个模型必须走原生格式，不能像其他供应商一样用OpenAI兼容payload。
+    "gemini-official-flash": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        "api_key": GEMINI_API_KEY,
+        "real_model": "gemini-3.6-flash",
+        "supports_thinking": False,
+        "api_style": "gemini_native",
+    },
+    "gemini-official-pro": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent",
+        "api_key": GEMINI_API_KEY,
+        "real_model": "gemini-3.1-pro-preview",
+        "supports_thinking": False,
+        "api_style": "gemini_native",
     },
 }
 
@@ -1576,8 +1604,9 @@ def call_deepseek(prompt):
     """纯粹的模型调用，返回生成的文本，不涉及事件/日记这些副作用。
     函数名保留call_deepseek是历史原因（早期只接了DeepSeek一家），
     现在实际会根据当前选中的模型，从MODEL_PROVIDER_MAP查到对应的供应商配置，
-    可能打DeepSeek官方接口，也可能打gemai.cc代理站——调用方完全不用关心这个分流，
-    只要模型在AVAILABLE_MODELS里、在MODEL_PROVIDER_MAP里配置好，这里就能自动选对地址。"""
+    可能打DeepSeek官方接口，也可能打gemai.cc代理站，也可能打Gemini官方原生接口——
+    调用方完全不用关心这个分流，只要模型在AVAILABLE_MODELS里、在MODEL_PROVIDER_MAP里配置好，
+    这里就能自动选对地址和请求格式。"""
     model = get_current_model()
     provider = MODEL_PROVIDER_MAP.get(model)
     if not provider:
@@ -1585,6 +1614,41 @@ def call_deepseek(prompt):
     if not provider["api_key"]:
         raise RuntimeError(f"模型 {model} 对应的 API key 未设置（环境变量缺失）")
 
+    # api_style默认是openai_compatible（DeepSeek官方 / gemai.cc代理站都是这种，
+    # messages结构 + Authorization: Bearer头）。Gemini官方原生接口结构不同，
+    # 单独分流处理，不污染现有格式的调用路径。
+    api_style = provider.get("api_style", "openai_compatible")
+
+    if api_style == "gemini_native":
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 1.2},
+        }
+        resp = requests.post(
+            provider["base_url"],
+            headers={
+                "x-goog-api-key": provider["api_key"],
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
+        result = resp.json()
+        try:
+            candidates = result.get("candidates") or []
+            if not candidates:
+                raise KeyError("candidates为空")
+            parts = candidates[0]["content"]["parts"]
+            text = "".join(p.get("text", "") for p in parts)
+            if not text.strip():
+                raise KeyError("parts中没有text内容")
+            return text.strip()
+        except (KeyError, IndexError, TypeError):
+            raise RuntimeError(f"模型API unexpected response: {result}")
+
+    # ---- 以下是原有的openai_compatible分支，逻辑不变 ----
     payload = {
         "model": provider["real_model"],
         "messages": [{"role": "user", "content": prompt}],
