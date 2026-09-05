@@ -694,7 +694,7 @@ function formatTime(isoStr) {
   return h + ':' + m;
 }
 
-function renderMsgRow(role, content, createdAt, pending, msgId, model) {
+function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed) {
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
@@ -702,6 +702,11 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model) {
   // model：这条消息（如果是charon发的）实际是哪个模型生成的，纯记录用途，
   // 不在气泡上直接显示，只挂在dataset里，双击唤出菜单时可以读出来展示成一行小字。
   if (model) row.dataset.model = model;
+  // isFailed：这是一条"调用模型失败"的临时提示气泡，不是数据库里真实存在的消息，
+  // 没有msgId，撤回/重新生成这些依赖msgId的操作对它天然无效——之前没有专门标记这种情况，
+  // 双击它要么什么反应都没有、要么按钮点了报"找不到这条消息"，只能刷新页面让它消失。
+  // 现在打上这个标记，双击菜单会识别出来，只提供"清除这条提示"（纯前端移除，不用查数据库）。
+  if (isFailed) row.dataset.failed = '1';
 
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
@@ -768,10 +773,10 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model) {
   addDoubleTapListener(bubble, (e) => {
     if (row.classList.contains('editing')) return;
     currentActiveRowEl = row;
-    showContextMenu(bubble, msgId, role, content, model);
-    // 双击的同时，把模型标记切换一下显示状态（双击一次显现，再双击一次隐藏），
-    // 跟"双击唤出菜单"是同一个手势触发，不需要额外交互成本。
-    if (modelTagEl) modelTagEl.classList.toggle('visible');
+    showContextMenu(bubble, msgId, role, content, model, isFailed);
+    // 双击时只负责"显示"模型标记（不做toggle）。隐藏统一交给hideWeChatMenu处理——
+    // 这样"点空白隐藏菜单"和"标记消失"永远同步，不用再双击第二次才能让标记消失。
+    if (modelTagEl) modelTagEl.classList.add('visible');
   });
 
   return row;
@@ -873,7 +878,7 @@ function enterEditMode(row, bubble, msgId, originalContent) {
 }
 
 // 全局上下文菜单管理 (双击唤出)
-function showContextMenu(targetElement, id, typeOrRole, textContent = "", model = "") {
+function showContextMenu(targetElement, id, typeOrRole, textContent = "", model = "", isFailed = false) {
   const rect = targetElement.getBoundingClientRect();
   // 先在不可见状态下重建内容并测量尺寸，避免"旧位置菜单闪现→跳到新位置"这个中间态被误触，
   // 这正是"要点两次才生效"的卡顿感来源：第一次点击其实点在了闪现的旧位置上。
@@ -885,6 +890,29 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
   // 这样上面能插一行不可点击的model提示文字，下面跟着一整排按钮，互不干扰。
   const buttonsRow = document.createElement('div');
   buttonsRow.className = 'bubble-menu-buttons-row';
+
+  if (isFailed) {
+    // ---- 失败占位气泡专属菜单：这条消息在数据库里根本不存在，没有msgId，
+    // 撤回/重新生成/编辑这些操作对它没有意义（后端会直接404）。
+    // 只给"清除这条提示"——纯前端把这个气泡从画面上移除，不需要访问后端。
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'menu-btn';
+    clearBtn.textContent = '🗑️ 清除这条提示';
+    clearBtn.onclick = () => {
+      if (currentActiveRowEl) currentActiveRowEl.remove();
+      hideWeChatMenu();
+    };
+    buttonsRow.appendChild(clearBtn);
+    contextMenu.appendChild(buttonsRow);
+    requestAnimationFrame(() => {
+      const menuWidth = contextMenu.offsetWidth || 200;
+      const menuHeight = contextMenu.offsetHeight || 34;
+      contextMenu.style.left = (rect.left + rect.width / 2 - menuWidth / 2 + window.scrollX) + 'px';
+      contextMenu.style.top = (rect.top - menuHeight - 8 + window.scrollY) + 'px';
+      contextMenu.style.visibility = 'visible';
+    });
+    return;
+  }
 
   if (typeOrRole === 'user' || typeOrRole === 'charon') {
     // ---- 聊天气泡专属双击选项 ----
@@ -964,7 +992,20 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
   });
 }
 
-function hideWeChatMenu() { contextMenu.style.display = 'none'; contextMenu.style.visibility = 'visible'; }
+function hideWeChatMenu() {
+  contextMenu.style.display = 'none';
+  contextMenu.style.visibility = 'visible';
+  // 菜单隐藏的同时，把当前这一行的模型标记也收起来（如果它正显示着的话）。
+  // 之前"双击显示模型标记"和"点空白隐藏菜单"是两套互不知道对方存在的逻辑：
+  // 双击气泡时菜单和标记一起显现，但点击空白只让菜单消失，标记留在原地，
+  // 必须再双击一次气泡（触发toggle）才会隐藏——体验上像是"要点两次"。
+  // 现在把"隐藏模型标记"归并到hideWeChatMenu里统一处理，不管从哪个入口触发隐藏
+  // （点空白、点复制、点撤回……），标记都会跟着菜单一起消失，不再需要额外一次双击。
+  if (currentActiveRowEl) {
+    const tagEl = currentActiveRowEl.querySelector('.model-tag');
+    if (tagEl) tagEl.classList.remove('visible');
+  }
+}
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.bubble') && !e.target.closest('.sticky-note-card') && !e.target.classList.contains('menu-btn')) {
@@ -1311,23 +1352,23 @@ async function sendMessage() {
   messagesEl.appendChild(pendingRow);
   scrollToBottom();
 
-  const pendingBubble = pendingRow.querySelector('.bubble');
-
   try {
     const res = await fetch(apiUrl('/api/chat-send'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text })
     });
     const data = await res.json();
     if (data.ok) {
-      pendingBubble.textContent = data.reply; pendingBubble.classList.remove('pending');
       userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
       pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id, data.model));
     } else {
-      pendingBubble.textContent = '（没能回复：' + (data.error || '未知错误') + '）';
-      pendingBubble.classList.remove('pending');
+      // 失败时也整行替换（而不是只改文字），这样才能带上isFailed=true这个标记——
+      // 之前只改pendingBubble.textContent，这一行的msgId/isFailed状态始终停留在
+      // 创建时（还不知道会失败）的样子，导致双击这条消息时，代码分不清它是不是失败气泡，
+      // 表现为"点撤回/重新生成没反应，只能刷新页面让它消失"。
+      pendingRow.replaceWith(renderMsgRow('charon', '（没能回复：' + (data.error || '未知错误') + '）', nowIso, false, null, null, true));
     }
   } catch (e) {
-    pendingBubble.textContent = '（网络错误，没发出去）'; pendingBubble.classList.remove('pending');
+    pendingRow.replaceWith(renderMsgRow('charon', '（网络错误，没发出去）', nowIso, false, null, null, true));
   }
   scrollToBottom(); sendBtn.disabled = false; loadStatus();
 }
