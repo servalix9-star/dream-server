@@ -208,6 +208,21 @@
   }
   .bubble.pending { opacity: 0.5; }
 
+  /* 打字指示器：流式回复真正开始收到第一个字之前的等待态，三个圆点依次跳动，
+     比空气泡（宽度塌陷成一条线）或静态"…"更接近真实聊天App"对方正在输入"的感觉。
+     等第一个字符到达，JS会把.typing-dots整个替换成文字内容，这个类就不再用到。 */
+  .typing-dots { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; }
+  .typing-dots span {
+    width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.4;
+    animation: typing-bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typing-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 0.9; }
+  }
+
   /* 行内编辑模式：气泡本身变可编辑，需要覆盖默认的user-select:none/cursor:pointer，
      否则光标无法进入、文字也选不中。虚线描边给出"正在编辑"的明确视觉信号。 */
   .bubble.editing-bubble {
@@ -743,7 +758,11 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'charon') + (pending ? ' pending' : '');
-  bubble.textContent = content;
+  if (pending && !content) {
+    bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+  } else {
+    bubble.textContent = content;
+  }
   col.appendChild(bubble);
 
   // 模型来源标记：只有charon的消息、且这条消息确实记录了model字段（老消息可能没有）才生成。
@@ -1348,24 +1367,69 @@ async function sendMessage() {
   const nowIso = new Date().toISOString();
   const userRow = renderMsgRow('user', text, nowIso, false);
   messagesEl.appendChild(userRow);
-  const pendingRow = renderMsgRow('charon', '…', nowIso, true);
+  const pendingRow = renderMsgRow('charon', '', nowIso, true);
   messagesEl.appendChild(pendingRow);
   scrollToBottom();
+
+  // 流式回复期间，Charon这条气泡的文字直接在这个DOM节点上原地追加，
+  // 不需要每收到一个字就重新renderMsgRow整行替换（那样会丢失/重建头像、模型标签等元素，
+  // 也更容易在快速追加时出现闪烁）。
+  const pendingBubble = pendingRow.querySelector('.bubble');
 
   try {
     const res = await fetch(apiUrl('/api/chat-send'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text })
     });
-    const data = await res.json();
-    if (data.ok) {
-      userRow.replaceWith(renderMsgRow('user', text, nowIso, false, data.user_msg_id));
-      pendingRow.replaceWith(renderMsgRow('charon', data.reply, nowIso, false, data.charon_msg_id, data.model));
-    } else {
-      // 失败时也整行替换（而不是只改文字），这样才能带上isFailed=true这个标记——
-      // 之前只改pendingBubble.textContent，这一行的msgId/isFailed状态始终停留在
-      // 创建时（还不知道会失败）的样子，导致双击这条消息时，代码分不清它是不是失败气泡，
-      // 表现为"点撤回/重新生成没反应，只能刷新页面让它消失"。
-      pendingRow.replaceWith(renderMsgRow('charon', '（没能回复：' + (data.error || '未知错误') + '）', nowIso, false, null, null, true));
+
+    if (!res.ok || !res.body) {
+      throw new Error('网络请求失败');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let sawDone = false;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE事件以"\n\n"分隔，一次read()可能拿到不完整的一个事件，
+      // 也可能一次拿到好几个事件粘在一起，这里按分隔符切开，最后剩的不完整片段留到下一轮拼接。
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice('data: '.length);
+        let evt;
+        try { evt = JSON.parse(jsonStr); } catch (e) { continue; }
+
+        if (evt.delta) {
+          pendingBubble.textContent += evt.delta;
+          scrollToBottom();
+        } else if (evt.error) {
+          // 中途出错：不立刻打断显示，等done事件里的最终态一起处理
+          // （done事件一定会在error之后紧跟着发送，见后端generate()的实现）
+        } else if (evt.done) {
+          sawDone = true;
+          if (evt.reply) {
+            userRow.replaceWith(renderMsgRow('user', text, nowIso, false, evt.user_msg_id));
+            pendingRow.replaceWith(renderMsgRow('charon', evt.reply, nowIso, false, evt.charon_msg_id, evt.model));
+          } else {
+            pendingRow.replaceWith(renderMsgRow('charon', '（没能回复：模型调用失败）', nowIso, false, null, null, true));
+          }
+        }
+      }
+    }
+
+    if (!sawDone) {
+      // 流被提前截断（比如网络中断），但至少已经收到的文字不会凭空消失，
+      // 把当前已经拼出来的内容原样定型成一条失败态消息（没有msgId，不能撤回/重新生成）。
+      const partial = pendingBubble.textContent;
+      pendingRow.replaceWith(renderMsgRow('charon', partial || '（连接中断，没能收到完整回复）', nowIso, false, null, null, true));
     }
   } catch (e) {
     pendingRow.replaceWith(renderMsgRow('charon', '（网络错误，没发出去）', nowIso, false, null, null, true));
