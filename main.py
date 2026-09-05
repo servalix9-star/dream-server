@@ -1932,23 +1932,42 @@ def call_model_stream(messages):
         if resp.status_code != 200:
             raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
 
-        for line in resp.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data: "):
+        # 注意：这里不能用 iter_lines(decode_unicode=True)。SSE是分块(chunked)传输，
+        # decode_unicode=True 依赖 requests 对 resp.encoding 的猜测（猜不到就退化成
+        # ISO-8859-1），而且是按网络包边界解码，一个多字节UTF-8字符（如中文，3字节）
+        # 如果恰好被切在两个包之间，就会在行内部被提前、错误地解码，导致乱码——
+        # 这正是"偶尔乱码、重试才正常"这种随机性表现的根本原因（命中网络分包时机才炸）。
+        # 改成按原始字节迭代 + 手动UTF-8解码，自动跨块缓冲不完整的字节序列，彻底规避这个问题。
+        buffer = b""
+        for raw_chunk in resp.iter_content(chunk_size=None):
+            if not raw_chunk:
                 continue
-            data_str = line[len("data: "):].strip()
-            if not data_str or data_str == "[DONE]":
-                continue
-            try:
-                chunk = json.loads(data_str)
-                candidates = chunk.get("candidates") or []
-                if not candidates:
+            buffer += raw_chunk
+            while b"\n" in buffer:
+                raw_line, buffer = buffer.split(b"\n", 1)
+                try:
+                    line = raw_line.decode("utf-8")
+                except UnicodeDecodeError:
+                    # 说明多字节字符被切断在了buffer末尾，把这半截数据放回buffer继续等下一块拼完整
+                    buffer = raw_line + b"\n" + buffer
+                    break
+                line = line.rstrip("\r")
+                if not line or not line.startswith("data: "):
                     continue
-                parts = candidates[0].get("content", {}).get("parts", [])
-                text = "".join(p.get("text", "") for p in parts)
-                if text:
-                    yield text
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
+                data_str = line[len("data: "):].strip()
+                if not data_str or data_str == "[DONE]":
+                    continue
+                try:
+                    chunk = json.loads(data_str)
+                    candidates = chunk.get("candidates") or []
+                    if not candidates:
+                        continue
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    text = "".join(p.get("text", "") for p in parts)
+                    if text:
+                        yield text
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
         return
 
     # ---- openai_compatible分支：DeepSeek官方 / gemai.cc代理站，标准SSE格式 ----
@@ -1971,23 +1990,37 @@ def call_model_stream(messages):
     if resp.status_code != 200:
         raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
 
-    for line in resp.iter_lines(decode_unicode=True):
-        if not line or not line.startswith("data: "):
+    # 同上：不用decode_unicode=True，理由见gemini_native分支里的注释。
+    # gemai.cc是中转代理，多加了一层转发，更容易在分包时机上踩中这个问题。
+    buffer = b""
+    for raw_chunk in resp.iter_content(chunk_size=None):
+        if not raw_chunk:
             continue
-        data_str = line[len("data: "):].strip()
-        if not data_str or data_str == "[DONE]":
-            continue
-        try:
-            chunk = json.loads(data_str)
-            choices = chunk.get("choices") or []
-            if not choices:
+        buffer += raw_chunk
+        while b"\n" in buffer:
+            raw_line, buffer = buffer.split(b"\n", 1)
+            try:
+                line = raw_line.decode("utf-8")
+            except UnicodeDecodeError:
+                buffer = raw_line + b"\n" + buffer
+                break
+            line = line.rstrip("\r")
+            if not line or not line.startswith("data: "):
                 continue
-            delta = choices[0].get("delta", {})
-            text = delta.get("content", "")
-            if text:
-                yield text
-        except (json.JSONDecodeError, KeyError, IndexError):
-            continue
+            data_str = line[len("data: "):].strip()
+            if not data_str or data_str == "[DONE]":
+                continue
+            try:
+                chunk = json.loads(data_str)
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {})
+                text = delta.get("content", "")
+                if text:
+                    yield text
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
 
 
 # 连续失败达到这个次数，就在前端菜单里把这个模型标记为"不健康"（红点）。
