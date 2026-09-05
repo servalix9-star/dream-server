@@ -475,7 +475,7 @@
         <div class="brand">CHARON</div>
         <div class="sub">
           <span class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></span>
-          <select id="model-select" title="选择模型"></select>
+          <span class="status-badge"><span class="status-dot" id="model-status-dot"></span><select id="model-select" title="选择模型"></select></span>
         </div>
       </div>
       <div class="header-signature-wrap">
@@ -1694,7 +1694,11 @@ const MODEL_DISPLAY_NAME = {
   'gemai-gemini-2.5-pro-d': 'gemini-2.5-pro(满血D)',
   'gemai-gemini-3.1-pro': 'gemini-3.1-pro-preview',
   'gemai-gemini-3.1-pro-thinking': 'gemini-3.1-pro-thinking-128(满血A)',
-  'gemai-grok-4': 'grok-4'
+  'gemai-grok-4': 'grok-4',
+  'gemini-official-flash': 'gemini-3.6-flash(官方)',
+  'gemini-3.5-flash': 'gemini-3.5-flash(官方)',
+  'gemini-3.5-flash-lite': 'gemini-3.5-flash-lite(官方)',
+  'gemini-official-pro': 'gemini-3.1-pro(官方)'
 };
 async function loadModelSelector() {
   try {
@@ -1702,28 +1706,39 @@ async function loadModelSelector() {
     const data = await res.json();
     if (!data.ok) return;
     modelSelect.innerHTML = '';
-    // model_health: 每个模型最近的健康状态。healthy=false说明最近连续失败次数够多，
-    // 大概率是这个渠道挂了。用emoji加在名字前面（原生select的option不支持自定义颜色/图标，
-    // emoji是唯一能跨浏览器稳定显示的办法）：✅正常 ⚠️最近老失败，选它之前心里有数。
+    // model_health: 每个模型最近的健康状态，healthy=false说明连续失败次数够多，
+    // 大概率这个渠道挂了。存起来supabase existing风格照抄心情状态的圆点样式（.status-dot/.low），
+    // 不在option文字里加符号（原生select的option样式很受限，加emoji反而不好看）。
     const health = data.model_health || {};
+    window._modelHealthMap = health; // 供切换模型时同步更新圆点用
     data.available_models.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m;
-      const label = MODEL_DISPLAY_NAME[m] || m;
+      opt.textContent = MODEL_DISPLAY_NAME[m] || m;
       const h = health[m];
-      const dot = h && h.healthy === false ? '⚠️ ' : '✅ ';
-      opt.textContent = dot + label;
       if (h && h.healthy === false && h.last_error) {
-        // title属性：鼠标悬停能看到具体失败原因，不用跳去别的地方查
         opt.title = '最近失败：' + h.last_error;
       }
       if (m === data.current_model) opt.selected = true;
       modelSelect.appendChild(opt);
     });
+    updateModelStatusDot(data.current_model);
   } catch (e) {}
+}
+
+function updateModelStatusDot(modelId) {
+  // 圆点样式跟心情状态那个完全复用：绿色=健康，粉色（.low）=最近连续失败次数够多。
+  // 没有健康记录（这个模型还没被调用过）时默认按健康处理，不提前判它有问题。
+  const dotEl = document.getElementById('model-status-dot');
+  if (!dotEl) return;
+  const h = (window._modelHealthMap || {})[modelId];
+  const healthy = !h || h.healthy !== false;
+  dotEl.className = 'status-dot' + (healthy ? '' : ' low');
+  dotEl.title = h && h.healthy === false && h.last_error ? ('最近失败：' + h.last_error) : '';
 }
 modelSelect.addEventListener('change', async () => {
   const chosen = modelSelect.value;
+  updateModelStatusDot(chosen);
   try {
     const res = await fetch(apiUrl('/api/chat-model'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: chosen })
