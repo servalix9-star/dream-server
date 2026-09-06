@@ -128,6 +128,20 @@ def add_moment_comment(moment_id, author, content):
     return comment_entry
 
 
+def delete_moment_comment(moment_id, comment_index):
+    """删除一条动态下的某条评论，按数组下标定位（前端渲染评论列表时用的就是数组遍历的index，
+    天然对应，不需要给每条评论单独生成id）。下标越界或动态不存在时抛异常，路由层负责转成错误响应。"""
+    row = get_moment_row(moment_id)
+    if not row:
+        raise RuntimeError(f"动态不存在: {moment_id}")
+    comments = row.get("comments") or []
+    if not (0 <= comment_index < len(comments)):
+        raise RuntimeError(f"评论下标越界: {comment_index}（当前共有{len(comments)}条评论）")
+    comments = comments[:comment_index] + comments[comment_index + 1:]
+    _supabase_request("PATCH", "moments", params={"id": f"eq.{moment_id}"}, json_body={"comments": comments})
+    return comments
+
+
 def delete_moment_row(moment_id):
     """删除一条动态，物理删除不可恢复（点赞/评论跟着这条一起没了，符合直觉）。"""
     _supabase_request("DELETE", "moments", params={"id": f"eq.{moment_id}"})
@@ -315,6 +329,26 @@ def comment_moment():
         return jsonify({"ok": True, "id": moment_id, "comment": comment_entry})
     except Exception as e:
         log_error("comment_moment", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/moments/comment/delete", methods=["POST"])
+def delete_comment():
+    """删除一条动态下的某条评论。body: {"id": "...", "comment_index": 0}
+    comment_index是前端渲染评论列表时的数组下标（从0开始），对应comments.forEach(idx)里的idx，
+    不是评论自己的某个唯一id——评论目前没有单独的id字段，下标定位对1v1这种低频操作场景足够用。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    moment_id = data.get("id")
+    comment_index = data.get("comment_index")
+    if not moment_id or comment_index is None:
+        return jsonify({"ok": False, "error": "缺少id或comment_index参数"}), 400
+    try:
+        comments = delete_moment_comment(moment_id, int(comment_index))
+        return jsonify({"ok": True, "id": moment_id, "comments": comments})
+    except Exception as e:
+        log_error("delete_comment", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
