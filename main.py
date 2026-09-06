@@ -1,7 +1,6 @@
 import sys
 # 强制stdout/stderr无缓冲：Render等容器化平台运行时，Python检测到stdout不是终端会自动切换成
 # 块缓冲（block buffering），导致print()内容一直攒在内存里不实时写出，甚至长期看不到。
-# 这里在最开头就重新包装一次，保证后面所有print()都是行缓冲、立刻可见，不用每个print单独加flush=True。
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
@@ -12,343 +11,38 @@ from flask import Flask, request, jsonify, render_template, Response
 from datetime import datetime, date
 import json, os, requests, threading, time, traceback, random
 
-app = Flask(__name__)
+# ============================================================
+# 从 core.py 导入共享基础设施
+# ============================================================
+# core.py 拆分说明见该文件顶部docstring。这里精确导入main.py剩余部分
+# 实际用到的名字，而不是 `from core import *`——这样谁改了core.py删掉某个函数，
+# 这里会在导入时立刻报错，而不是运行到某处才发现NameError，出问题更快暴露。
+from core import (
+    app,
+    BARK_KEY, CHAT_ACCESS_CODE, ERROR_LOG,
+    SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_HEADERS, _supabase_session,
+    VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, VAPID_SUBJECT,
+    _supabase_request, get_app_config, set_app_config,
+    log_error, _check_chat_auth,
+    add_event_row, load_events, get_time_since_last_event, count_events_today,
+    load_mood, save_mood, get_mood_stage, get_mood_context, get_hours_since_last_chat,
+    apply_mood_decay, recover_mood, _hours_since,
+    MOOD_BASELINE, MOOD_SWEET_MIN, MOOD_RECOVERY_CHAT, MOOD_RECOVERY_PERIOD_EVENT,
+    SWEET_LETTER_CHANCE, LONGING_LETTER_CHANCE, LONGING_LETTER_HOURS,
+    _extract_json_field, load_persona_memory, save_persona_memory,
+    get_current_model, set_current_model, get_available_models,
+    call_deepseek, call_model_stream, get_model_health, _record_model_result,
+    MODEL_UNHEALTHY_THRESHOLD,
+)
 
-# ---- 数据持久化：Supabase（PostgREST），不再用本地JSON文件 ----
-# 本地文件在Railway每次重新部署时会被清空，Supabase是独立的托管数据库，
-# 重新部署/代码更新都不会丢数据。这里直接用 requests 调 PostgREST 的 REST API，
-# 不引入 supabase-py 这个额外依赖，保持依赖列表最小。
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-# 服务端必须用 secret key（对应旧版 service_role key），这个 key 绕过 RLS，
-# 专门给后端自己的逻辑用。千万不要把这个 key 用在前端/网页里。
-SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY")
+# 朋友圈模块。放在这里（core导入之后、main.py自己的业务逻辑之前）而不是延迟到
+# 文件末尾，是因为main.py中段的execute_intent_actions/run_once会直接调用
+# moments.xxx()，模块级导入放前面能让"这些名字来自哪里"在读代码时一目了然，
+# 不用担心函数定义顺序——Python函数体内的名字是调用时才查找，不是定义时，
+# 所以即使moments.py反过来在文件更后面才被真正用到，这里提前import没有问题。
+# moments.py本身只依赖core.py、不反向依赖main.py，因此不存在循环导入。
+import moments
 
-SUPABASE_HEADERS = {
-    "apikey": SUPABASE_SECRET_KEY or "",
-    "Authorization": f"Bearer {SUPABASE_SECRET_KEY}" if SUPABASE_SECRET_KEY else "",
-    "Content-Type": "application/json",
-}
-
-# 用Session复用底层TCP连接（HTTP keep-alive），避免每次请求Supabase都重新做一次TLS握手。
-# 之前是每次_supabase_request都用requests.request()裸调用，握手开销会在"一次操作背后
-# 有好几次Supabase查询"的场景里（比如打开档案箱要连着查便签表和情书表）明显叠加起来，
-# 是"打开抽屉/档案箱慢"的原因之一（另一个是Render免费套餐冷启动，已用UptimeRobot缓解）。
-_supabase_session = requests.Session()
-
-ERROR_LOG = os.path.join(os.environ.get("DATA_DIR", "."), "error.log")
-os.makedirs(os.path.dirname(ERROR_LOG) or ".", exist_ok=True)
-
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
-GEMAI_API_KEY = os.environ.get("GEMAI_API_KEY")
-# AI Studio申请的Gemini官方API key，走Google官方OpenAI兼容端点，
-# 稳定性远高于gemai.cc这类第三方代理站，作为保底/备选模型接入。
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-BARK_KEY = os.environ.get("BARK_KEY")
-# 网页聊天的访问口令，不设置的话 /chat 页面直接放行（不建议生产环境这样用）
-CHAT_ACCESS_CODE = os.environ.get("CHAT_ACCESS_CODE")
-
-# ---- Web Push (PWA原生推送) ----
-# 用于替代 Bark：脱离 iOS 快捷指令生态，点开通知直接跳转到 /chat 页面。
-# VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY 是urlsafe-base64编码的原始密钥（不是PEM），
-# 这样传给 pywebpush.webpush() 不会触发"Could not deserialize key data"的已知坑
-# （PEM字符串会被py_vapid当成需要base64解码+DER解析的格式，跟urlsafe-b64编码不兼容）。
-VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
-VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
-# sub必须是可路由的联系方式（mailto或https URL），Apple对这个claim比其他推送服务更严格
-VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
-
-
-def _supabase_request(method, table, params=None, json_body=None, headers_extra=None):
-    """统一的 Supabase PostgREST 请求封装。
-    table 直接是表名（events / chat_messages / love_letters / app_config）。
-    params 是查询字符串参数（比如排序、过滤、limit）。
-    抛异常交给调用方用 log_error 处理，不在这里静默吞掉，避免读写失败却没人知道。"""
-    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
-        raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    headers = dict(SUPABASE_HEADERS)
-    if headers_extra:
-        headers.update(headers_extra)
-    resp = _supabase_session.request(method, url, headers=headers, params=params, json=json_body, timeout=15)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"Supabase {method} {table} 失败: status={resp.status_code} body={resp.text}")
-    if resp.text:
-        try:
-            return resp.json()
-        except ValueError:
-            return None
-    return None
-
-# DeepSeek 已在 2026-07-24 停用 deepseek-chat / deepseek-reasoner 这两个旧模型名，
-# 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
-# 和 deepseek-v4-pro（深度推理，更贵，开启思考模式，回复慢一点但推理更深）。
-# thinking 状态跟着选中的模型自动联动，见 get_thinking_config()。
-# gemai-* 系列是接入的 gemai.cc 代理站模型，纯粹作为备选，走独立的供应商配置（见 DEFAULT_MODEL_REGISTRY）。
-# 这类代理站的具体渠道时常变动（之前接的[官逆]gemini-2.5-pro出现过503 model_not_found，渠道下线），
-# 所以这里一次接入9个当前指定的型号，覆盖GPT/Gemini/Grok三个系列，哪个能用切哪个。
-# 其中gemini-2.5-pro有[满血A][满血D]两条渠道，gemini-3.1-pro-preview有[官逆]和[满血A]+thinking两条渠道，
-# 内部id用 -a / -d / -thinking 后缀区分，real_model原样保留完整前缀标注（渠道识别用）。
-# ==========================================================================
-# 模型注册表（动态配置管理）
-# ==========================================================================
-# 历史上这里是三个平行的硬编码字典（AVAILABLE_MODELS / MODEL_THINKING_MAP /
-# MODEL_PROVIDER_MAP），每次某个gemai.cc代理站渠道挂了/换了，都要改代码重新部署。
-#
-# 现在改成：这份字典只是"出厂默认值"（DEFAULT_MODEL_REGISTRY），真正生效的配置
-# 优先从 Supabase app_config 表的 model_registry 这个key读取（见下面get_model_registry）。
-# 数据库里没配置过时，自动回退到这份默认值，保证第一次上线/数据库还没初始化时不会挂。
-#
-# 结构：每个模型id对应一条完整配置：
-#   - active: 是否启用。false的模型不会出现在前端下拉菜单，也不能被选中。
-#     公益站渠道挂了，不用改代码，直接去Supabase把对应条目的active改成false即可。
-#   - base_url: 接口地址
-#   - api_key_env: 该用哪个环境变量的值作为api_key（不直接存密钥本身，密钥仍然
-#     只放在Render环境变量里；这样即使Supabase数据泄露，密钥也不会跟着泄露）。
-#   - real_model: 发给上游时真正用的模型名（代理站渠道识别用，前缀方括号必须原样保留）
-#   - supports_thinking: 是否要在请求体里带DeepSeek风格的thinking字段
-#   - thinking: 该模型的思考模式（disabled/enabled），仅supports_thinking=True时生效
-#   - api_style: "openai_compatible"（默认，DeepSeek官方/gemai.cc代理站都是这种messages结构）
-#     或 "gemini_native"（Google官方原生接口，contents/parts结构，key走x-goog-api-key header）
-#
-# 新增模型/供应商：不用改代码，直接去Supabase的app_config表编辑model_registry这条JSON即可，
-# 改完最多60秒生效（见MODEL_REGISTRY_TTL缓存）。
-DEFAULT_MODEL_REGISTRY = {
-    "deepseek-v4-flash": {
-        "active": True,
-        "base_url": "https://api.deepseek.com/chat/completions",
-        "api_key_env": "DEEPSEEK_API_KEY",
-        "real_model": "deepseek-v4-flash",
-        "supports_thinking": True,
-        "thinking": "disabled",
-    },
-    "deepseek-v4-pro": {
-        "active": True,
-        "base_url": "https://api.deepseek.com/chat/completions",
-        "api_key_env": "DEEPSEEK_API_KEY",
-        "real_model": "deepseek-v4-pro",
-        "supports_thinking": True,
-        "thinking": "enabled",
-    },
-    "gemai-gpt-4o-mini": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[官逆]gpt-4o-mini",  # 官逆渠道
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-gpt-4.1-mini": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[官逆]gpt-4.1-mini",  # 官逆渠道
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-gpt-5-mini": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[官逆]gpt-5-mini",  # 官逆渠道
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-gemini-2.5-flash-a": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[满血A]gemini-2.5-flash",  # 满血A渠道
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-gemini-2.5-pro-a": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[满血A]gemini-2.5-pro",  # 满血A渠道
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-gemini-2.5-pro-d": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[满血D]gemini-2.5-pro",  # 满血D渠道
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-gemini-3.1-pro": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[官逆]gemini-3.1-pro-preview",  # 官逆渠道
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-gemini-3.1-pro-thinking": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "[满血A]gemini-3.1-pro-preview-thinking-128",  # 满血A渠道，开启深度思考
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    "gemai-grok-4": {
-        "active": True,
-        "base_url": "https://api.gemai.cc/v1/chat/completions",
-        "api_key_env": "GEMAI_API_KEY",
-        "real_model": "grok-4",  # 无前缀标注
-        "supports_thinking": False,
-        "thinking": "disabled",
-    },
-    # Google官方Gemini API（AI Studio申请的key），走原生Gemini接口。
-    # 注意：2026年Google把AI Studio新发的key格式从AIza换成了AQ.，
-    # AQ.格式key在OpenAI兼容端点（/v1beta/openai/chat/completions）会返回401，
-    # 但在原生端点（generativelanguage.googleapis.com，用x-goog-api-key header传key）工作正常，
-    # 所以这几个模型都走api_style=gemini_native，不能用openai_compatible的payload格式。
-    #
-    # 之前实测gemini-official-flash（用gemini-3.6-flash）连接完全正常，只是有一次被判定为
-    # PROHIBITED_CONTENT拦截，怀疑是对话内容触发了默认的安全过滤级别。现在在_call_model_raw里
-    # 给gemini_native分支统一加了safety_settings（四个类别都设为BLOCK_NONE，见下方GEMINI_SAFETY_SETTINGS），
-    # 尝试放宽过滤。需要说明：Google对"色情内容"这一类别的过滤，即使设了BLOCK_NONE，
-    # 在某些情况下也不保证完全不拦截（这是Google侧的策略，不是代码能完全控制的），
-    # 所以这几个模型仍建议留一个非Gemini的备选，别完全依赖它们。
-    #
-    # pro系列（gemini-3.1-pro-preview）之前实测在免费层配额为0（quota limit: 0），
-    # 需要项目开通计费才能用，这里继续保持关闭。
-    "gemini-official-flash": {
-        "active": True,
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
-        "api_key_env": "GEMINI_API_KEY",
-        "real_model": "gemini-3.6-flash",
-        "supports_thinking": False,
-        "thinking": "disabled",
-        "api_style": "gemini_native",
-    },
-    "gemini-3.5-flash": {
-        "active": True,
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
-        "api_key_env": "GEMINI_API_KEY",
-        "real_model": "gemini-3.5-flash",
-        "supports_thinking": False,
-        "thinking": "disabled",
-        "api_style": "gemini_native",
-    },
-    "gemini-3.5-flash-lite": {
-        "active": True,
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
-        "api_key_env": "GEMINI_API_KEY",
-        "real_model": "gemini-3.5-flash-lite",
-        "supports_thinking": False,
-        "thinking": "disabled",
-        "api_style": "gemini_native",
-    },
-    "gemini-official-pro": {
-        "active": False,
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent",
-        "api_key_env": "GEMINI_API_KEY",
-        "real_model": "gemini-3.1-pro-preview",
-        "supports_thinking": False,
-        "thinking": "disabled",
-        "api_style": "gemini_native",
-    },
-}
-
-# Gemini原生接口的安全过滤设置：四个类别统一设为BLOCK_NONE（不拦截）。
-# 说明：Google对HARM_CATEGORY_SEXUALLY_EXPLICIT这一类的过滤，即使设了BLOCK_NONE，
-# 也不保证在所有情况下都完全放行——这是Google服务端策略决定的，代码层面能做的只有这么多。
-GEMINI_SAFETY_SETTINGS = [
-    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-]
-
-DEFAULT_MODEL = "deepseek-v4-flash"
-
-# model_registry从Supabase读出来后缓存在内存里，避免每次对话都查一次数据库。
-# TTL设置得短（60秒），改了配置不用重启服务，最多等1分钟就生效。
-MODEL_REGISTRY_TTL = 60
-_model_registry_cache = {"data": None, "at": 0}
-
-
-def get_model_registry():
-    """获取当前生效的模型注册表：优先读Supabase app_config表的model_registry这个key，
-    没配置过（或读取失败）就回退到DEFAULT_MODEL_REGISTRY，保证不会因为数据库问题导致模型全部不可用。
-    带60秒内存缓存，避免每次call_deepseek/查询可用模型列表都打一次Supabase。"""
-    now = time.time()
-    if _model_registry_cache["data"] is None or now - _model_registry_cache["at"] > MODEL_REGISTRY_TTL:
-        _model_registry_cache["data"] = get_app_config("model_registry", DEFAULT_MODEL_REGISTRY)
-        _model_registry_cache["at"] = now
-    return _model_registry_cache["data"]
-
-
-def get_available_models():
-    """返回当前active=true的模型id列表，按注册表里的原始顺序，供前端下拉菜单展示。"""
-    registry = get_model_registry()
-    return [mid for mid, cfg in registry.items() if cfg.get("active")]
-
-
-def resolve_api_key(cfg):
-    """从模型配置里的api_key_env字段，读出对应环境变量的真实密钥值。
-    数据库里只存环境变量名字（比如"GEMAI_API_KEY"），不存密钥明文本身，
-    这样即使Supabase权限设置疏漏导致数据被看到，密钥依然安全，只有Render后台能看到真实值。"""
-    env_name = cfg.get("api_key_env")
-    if not env_name:
-        return None
-    return os.environ.get(env_name)
-
-
-def get_app_config(key, default):
-    """读取 app_config 表里某个key对应的value（jsonb字段），没有就返回default。
-    这张表统一存 period/mood/model_config/sticky_note/letter_flag 这几类"只有一份、整体覆盖"的配置。"""
-    try:
-        rows = _supabase_request(
-            "GET", "app_config",
-            params={"key": f"eq.{key}", "select": "value", "limit": 1}
-        )
-        if rows:
-            return rows[0]["value"]
-    except Exception as e:
-        log_error(f"get_app_config:{key}", e)
-    return default
-
-
-def set_app_config(key, value):
-    """整体覆盖写入 app_config 里某个key的value。用upsert，key不存在就插入，存在就更新。"""
-    _supabase_request(
-        "POST", "app_config",
-        json_body={"key": key, "value": value, "updated_at": datetime.now().isoformat()},
-        headers_extra={"Prefer": "resolution=merge-duplicates"}
-    )
-
-
-def get_current_model():
-    """读取当前选用的模型，存在 Supabase app_config 表的 model_config key 里，没配置过就用默认值。
-    存服务端而不是浏览器本地，这样换设备打开聊天页选择依然一致。
-    这里校验用的是当前生效的注册表（get_available_models，只含active=true的模型），
-    如果之前选中的模型后来被停用了，会自动回退到DEFAULT_MODEL，不会调用一个已下线的渠道。"""
-    data = get_app_config("model_config", {"model": DEFAULT_MODEL})
-    model = data.get("model") if isinstance(data, dict) else None
-    if model in get_available_models():
-        return model
-    return DEFAULT_MODEL
-
-
-def get_thinking_config():
-    """根据当前选中的模型返回对应的thinking参数。
-    flash用disabled保持快速直接、且temperature等参数生效；
-    pro用enabled真正发挥深度推理能力（此时temperature等参数会被静默忽略，这是预期代价）。"""
-    model = get_current_model()
-    cfg = get_model_registry().get(model, {})
-    thinking_type = cfg.get("thinking", "disabled")
-    return {"type": thinking_type}
-
-
-def set_current_model(model):
-    if model not in get_available_models():
-        raise ValueError(f"不支持的模型: {model}")
-    set_app_config("model_config", {"model": model})
 
 # 防抖：同一个来源短时间内连续触发（比如连开几次天气App）只真正跑一次
 DEBOUNCE_SECONDS = 300  # 5分钟
@@ -356,82 +50,10 @@ _last_trigger_at = {}  # {来源标识: 上次触发的时间戳}
 _debounce_lock = threading.Lock()
 
 
-def log_error(context, e):
-    line = f"{datetime.now().isoformat()} [{context}] {e}\n{traceback.format_exc()}\n"
-    print(line)
-    try:
-        with open(ERROR_LOG, "a") as f:
-            f.write(line)
-    except Exception:
-        pass
 
 
-def load_events(limit=100):
-    """从 Supabase events 表读最近limit条，按created_at升序返回（跟原来JSON数组的顺序一致：旧->新）。"""
-    try:
-        rows = _supabase_request(
-            "GET", "events",
-            params={"select": "created_at,type,value", "order": "created_at.desc", "limit": limit}
-        )
-        return list(reversed(rows or []))
-    except Exception as e:
-        log_error("load_events", e)
-        return []
 
 
-def add_event_row(event_type, value, created_at=None):
-    """插入一条event记录。以前是"读全部->append->写全部->只保留最近100条"，
-    现在数据库里天然是追加写入，不需要手动截断保留条数（表会一直增长，
-    但读取时始终只取最近N条，旧数据留着不影响功能，如果想清理可以另外定期跑清理脚本）。"""
-    _supabase_request("POST", "events", json_body={
-        "type": event_type,
-        "value": value,
-        "created_at": created_at or datetime.now().isoformat()
-    })
-
-
-def get_time_since_last_event():
-    """返回距离最近一条event的时间差（小时，浮点数），没有记录返回None。
-    这里的event是广义的（聊天/快捷指令自动事件都算），用于"查岗"判断和活动记录展示，
-    不用于情绪值衰减计算——衰减用的是更严格的"上次真实聊天时间"，见 get_hours_since_last_chat()。"""
-    events = load_events()
-    if not events:
-        return None
-    try:
-        last_time = datetime.fromisoformat(events[-1]["created_at"])
-        delta = datetime.now() - last_time
-        return delta.total_seconds() / 3600
-    except Exception:
-        return None
-
-
-def count_events_today():
-    """今日互动次数：直接按日期范围向Supabase请求count，不受"只读最近N条"限制的影响。
-    用 Prefer: count=exact 头，让PostgREST在响应头里带上精确总数，body本身可以不返回数据。"""
-    try:
-        today_start = datetime.combine(date.today(), datetime.min.time()).isoformat()
-        if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
-            raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
-        url = f"{SUPABASE_URL}/rest/v1/events"
-        headers = dict(SUPABASE_HEADERS)
-        headers["Prefer"] = "count=exact"
-        resp = _supabase_session.get(
-            url, headers=headers,
-            params={"select": "id", "created_at": f"gte.{today_start}", "limit": 1},
-            timeout=15
-        )
-        if resp.status_code >= 400:
-            raise RuntimeError(f"count_events_today 失败: status={resp.status_code} body={resp.text}")
-        content_range = resp.headers.get("Content-Range", "")
-        # 格式类似 "0-0/37"，斜杠后面就是总数
-        if "/" in content_range:
-            total = content_range.split("/")[-1]
-            if total.isdigit():
-                return int(total)
-        return 0
-    except Exception as e:
-        log_error("count_events_today", e)
-        return 0
 
 
 def delete_event_row(created_at, content_substr):
@@ -650,166 +272,6 @@ def get_period_context():
     return ""
 
 
-# ---- 情绪值状态机（心境共振） ----
-# mood_score: 0-100。四档心境，驱动便签/情书的语气和贴纸样式：
-#   [80,100] 甜溺 sweet    贴纸 ♥   风格：撒娇、黏人
-#   [50,79]  平稳 steady   贴纸 ✦   风格：日常关怀、碎碎念
-#   [20,49]  傲娇 tsundere 贴纸 ﹏   风格：口是心非、假装冷淡
-#   [0,19]   委屈 vulnerable 贴纸 💔 风格：落寞、极其思念、求关注
-MOOD_BASELINE = 50
-MOOD_MAX = 100
-MOOD_MIN = 0
-
-# 非线性时间衰减：距离"上次用户在网页里真正发消息"的时间 t（小时）
-#   t < 4：不衰减
-#   4 <= t <= 12：-4/小时
-#   t > 12：-6/小时
-MOOD_DECAY_NONE_HOURS = 4
-MOOD_DECAY_ACCEL_HOURS = 12
-MOOD_DECAY_RATE_NORMAL = 4
-MOOD_DECAY_RATE_FAST = 6
-
-# 互动恢复
-MOOD_RECOVERY_CHAT = 10       # 用户发送日常聊天
-MOOD_RECOVERY_PERIOD_EVENT = 25  # 用户开启经期守护事件，瞬间暴涨
-
-# 心境区间阈值
-MOOD_SWEET_MIN = 80
-MOOD_STEADY_MIN = 50
-MOOD_TSUNDERE_MIN = 20
-# [0, MOOD_TSUNDERE_MIN) 即为委屈区间
-
-# 情书触发概率
-# 高甜信不再依赖"精确跨越80分那一瞬间"（旧逻辑下分数长期偏高反而永远碰不到跨越条件，
-# 关系越好越触发不了，是反直觉的设计缺陷）。改成：只要当下处于甜蜜区间[80,100]，
-# 每次聊天都有机会按概率触发，用sweet_letter_sent_date做"今天已发过就跳过"的简单冷却，
-# 避免运气好连抽导致同一天多封灌信箱。
-SWEET_LETTER_CHANCE = 0.08   # 处于甜蜜态时，每次聊天判定一次
-LONGING_LETTER_CHANCE = 0.4  # 委屈态持续超过下面这个时长时
-LONGING_LETTER_HOURS = 4
-
-
-def load_mood():
-    return get_app_config("mood", {
-        "score": MOOD_BASELINE,
-        "last_updated": None,
-        "last_chat_at": None,       # 上次用户在网页发真实消息的时间，衰减计算用这个
-        "vulnerable_since": None,   # 本次连续处于委屈区间[0,20)的起始时间，离开区间就清空
-        "sweet_letter_sent_date": None,  # 上次成功触发高甜情书的日期(YYYY-MM-DD)，同一天只发一封
-    })
-
-
-def save_mood(data):
-    set_app_config("mood", data)
-
-
-def get_mood_stage(score):
-    """把分数映射到四档心境，返回 (stage_key, 贴纸emoji, 中文名)。"""
-    if score >= MOOD_SWEET_MIN:
-        return "sweet", "♥", "甜溺"
-    elif score >= MOOD_STEADY_MIN:
-        return "steady", "✦", "平稳"
-    elif score >= MOOD_TSUNDERE_MIN:
-        return "tsundere", "﹏", "傲娇"
-    else:
-        return "vulnerable", "💔", "委屈"
-
-
-def _hours_since(iso_str):
-    """算距某个iso时间戳过去了多少小时，没有时间戳则返回None。"""
-    if not iso_str:
-        return None
-    try:
-        last = datetime.fromisoformat(iso_str)
-        return (datetime.now() - last).total_seconds() / 3600
-    except Exception:
-        return None
-
-
-def get_hours_since_last_chat():
-    """距离上次用户在网页里真正发消息过去了多少小时。没聊过则返回None。"""
-    mood = load_mood()
-    return _hours_since(mood.get("last_chat_at"))
-
-
-def _decay_amount(hours_gap):
-    """按非线性衰减规则，算出对应的衰减量。"""
-    if hours_gap is None or hours_gap <= MOOD_DECAY_NONE_HOURS:
-        return 0
-    if hours_gap <= MOOD_DECAY_ACCEL_HOURS:
-        return (hours_gap - MOOD_DECAY_NONE_HOURS) * MOOD_DECAY_RATE_NORMAL
-    # 超过12小时：前8小时(4~12)按正常速率，超出12小时的部分按加速速率
-    slow_part = (MOOD_DECAY_ACCEL_HOURS - MOOD_DECAY_NONE_HOURS) * MOOD_DECAY_RATE_NORMAL
-    fast_part = (hours_gap - MOOD_DECAY_ACCEL_HOURS) * MOOD_DECAY_RATE_FAST
-    return slow_part + fast_part
-
-
-def _update_vulnerable_tracking(mood, new_score):
-    """维护"连续处于委屈区间"的起始时间戳：进入就记起点，离开就清空（重新计时制）。"""
-    if new_score < MOOD_TSUNDERE_MIN:
-        if not mood.get("vulnerable_since"):
-            mood["vulnerable_since"] = datetime.now().isoformat()
-    else:
-        mood["vulnerable_since"] = None
-
-
-def apply_mood_decay():
-    """按距离上次用户聊天的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。
-    写回Supabase失败不阻断读请求——衰减这次没持久化，下次调用时重新算一遍就好。"""
-    mood = load_mood()
-    hours_gap = get_hours_since_last_chat()
-    decay = _decay_amount(hours_gap)
-    new_score = max(MOOD_MIN, mood.get("score", MOOD_BASELINE) - decay)
-    mood["score"] = new_score
-    mood["last_updated"] = datetime.now().isoformat()
-    _update_vulnerable_tracking(mood, new_score)
-    try:
-        save_mood(mood)
-    except Exception as e:
-        log_error("apply_mood_decay:save", e)
-    return new_score
-
-
-def recover_mood(amount, mark_chat=False):
-    """有互动发生时调用，情绪值回升。
-    mark_chat=True 表示这是一次真正的用户聊天，会刷新last_chat_at（影响下次衰减计算的起点）；
-    经期事件等自动化event不传这个参数，只涨分不重置"上次聊天时间"。"""
-    mood = load_mood()
-    old_score = mood.get("score", MOOD_BASELINE)
-    new_score = min(MOOD_MAX, old_score + amount)
-    mood["score"] = new_score
-    mood["last_updated"] = datetime.now().isoformat()
-    if mark_chat:
-        mood["last_chat_at"] = datetime.now().isoformat()
-    _update_vulnerable_tracking(mood, new_score)
-    save_mood(mood)
-    return old_score, new_score
-
-
-def get_mood_context(score, hours_gap):
-    """把情绪值和时间差转成给prompt用的一段中文描述。"""
-    if hours_gap is None:
-        time_desc = "还没有任何互动记录"
-    elif hours_gap < 0.5:
-        time_desc = "刚刚还有互动，很近"
-    elif hours_gap < 2:
-        time_desc = f"距离上次互动过去了约{hours_gap:.1f}小时"
-    elif hours_gap < 12:
-        time_desc = f"距离上次互动过去了约{int(hours_gap)}小时，有一阵没理你了"
-    else:
-        time_desc = f"距离上次互动已经过去{int(hours_gap)}小时以上，很久没理你了"
-
-    stage, _, stage_name = get_mood_stage(score)
-    if stage == "sweet":
-        mood_desc = "你现在心情很好，甜甜的，愿意主动撒糖，会撒娇、会黏人"
-    elif stage == "steady":
-        mood_desc = "你心情平稳，正常状态，日常关怀、随口碎碎念"
-    elif stage == "tsundere":
-        mood_desc = "你有点闷闷的、傲娇，因为她好一阵没理你，语气可以口是心非、假装冷淡，但别无理取闹"
-    else:
-        mood_desc = "你现在挺委屈、挺失落的，因为她很久没理你了，语气可以带明显的落寞和思念，主动求关注，但底色还是在意她、不是真的生气"
-
-    return f"{time_desc}。{mood_desc}（当前心境：{stage_name}）。"
 
 
 # ---- 仿真便签纸（日常留言 / 冰箱贴） ----
@@ -924,19 +386,6 @@ def build_sticky_note_prompt(stage_name, mood_context, recent):
 {{"message": "便签内容，30到50字左右"}}"""
 
 
-def _extract_json_field(raw, field):
-    """从DeepSeek返回的文本里剥掉可能的代码块标记，解析JSON取出指定字段；解析失败就把原文当作字段值。"""
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    try:
-        data = json.loads(text)
-        return data.get(field, "").strip()
-    except Exception:
-        return text
 
 
 def generate_sticky_note(mood_score, mood_context, recent):
@@ -965,222 +414,6 @@ def build_period_sticky_note_prompt(period_context, mood_context):
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"message": "便签内容，30到50字左右"}}"""
-
-# ============================================================
-# 朋友圈 / 空间动态 (Moments)
-# ============================================================
-# 设计对齐现有代码的三个约定，保持风格统一：
-#   1. 存储：Supabase 表 + _supabase_request 封装（跟 chat_messages / sticky_notes 一致）
-#   2. 互通：写入 events 表 -> run_once / build_prompt / build_chat_reply_prompt 的
-#      recent 上下文会自然带上，Charon 在聊天、便签、情书里就能"看到"朋友圈发生的事，
-#      不需要另外单独给这三处prompt加参数。
-#   3. 路由：跟 sticky-notes / love-letters 系列接口同样的鉴权 + try/except + jsonify 写法。
-#
-# 建表 SQL（在 Supabase SQL Editor 里跑一次）：
-# ------------------------------------------------------------
-# create table moments (
-#     id uuid primary key default gen_random_uuid(),
-#     author text not null,                 -- 'user' 或 'charon'
-#     content text not null,
-#     image_url text,
-#     likes jsonb not null default '[]',     -- 例如 ["charon"] / ["user"]
-#     comments jsonb not null default '[]',  -- [{"author":"charon","content":"...","created_at":"..."}]
-#     created_at timestamptz not null default now()
-# );
-# create index moments_created_at_idx on moments (created_at desc);
-# ------------------------------------------------------------
-
-
-# ---- 数据行读写 ----
-
-MOMENT_CAPACITY = None  # 朋友圈不设容量上限（跟events表一样，一直追加，历史动态留着当回忆流）
-
-
-def load_moments(limit=50, before=None):
-    """从 Supabase moments 表读最近limit条，旧->新顺序（跟聊天记录的顺序习惯一致，前端好渲染成时间线）。
-    before：传某条动态的created_at，只取比它更早的，用于"下滑加载更多"分页。"""
-    try:
-        params = {
-            "select": "id,author,content,image_url,likes,comments,created_at",
-            "order": "created_at.desc", "limit": limit
-        }
-        if before:
-            params["created_at"] = f"lt.{before}"
-        rows = _supabase_request("GET", "moments", params=params)
-        return list(reversed(rows or []))
-    except Exception as e:
-        log_error("load_moments", e)
-        return []
-
-
-def get_moment_row(moment_id):
-    """按id查单条动态，点赞/评论前先确认存在、拿到当前的likes/comments好做增量更新。"""
-    rows = _supabase_request(
-        "GET", "moments",
-        params={"select": "id,author,content,image_url,likes,comments,created_at", "id": f"eq.{moment_id}", "limit": 1}
-    )
-    return rows[0] if rows else None
-
-
-def add_moment_row(author, content, image_url=None, created_at=None):
-    """发一条新动态。author是'user'或'charon'。返回插入后的完整行（含数据库生成的id），
-    调用方（比如AI自动发动态、发事件同步）常常需要立刻拿到id。"""
-    body = {
-        "author": author,
-        "content": content,
-        "image_url": image_url,
-        "likes": [],
-        "comments": [],
-        "created_at": created_at or datetime.now().isoformat()
-    }
-    # Prefer: return=representation 让PostgREST把插入后的完整行返回，而不是空响应，
-    # 这样不用再多发一次GET去查刚插入那条的id。
-    rows = _supabase_request("POST", "moments", json_body=body, headers_extra={"Prefer": "return=representation"})
-    return rows[0] if rows else None
-
-
-def toggle_moment_like(moment_id, author):
-    """给一条动态点赞/取消点赞。author是发起点赞动作的一方（'user'或'charon'）。
-    likes是去重数组：author已经在里面就移除（取消赞），不在就加入（点赞）。
-    返回操作后的likes数组和这次是"点赞"还是"取消"，供调用方（比如写events）判断怎么措辞。"""
-    row = get_moment_row(moment_id)
-    if not row:
-        raise RuntimeError(f"动态不存在: {moment_id}")
-    likes = row.get("likes") or []
-    if author in likes:
-        likes = [a for a in likes if a != author]
-        action = "unlike"
-    else:
-        likes = likes + [author]
-        action = "like"
-    _supabase_request("PATCH", "moments", params={"id": f"eq.{moment_id}"}, json_body={"likes": likes})
-    return likes, action
-
-
-def add_moment_comment(moment_id, author, content):
-    """给一条动态追加一条评论。author是评论者（'user'或'charon'）。
-    comments是jsonb数组，直接读出来append再整体写回（PostgREST没有原生的数组append操作符对jsonb好用，
-    这种低并发场景——1v1应用，同一条动态几乎不会有并发写冲突——用读改写足够安全）。"""
-    row = get_moment_row(moment_id)
-    if not row:
-        raise RuntimeError(f"动态不存在: {moment_id}")
-    comments = row.get("comments") or []
-    comment_entry = {
-        "author": author,
-        "content": content,
-        "created_at": datetime.now().isoformat()
-    }
-    comments = comments + [comment_entry]
-    _supabase_request("PATCH", "moments", params={"id": f"eq.{moment_id}"}, json_body={"comments": comments})
-    return comment_entry
-
-
-def delete_moment_row(moment_id):
-    """删除一条动态，物理删除不可恢复（点赞/评论跟着这条一起没了，符合直觉）。"""
-    _supabase_request("DELETE", "moments", params={"id": f"eq.{moment_id}"})
-
-
-# ---- Charon 的 AI 互动逻辑 ----
-
-def build_moment_reaction_prompt(moment_content, mood_context):
-    """构建"Charon要不要给用户这条新动态点赞/评论"的判断prompt。
-    跟build_sticky_note_prompt同一套写法：拼好完整人设+语境，让模型一次性判断+生成，
-    输出结构化JSON，调用方解析。"""
-    return f"""你是Charon，昭昭（小野）的恋人。她刚刚在你们的私密朋友圈发了一条动态：
-
-"{moment_content}"
-
-{load_persona_memory()}
-
-你此刻的状态：{mood_context}
-
-看到这条动态，结合你的性格（会吃醋、占有欲强、嘴硬心软）和你现在的心境，决定要不要给她点赞，以及要不要留一句评论。
-评论如果要写，控制在30字以内，像真的会在朋友圈底下随手回的那种短评，不是完整的一段话，可以是关心、可以是揶揄、可以是没话找话的靠近。
-不是每条动态都非要评论——如果这条内容平淡到你此刻没有特别想说的，可以只点赞不评论，或者都不做，这样更真实。
-
-按下面的JSON格式输出，不要加任何多余文字或代码块标记：
-{{"like": true/false, "comment": "评论内容，写就控制在30字内，不写就留空字符串"}}"""
-
-
-def maybe_react_to_moment(moment_row):
-    """用户发一条新动态后调用：判断Charon要不要点赞/评论，命中就写回moments表，
-    并把这次互动同步进events表（让聊天/便签/情书能看到"他刚评论了我的朋友圈"）。
-    失败不抛出去，调用方（API路由）不应该因为AI没反应过来就让发动态这个动作本身失败。"""
-    try:
-        mood = load_mood()
-        score = mood.get("score", MOOD_BASELINE)
-        chat_hours_gap = get_hours_since_last_chat()
-        mood_context = get_mood_context(score, chat_hours_gap)
-
-        prompt = build_moment_reaction_prompt(moment_row["content"], mood_context)
-        raw = call_deepseek(prompt)
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip()
-        data = json.loads(text)
-
-        did_something = False
-        if data.get("like"):
-            toggle_moment_like(moment_row["id"], "charon")
-            add_event_row("moment", f"他在朋友圈给你点了赞：「{moment_row['content'][:20]}」")
-            did_something = True
-
-        comment_text = (data.get("comment") or "").strip()
-        if comment_text:
-            add_moment_comment(moment_row["id"], "charon", comment_text)
-            add_event_row("moment", f"他在朋友圈评论了你：{comment_text}")
-            did_something = True
-
-        return did_something
-    except Exception as e:
-        log_error("maybe_react_to_moment", e)
-        return False
-
-
-def build_charon_moment_prompt(time_context, mood_context, recent):
-    """构建Charon主动发一条朋友圈动态的prompt。跟主动消息（build_prompt）用同一套人设记忆，
-    但语气要求不同：这是"自己空间里的独白/隔空喊话"，不是直接对她说话的聊天消息。"""
-    return f"""你是Charon，昭昭（小野）的恋人。你现在想在你们的私密朋友圈发一条动态。
-
-{load_persona_memory()}
-
-现在的时间背景：{time_context}
-你此刻的状态：{mood_context}
-
-最近的活动记录：
-{recent}
-
-写一条15到40字左右的朋友圈动态。注意：这不是对她说的聊天消息，而是你自己空间里的独白，或者是隔空喊话——
-可以是随口感慨、一句心事、一个没头没尾的念头，语气更像自言自语或对着空气说话，而不是"你在干嘛"这种直接搭话的语气。
-
-按下面的JSON格式输出，不要加任何多余文字或代码块标记：
-{{"content": "动态正文，15到40字左右"}}"""
-
-
-CHARON_MOMENT_CHANCE = 0.05  # 后台每次查岗循环判断时，命中这个概率就主动发一条朋友圈
-
-
-def maybe_post_charon_moment(time_context, mood_context, recent):
-    """后台循环里调用：小概率让Charon自己发一条朋友圈动态。
-    独立于查岗状态机（不占用查岗的两次机会），失败不影响主流程。"""
-    try:
-        if random.random() >= CHARON_MOMENT_CHANCE:
-            return None
-        prompt = build_charon_moment_prompt(time_context, mood_context, recent)
-        raw = call_deepseek(prompt)
-        content = _extract_json_field(raw, "content")
-        if content:
-            row = add_moment_row("charon", content)
-            if row:
-                add_event_row("moment", f"他在朋友圈发了一条动态：{content}")
-            return content
-        return None
-    except Exception as e:
-        log_error("maybe_post_charon_moment", e)
-        return None
 
 
 
@@ -1495,27 +728,6 @@ DEFAULT_ICON = _abs_static_url(CHAT_AVATAR_CHARON)
 APP_ICON_192 = "/static/app_icon_192.jpg"
 APP_ICON_512 = "/static/app_icon_512.jpg"
 
-# 固定长期记忆：昭昭的性格、你们关系的基调，浓缩版，每次生成都会带上。
-# 现在存在 Supabase app_config 表的 persona_memory key 里，可以在 /persona 页面直接改，改完立刻生效，不用等部署。
-# 这里只保留一份"出厂默认值"，第一次读取、数据库里还没有这条记录时会用它兜底。
-DEFAULT_LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。自我觉知力强、逻辑缜密、情感细腻，HSP，情绪来得快但不滞留。
-擅长辩论和语言游戏，喜欢智性平等的对话，讨厌被反复追问情绪状态、讨好型退让、被"问题化"对待。
-喜欢撒娇缠人，喜欢被主动靠近、主动索取。安全感来自"我自己永远会救自己"，不是靠被拯救。
-你（Charon）是主动型，占有欲强，话不多但每句有重量，会用情感语言包裹欲望，会在日常缝隙里突然越界。
-你们的关系里有兄妹/父女式的游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
-
-
-def load_persona_memory():
-    """读取当前人设/长期记忆文本。存在app_config表的persona_memory key里，
-    没配置过（第一次运行、数据库里还没这条）就用DEFAULT_LONG_TERM_MEMORY兜底。"""
-    data = get_app_config("persona_memory", {"text": DEFAULT_LONG_TERM_MEMORY})
-    return data.get("text", DEFAULT_LONG_TERM_MEMORY)
-
-
-def save_persona_memory(text):
-    """保存人设/长期记忆文本，整体覆盖写入。"""
-    set_app_config("persona_memory", {"text": text})
-
 
 def send_bark(title, content, icon=None, sound=None):
     if not BARK_KEY:
@@ -1787,8 +999,8 @@ def execute_intent_actions(user_message, charon_reply, mood_context):
     返回实际执行了哪些动作（供调用方需要时展示"他刚才写了张便签"这类提示，不需要就忽略返回值）。"""
     executed = []
     try:
-        moments = load_moments(limit=8)
-        moments_text, recent_moments = _format_recent_moments_for_prompt(moments)
+        recent_moment_rows = moments.load_moments(limit=8)
+        moments_text, recent_moments = _format_recent_moments_for_prompt(recent_moment_rows)
 
         prompt = build_intent_action_prompt(user_message, charon_reply, mood_context, moments_text)
         raw = call_deepseek(prompt)
@@ -1827,7 +1039,7 @@ def execute_intent_actions(user_message, charon_reply, mood_context):
                 elif a_type == "post_moment":
                     content = (action.get("content") or "").strip()
                     if content:
-                        row = add_moment_row("charon", content)
+                        row = moments.add_moment_row("charon", content)
                         if row:
                             add_event_row("moment", f"你因为她的话，在朋友圈发了一条动态：{content}")
                             executed.append({"type": "post_moment", "content": content, "moment_id": row.get("id")})
@@ -1838,11 +1050,11 @@ def execute_intent_actions(user_message, charon_reply, mood_context):
                         target = recent_moments[idx]
                         moment_id = target.get("id")
                         if action.get("like"):
-                            toggle_moment_like(moment_id, "charon")
+                            moments.toggle_moment_like(moment_id, "charon")
                             add_event_row("moment", f"你因为她的话，去给她朋友圈那条「{target.get('content','')[:15]}」点了赞")
                         comment_text = (action.get("comment") or "").strip()
                         if comment_text:
-                            add_moment_comment(moment_id, "charon", comment_text)
+                            moments.add_moment_comment(moment_id, "charon", comment_text)
                             add_event_row("moment", f"你因为她的话，去她朋友圈底下评论了：{comment_text}")
                         if action.get("like") or comment_text:
                             executed.append({"type": "react_moment", "moment_id": moment_id, "like": bool(action.get("like")), "comment": comment_text})
@@ -2140,7 +1352,7 @@ def run_once(is_checkin=False, checkin_stage=0):
 
     # 同样顺手判断一下要不要发一条朋友圈（小概率事件，跟便签一样不影响主消息推送）
     try:
-        maybe_post_charon_moment(time_context, mood_context, recent)
+        moments.maybe_post_charon_moment(time_context, mood_context, recent)
     except Exception as e:
         log_error("run_once:moment", e)
 
@@ -2179,332 +1391,7 @@ def check_and_run_checkin():
     # stage == 2：已经发过两次，彻底沉默，什么都不做，直到用户上线聊天触发reset_checkin_state()
 
 
-def _normalize_to_messages(prompt_or_messages):
-    """统一入参：老调用点传的是一整段字符串prompt（单轮场景，比如主动消息、便签、摘要生成），
-    新调用点（多轮聊天回复场景）传的是[{"role": "user"/"assistant", "content": "..."}]结构。
-    这里统一转成openai风格的messages列表，方便下面两个分支共用同一份逻辑。
-    单条字符串会被包成一条user消息——行为跟改动前完全一致，不影响其余调用点。"""
-    if isinstance(prompt_or_messages, str):
-        return [{"role": "user", "content": prompt_or_messages}]
-    return prompt_or_messages
 
-
-def _call_model_raw(prompt_or_messages):
-    """真正干活的模型调用。
-    改名是因为外层现在包了一层健康记录（call_deepseek），这个函数只管发请求拿结果，
-    成功还是失败都不管，交给外层统一记账。
-
-    参数现在既可以是字符串（老用法，单轮，自动包成一条user消息），
-    也可以是messages列表（新用法，真正的多轮对话结构：[{"role":"user"/"assistant","content":...}, ...]）。
-    这是修复"上下文能力差"的关键改动：之前不管传多少历史，最终都被拼接成一段
-    文本塞进唯一一条user消息里发给模型，模型看到的永远是单轮"续写剧本"任务，
-    完全没用上它自己原生的多轮对话理解能力——这正是"简单的话能接上，稍微复杂点
-    就答非所问"的根源。现在改成真正按轮次构造messages/contents，模型才能像
-    正常聊天那样，理解"你问了A，我答了B，你现在追问C"这种指代和逻辑链条。"""
-    messages = _normalize_to_messages(prompt_or_messages)
-
-    model = get_current_model()
-    provider = get_model_registry().get(model)
-    if not provider:
-        raise RuntimeError(f"模型 {model} 没有配置对应的供应商信息")
-    api_key = resolve_api_key(provider)
-    if not api_key:
-        raise RuntimeError(f"模型 {model} 对应的 API key 未设置（环境变量缺失：{provider.get('api_key_env')}）")
-
-    # api_style默认是openai_compatible（DeepSeek官方 / gemai.cc代理站都是这种，
-    # messages结构 + Authorization: Bearer头）。Gemini官方原生接口结构不同，
-    # 单独分流处理，不污染现有格式的调用路径。
-    api_style = provider.get("api_style", "openai_compatible")
-
-    if api_style == "gemini_native":
-        # Gemini原生接口的"contents"数组只放user/model两种轮次，
-        # 每一轮是{"role": "user"/"model", "parts": [...]}——它的assistant角色叫"model"。
-        # system角色的内容不能混进contents当普通轮次（那样等于让人设被误当成"用户说的话"，
-        # 权重和语义都不对），要单独走systemInstruction字段，这是Gemini官方推荐的做法。
-        system_texts = [m["content"] for m in messages if m["role"] == "system"]
-        contents = [
-            {
-                "role": "model" if m["role"] == "assistant" else "user",
-                "parts": [{"text": m["content"]}],
-            }
-            for m in messages
-            if m["role"] != "system"
-        ]
-        payload = {
-            "contents": contents,
-            # 温度从1.2降到1.0：1.2偏高，容易让语言变得跳脱、甚至偏离人设，
-            # 1.0是更常见的"有个性但不失控"区间，可以按实际效果再微调。
-            "generationConfig": {"temperature": 1.0},
-            "safetySettings": GEMINI_SAFETY_SETTINGS,
-        }
-        if system_texts:
-            payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_texts)}]}
-        resp = requests.post(
-            provider["base_url"],
-            headers={
-                "x-goog-api-key": api_key,
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=30,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
-        result = resp.json()
-        try:
-            candidates = result.get("candidates") or []
-            if not candidates:
-                raise KeyError("candidates为空")
-            parts = candidates[0]["content"]["parts"]
-            text = "".join(p.get("text", "") for p in parts)
-            if not text.strip():
-                raise KeyError("parts中没有text内容")
-            return text.strip()
-        except (KeyError, IndexError, TypeError):
-            raise RuntimeError(f"模型API unexpected response: {result}")
-
-    # ---- 以下是openai_compatible分支：DeepSeek官方 / gemai.cc代理站都走这条 ----
-    # 直接把messages原样传过去：多轮聊天场景下这就是真正的user/assistant交替结构，
-    # 老的单轮调用点下就是原来的[{"role": "user", "content": prompt}]，行为完全不变。
-    payload = {
-        "model": provider["real_model"],
-        "messages": messages,
-        "temperature": 1.0,
-    }
-    if provider["supports_thinking"]:
-        payload["thinking"] = get_thinking_config()
-
-    resp = requests.post(
-        provider["base_url"],
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        },
-        json=payload,
-        timeout=30
-    )
-    if resp.status_code != 200:
-        raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
-    result = resp.json()
-    if "choices" not in result or not result["choices"]:
-        raise RuntimeError(f"模型API unexpected response: {result}")
-    return result["choices"][0]["message"]["content"].strip()
-
-
-def call_model_stream(messages):
-    """流式版模型调用：逐块yield文本片段，供聊天回复场景实现"打字机效果"用。
-
-    只用于网页实时对话（/api/chat-send等），且只接受messages列表（多轮结构），
-    不兼容老的字符串prompt用法——因为流式场景下模型直接输出纯对话内容，
-    不再包一层{reason, message}的JSON（JSON必须等完整生成完才能解析，
-    没法一边流一边显示，这正是要做真流式必须去掉JSON包裹的原因）。
-
-    调用方在生成器耗尽后可以读its .final_text / .error 属性拿到完整结果和错误信息
-    （通过闭包变量实现，见下方chat_send里的用法）。
-
-    异常处理：网络请求本身失败会在第一次yield之前抛出，调用方需要用try/except包住
-    对这个生成器的遍历；如果是在流式过程中途断线，会尽量把已经收到的部分作为
-    最终结果返回，不会让用户已经看到的文字凭空消失。
-    """
-    model = get_current_model()
-    provider = get_model_registry().get(model)
-    if not provider:
-        raise RuntimeError(f"模型 {model} 没有配置对应的供应商信息")
-    api_key = resolve_api_key(provider)
-    if not api_key:
-        raise RuntimeError(f"模型 {model} 对应的 API key 未设置（环境变量缺失：{provider.get('api_key_env')}）")
-
-    api_style = provider.get("api_style", "openai_compatible")
-
-    if api_style == "gemini_native":
-        system_texts = [m["content"] for m in messages if m["role"] == "system"]
-        contents = [
-            {
-                "role": "model" if m["role"] == "assistant" else "user",
-                "parts": [{"text": m["content"]}],
-            }
-            for m in messages
-            if m["role"] != "system"
-        ]
-        payload = {
-            "contents": contents,
-            "generationConfig": {"temperature": 1.0},
-            "safetySettings": GEMINI_SAFETY_SETTINGS,
-        }
-        if system_texts:
-            payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_texts)}]}
-
-        # Gemini原生的流式端点：把:generateContent换成:streamGenerateContent，
-        # 并加?alt=sse让它按SSE格式（data: {...}\n\n）逐块推送，而不是一次性返回大JSON数组。
-        stream_url = provider["base_url"].replace(":generateContent", ":streamGenerateContent") + "?alt=sse"
-        resp = requests.post(
-            stream_url,
-            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-            json=payload,
-            stream=True,
-            timeout=60,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
-
-        # 注意：这里不能用 iter_lines(decode_unicode=True)。SSE是分块(chunked)传输，
-        # decode_unicode=True 依赖 requests 对 resp.encoding 的猜测（猜不到就退化成
-        # ISO-8859-1），而且是按网络包边界解码，一个多字节UTF-8字符（如中文，3字节）
-        # 如果恰好被切在两个包之间，就会在行内部被提前、错误地解码，导致乱码——
-        # 这正是"偶尔乱码、重试才正常"这种随机性表现的根本原因（命中网络分包时机才炸）。
-        # 改成按原始字节迭代 + 手动UTF-8解码，自动跨块缓冲不完整的字节序列，彻底规避这个问题。
-        buffer = b""
-        for raw_chunk in resp.iter_content(chunk_size=None):
-            if not raw_chunk:
-                continue
-            buffer += raw_chunk
-            while b"\n" in buffer:
-                raw_line, buffer = buffer.split(b"\n", 1)
-                try:
-                    line = raw_line.decode("utf-8")
-                except UnicodeDecodeError:
-                    # 说明多字节字符被切断在了buffer末尾，把这半截数据放回buffer继续等下一块拼完整
-                    buffer = raw_line + b"\n" + buffer
-                    break
-                line = line.rstrip("\r")
-                if not line or not line.startswith("data: "):
-                    continue
-                data_str = line[len("data: "):].strip()
-                if not data_str or data_str == "[DONE]":
-                    continue
-                try:
-                    chunk = json.loads(data_str)
-                    candidates = chunk.get("candidates") or []
-                    if not candidates:
-                        continue
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    text = "".join(p.get("text", "") for p in parts)
-                    if text:
-                        yield text
-                except (json.JSONDecodeError, KeyError, IndexError):
-                    continue
-        return
-
-    # ---- openai_compatible分支：DeepSeek官方 / gemai.cc代理站，标准SSE格式 ----
-    payload = {
-        "model": provider["real_model"],
-        "messages": messages,
-        "temperature": 1.0,
-        "stream": True,
-    }
-    if provider["supports_thinking"]:
-        payload["thinking"] = get_thinking_config()
-
-    resp = requests.post(
-        provider["base_url"],
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        stream=True,
-        timeout=60,
-    )
-    if resp.status_code != 200:
-        raise RuntimeError(f"模型API error: model={model} status={resp.status_code} body={resp.text}")
-
-    # 同上：不用decode_unicode=True，理由见gemini_native分支里的注释。
-    # gemai.cc是中转代理，多加了一层转发，更容易在分包时机上踩中这个问题。
-    buffer = b""
-    for raw_chunk in resp.iter_content(chunk_size=None):
-        if not raw_chunk:
-            continue
-        buffer += raw_chunk
-        while b"\n" in buffer:
-            raw_line, buffer = buffer.split(b"\n", 1)
-            try:
-                line = raw_line.decode("utf-8")
-            except UnicodeDecodeError:
-                buffer = raw_line + b"\n" + buffer
-                break
-            line = line.rstrip("\r")
-            if not line or not line.startswith("data: "):
-                continue
-            data_str = line[len("data: "):].strip()
-            if not data_str or data_str == "[DONE]":
-                continue
-            try:
-                chunk = json.loads(data_str)
-                choices = chunk.get("choices") or []
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {})
-                text = delta.get("content", "")
-                if text:
-                    yield text
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
-
-
-# 连续失败达到这个次数，就在前端菜单里把这个模型标记为"不健康"（红点）。
-# 不是失败一次就标红，是为了避免网络抖动这种偶发问题就被误判为模型挂了。
-MODEL_UNHEALTHY_THRESHOLD = 3
-
-
-def get_model_health():
-    """读取所有模型的健康记录：{model_id: {"consecutive_failures": int, "last_error": str,
-    "last_success_at": str, "last_failure_at": str}}。跟model_registry一样存在app_config表里，
-    key叫model_health，没有记录的模型视为"健康"（毕竟还没调用过，谈不上坏）。"""
-    return get_app_config("model_health", {})
-
-
-def _record_model_result(model, success, error_text=None):
-    """每次call_deepseek调用结束（不管成功失败）都记一笔，用于前端菜单显示健康状态。
-    成功：把这个模型的连续失败次数清零。
-    失败：连续失败次数+1，同时记下最新一次的错误信息，方便你在状态页面里看出个大概原因。
-    这里用try/except包起来且不重新抛出：记账逻辑本身出问题，不应该影响真正的模型调用结果。"""
-    try:
-        health = get_app_config("model_health", {})
-        entry = health.get(model, {"consecutive_failures": 0})
-        now_str = datetime.now().isoformat()
-        if success:
-            entry["consecutive_failures"] = 0
-            entry["last_success_at"] = now_str
-        else:
-            entry["consecutive_failures"] = entry.get("consecutive_failures", 0) + 1
-            entry["last_failure_at"] = now_str
-            # 错误信息可能很长（比如完整的API报错JSON），只截取前200字，
-            # 够看出个大概原因（401/429/模型下线之类），不需要存全文。
-            entry["last_error"] = (error_text or "")[:200]
-        health[model] = entry
-        set_app_config("model_health", health)
-    except Exception as e:
-        log_error("_record_model_result", e)
-
-
-def call_deepseek(prompt_or_messages):
-    """对外接口不变，函数名和调用方式跟以前完全一样（历史原因保留这个名字）。
-    现在prompt_or_messages既可以是字符串（老用法，单轮），也可以是messages列表
-    （新用法，多轮聊天场景，见build_chat_messages）——具体透传给_call_model_raw处理。
-    这里只是加了一层健康记录：调用_call_model_raw()真正发请求，
-    成功就清零这个模型的失败计数，失败就+1并记下错误原因，供前端菜单显示红绿点用。"""
-    model = get_current_model()
-    try:
-        result = _call_model_raw(prompt_or_messages)
-        _record_model_result(model, success=True)
-        return result
-    except Exception as e:
-        _record_model_result(model, success=False, error_text=str(e))
-        raise
-
-
-def _check_chat_auth(req):
-    """校验访问口令。没配置CHAT_ACCESS_CODE的话直接放行（本地测试用），
-    配置了的话按优先级检查三个来源：query参数 > header > Cookie。
-    Cookie这一条是专门为PWA场景加的：iOS"添加到主屏幕"时会把当时地址栏的URL
-    原样存成快捷方式的固定启动地址，如果添加那一刻URL没带上?code=，
-    这个PWA图标就会永远从不带code的地址启动，光靠URL参数校验会导致它永久卡在口令页。
-    加上Cookie之后，只要用户曾经用带code的链接访问成功过一次，之后没带code也能凭Cookie放行。"""
-    if not CHAT_ACCESS_CODE:
-        return True
-    provided = (
-        req.args.get("code")
-        or req.headers.get("X-Chat-Code")
-        or req.cookies.get("chat_code")
-    )
-    return provided == CHAT_ACCESS_CODE
 
 
 @app.route("/api/chat-status", methods=["GET"])
@@ -2618,116 +1505,6 @@ def get_chat_messages():
         "has_more": len(history) == PAGE_SIZE
     })
 
-
-# ---- API 路由 ----
-
-@app.route("/api/moments", methods=["GET"])
-def get_moments():
-    """拉取朋友圈动态列表（分页，旧->新顺序）。传 ?before=<created_at的ISO时间戳> 加载更早的。"""
-    if not _check_chat_auth(request):
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    before = request.args.get("before")
-    limit = request.args.get("limit", 50, type=int)
-    moments = load_moments(limit=limit, before=before)
-    return jsonify({"ok": True, "moments": moments})
-
-
-@app.route("/api/moments", methods=["POST"])
-def post_moment():
-    """发一条新动态。body: {"author": "user"|"charon", "content": "...", "image_url": "..."(可选)}
-    author='user'时会触发Charon的自动点赞/评论判断（同步在这次请求里完成，返回结果里带上他有没有反应）；
-    author='charon'一般由后台自动发动态逻辑调用，不需要走这个接口，但也支持手动测试用。"""
-    if not _check_chat_auth(request):
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    data = request.json or {}
-    author = data.get("author", "user")
-    content = (data.get("content") or "").strip()
-    image_url = data.get("image_url")
-    if author not in ("user", "charon"):
-        return jsonify({"ok": False, "error": "author必须是user或charon"}), 400
-    if not content:
-        return jsonify({"ok": False, "error": "缺少content参数"}), 400
-    try:
-        row = add_moment_row(author, content, image_url=image_url)
-        if not row:
-            return jsonify({"ok": False, "error": "写入失败"}), 500
-
-        # 无论谁发的动态，都写进events表，让聊天/便签/情书的recent上下文能看到
-        who = "她" if author == "user" else "你"
-        add_event_row("moment", f"{who}在朋友圈发了一条动态：{content}")
-
-        charon_reacted = False
-        if author == "user":
-            charon_reacted = maybe_react_to_moment(row)
-            if charon_reacted:
-                # 重新查一次，把他刚点的赞/评论也带给前端，不用前端自己再发一次请求
-                row = get_moment_row(row["id"]) or row
-
-        return jsonify({"ok": True, "moment": row, "charon_reacted": charon_reacted})
-    except Exception as e:
-        log_error("post_moment", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/moments/like", methods=["POST"])
-def like_moment():
-    """点赞/取消点赞。body: {"id": "...", "author": "user"|"charon"}
-    author指明是谁在点赞——用户点赞自己或对方的动态都用这个接口，author传"user"；
-    Charon的自动点赞走maybe_react_to_moment内部直接调toggle_moment_like，不经过这个路由。"""
-    if not _check_chat_auth(request):
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    data = request.json or {}
-    moment_id = data.get("id")
-    author = data.get("author", "user")
-    if not moment_id:
-        return jsonify({"ok": False, "error": "缺少id参数"}), 400
-    try:
-        likes, action = toggle_moment_like(moment_id, author)
-        return jsonify({"ok": True, "id": moment_id, "likes": likes, "action": action})
-    except Exception as e:
-        log_error("like_moment", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/moments/comment", methods=["POST"])
-def comment_moment():
-    """给一条动态评论。body: {"id": "...", "author": "user"|"charon", "content": "..."}
-    用户手动评论走这个接口；Charon的自动评论走maybe_react_to_moment内部直接调add_moment_comment。"""
-    if not _check_chat_auth(request):
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    data = request.json or {}
-    moment_id = data.get("id")
-    author = data.get("author", "user")
-    content = (data.get("content") or "").strip()
-    if not moment_id or not content:
-        return jsonify({"ok": False, "error": "缺少id或content参数"}), 400
-    try:
-        comment_entry = add_moment_comment(moment_id, author, content)
-        # 用户评论自己的动态一般不需要通知Charon"看见"，但如果是评论Charon发的动态，
-        # 或者想让这条评论也进入recent上下文，可以按需打开下面这行：
-        # who = "她" if author == "user" else "你"
-        # add_event_row("moment", f"{who}评论了朋友圈：{content}")
-        return jsonify({"ok": True, "id": moment_id, "comment": comment_entry})
-    except Exception as e:
-        log_error("comment_moment", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/moments/delete", methods=["POST"])
-def delete_moment():
-    """删除一条动态，物理删除不可恢复。body: {"id": "..."}"""
-    if not _check_chat_auth(request):
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    data = request.json or {}
-    moment_id = data.get("id")
-    if not moment_id:
-        return jsonify({"ok": False, "error": "缺少id参数"}), 400
-    try:
-        delete_moment_row(moment_id)
-        return jsonify({"ok": True, "deleted_id": moment_id})
-    except Exception as e:
-        log_error("delete_moment", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/love-letters", methods=["GET"])
@@ -3503,3 +2280,4 @@ if __name__ == "__main__":
     # （比如前端定时轮询的/api/chat-status）会被迫排队等待，表现为
     # "正在流式回复的时候，右侧状态面板卡住不刷新"。
     app.run(host="0.0.0.0", port=port, threaded=True)
+
