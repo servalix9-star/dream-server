@@ -33,15 +33,19 @@ from core import (
     get_current_model, set_current_model, get_available_models,
     call_deepseek, call_model_stream, get_model_health, _record_model_result,
     MODEL_UNHEALTHY_THRESHOLD,
+    upload_image_to_storage,
 )
 
-# 朋友圈模块。放在这里（core导入之后、main.py自己的业务逻辑之前）而不是延迟到
-# 文件末尾，是因为main.py中段的execute_intent_actions/run_once会直接调用
+# 朋友圈/心意币/表情包/账号资料模块。放在这里（core导入之后、main.py自己的业务逻辑之前）
+# 而不是延迟到文件末尾，是因为main.py中段的execute_intent_actions/run_once会直接调用
 # moments.xxx()，模块级导入放前面能让"这些名字来自哪里"在读代码时一目了然，
 # 不用担心函数定义顺序——Python函数体内的名字是调用时才查找，不是定义时，
-# 所以即使moments.py反过来在文件更后面才被真正用到，这里提前import没有问题。
-# moments.py本身只依赖core.py、不反向依赖main.py，因此不存在循环导入。
+# 所以即使这些模块反过来在文件更后面才被真正用到，这里提前import没有问题。
+# 这几个模块都只依赖core.py、不反向依赖main.py，因此不存在循环导入。
 import moments
+import wallet
+import stickers
+import profile as profile_module  # 避免跟Python内置的profile模块（性能分析工具）撞名
 
 
 # 防抖：同一个来源短时间内连续触发（比如连开几次天气App）只真正跑一次
@@ -76,9 +80,14 @@ def load_chat_history(limit=200, before=None):
     before：传入某条消息的created_at时间戳，只取比它更早的记录——用于前端"上滑加载更早的历史"，
     不传就是原来的行为（取最新的limit条）。
     model字段：这条消息（如果是charon发的）实际是哪个模型生成的，纯记录用途，
-    前端默认不展示在聊天气泡上，只在双击消息的详情/菜单里可以看到，用户消息这个字段是null。"""
+    前端默认不展示在聊天气泡上，只在双击消息的详情/菜单里可以看到，用户消息这个字段是null。
+    msg_type/extra：区分文本/图片/表情包/转账消息，见 sql/schema_additions.sql 里
+    chat_messages 字段扩展的注释。历史消息msg_type默认是'text'、extra是null。"""
     try:
-        params = {"select": "id,role,content,created_at,model", "order": "created_at.desc", "limit": limit}
+        params = {
+            "select": "id,role,content,created_at,model,msg_type,extra",
+            "order": "created_at.desc", "limit": limit
+        }
         if before:
             params["created_at"] = f"lt.{before}"
         rows = _supabase_request("GET", "chat_messages", params=params)
@@ -88,17 +97,21 @@ def load_chat_history(limit=200, before=None):
         return []
 
 
-def add_chat_message_row(msg_id, role, content, created_at=None, model=None):
+def add_chat_message_row(msg_id, role, content, created_at=None, model=None, msg_type="text", extra=None):
     """新增一条聊天消息。model参数只有role="charon"时才有意义
-    （记录这条回复实际是用哪个模型生成的），用户消息不传就是None。"""
+    （记录这条回复实际是用哪个模型生成的），用户消息不传就是None。
+    msg_type默认'text'，extra默认None——保证旧调用点（不传这两个参数）行为完全不变。"""
     body = {
         "id": msg_id,
         "role": role,
         "content": content,
-        "created_at": created_at or datetime.now().isoformat()
+        "created_at": created_at or datetime.now().isoformat(),
+        "msg_type": msg_type,
     }
     if model:
         body["model"] = model
+    if extra is not None:
+        body["extra"] = extra
     _supabase_request("POST", "chat_messages", json_body=body)
 
 
@@ -133,7 +146,7 @@ def get_chat_message_row(msg_id):
     """按id查单条消息，重新生成/撤回时需要先确认这条消息存在、拿到它的created_at和content。"""
     rows = _supabase_request(
         "GET", "chat_messages",
-        params={"select": "id,role,content,created_at,model", "id": f"eq.{msg_id}", "limit": 1}
+        params={"select": "id,role,content,created_at,model,msg_type,extra", "id": f"eq.{msg_id}", "limit": 1}
     )
     return rows[0] if rows else None
 
@@ -1039,7 +1052,13 @@ def execute_intent_actions(user_message, charon_reply, mood_context):
                 elif a_type == "post_moment":
                     content = (action.get("content") or "").strip()
                     if content:
-                        row = moments.add_moment_row("charon", content)
+                        # 用 post_charon_moment_from_intent 而不是直接 add_moment_row：
+                        # 这里要跟后台查岗循环（run_once -> maybe_post_charon_moment）共享
+                        # 同一把发帖冷却锁，避免两处独立触发在短时间内各发一条内容相近的动态
+                        # （这正是之前"Charon会重复发同样内容好几条"的根源）。
+                        # 冷却期内会返回None——这是有意的静默跳过：模型已经决定要发，
+                        # 但这不是用户能感知到的失败，不需要报错或提示。
+                        row = moments.post_charon_moment_from_intent(content)
                         if row:
                             add_event_row("moment", f"你因为她的话，在朋友圈发了一条动态：{content}")
                             executed.append({"type": "post_moment", "content": content, "moment_id": row.get("id")})
@@ -1507,6 +1526,26 @@ def get_chat_messages():
 
 
 
+@app.route("/api/chat-upload-image", methods=["POST"])
+def chat_upload_image():
+    """聊天发图的第一步：上传图片拿到URL。multipart/form-data，字段：file。
+    拿到url之后，前端再调 /api/chat-send 传 {"msg_type": "image", "image_url": "..."}
+    才算真正"发送"这条消息——这个接口只负责上传，不写入聊天记录或事件。
+    分两步而不是一步到位，是为了让"上传"和"发送"是两件独立的事：
+    上传失败不会污染聊天记录；用户上传完预览之后改主意不发了，也不会留下垃圾数据。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "缺少file文件"}), 400
+    try:
+        image_url = upload_image_to_storage(file.read(), file.filename, folder="chat")
+        return jsonify({"ok": True, "image_url": image_url})
+    except Exception as e:
+        log_error("chat_upload_image", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/love-letters", methods=["GET"])
 def get_love_letters():
     """拉取情书列表。传 ?status=drawer 或 ?status=archive 按层筛选；不传则返回全部。
@@ -1798,9 +1837,52 @@ def chat_send():
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
     data = request.json or {}
+    msg_type = data.get("msg_type", "text")
     user_message = (data.get("message") or "").strip()
-    if not user_message:
-        return jsonify({"ok": False, "error": "message不能为空"}), 400
+
+    # 非文本类型：构造一段"给模型看的文字化描述"（model_facing_text），
+    # 同时准备好这条消息落库时需要的extra结构化数据。用户实际输入的文字（如果有）
+    # 仍然保留在user_message里，作为这条消息的"人类可读兜底文案"存进content字段。
+    # 模型不能真的"看到"图片内容（除非以后接入多模态），这里先只做文字化占位，
+    # 但至少能让Charon对"她发了张照片/一个表情/一笔转账"这件事做出恰当反应。
+    extra = None
+    if msg_type == "image":
+        image_url = (data.get("image_url") or "").strip()
+        if not image_url:
+            return jsonify({"ok": False, "error": "缺少image_url参数"}), 400
+        extra = {"image_url": image_url}
+        model_facing_text = f"[她发了一张照片]{('：' + user_message) if user_message else ''}"
+        if not user_message:
+            user_message = "[图片]"
+
+    elif msg_type == "sticker":
+        sticker_id = data.get("sticker_id")
+        image_url = (data.get("image_url") or "").strip()
+        if not sticker_id or not image_url:
+            return jsonify({"ok": False, "error": "缺少sticker_id或image_url参数"}), 400
+        extra = {"sticker_id": sticker_id, "image_url": image_url}
+        model_facing_text = "[她发了一个表情包]"
+        user_message = "[表情包]"
+
+    elif msg_type == "transfer":
+        amount = data.get("amount")
+        if not isinstance(amount, int) or amount <= 0:
+            return jsonify({"ok": False, "error": "amount必须是正整数"}), 400
+        try:
+            transfer_row = wallet.create_transfer("user", "charon", amount, message=user_message, source="manual")
+        except ValueError as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        if not transfer_row:
+            return jsonify({"ok": False, "error": "转账写入失败"}), 500
+        extra = {"transfer_id": transfer_row["id"], "amount": amount, "message": user_message}
+        model_facing_text = f"[她给你转了{amount}心意币]{('，附言：' + user_message) if user_message else ''}"
+        user_message = f"[转账 {amount}]" + (f" {user_message}" if user_message else "")
+
+    else:
+        msg_type = "text"
+        model_facing_text = user_message
+        if not user_message:
+            return jsonify({"ok": False, "error": "message不能为空"}), 400
 
     try:
         # 先读历史（用于构建prompt的上下文），再把这句话写进去
@@ -1808,10 +1890,12 @@ def chat_send():
 
         user_msg_id = new_msg_id()
         user_created_at = datetime.now().isoformat()
-        add_chat_message_row(user_msg_id, "user", user_message, user_created_at)
+        add_chat_message_row(user_msg_id, "user", user_message, user_created_at, msg_type=msg_type, extra=extra)
 
-        # 同步写一笔events，方便活动记录里也能看到这次互动
-        add_event_row("chat", f"她在网页里说：{user_message}", user_created_at)
+        # 同步写一笔events，方便活动记录里也能看到这次互动。
+        # 用model_facing_text而不是user_message，让活动记录里的措辞跟"这是一张图片/
+        # 一个表情/一笔转账"这件事对得上，而不是显示兜底占位文案（比如"[图片]"）。
+        add_event_row("chat", f"她在网页里说：{model_facing_text}", user_created_at)
 
         # 用户重新上线说话了：查岗状态清零，下次她离线重新计时
         try:
@@ -1832,7 +1916,10 @@ def chat_send():
         hour = datetime.now().hour
         time_context = get_time_context(hour)
 
-        messages = build_chat_messages(time_context, user_message, history, mood_context, plain_text=True)
+        # 喂给模型的是model_facing_text（文字化描述版本），不是user_message——
+        # 原始的user_message/兜底文案已经落库展示用了，模型这边应该看到的是
+        # "她发了张照片/一个表情/转了笔钱"这种描述，才能做出恰当反应。
+        messages = build_chat_messages(time_context, model_facing_text, history, mood_context, plain_text=True)
         model_used = get_current_model()
 
         def generate():
@@ -1872,7 +1959,7 @@ def chat_send():
                 # 但要在done事件里带上结果，让前端能第一时间提示"他刚写了张便签/发了条朋友圈"。
                 executed_actions = []
                 try:
-                    executed_actions = execute_intent_actions(user_message, reply_msg, mood_context)
+                    executed_actions = execute_intent_actions(model_facing_text, reply_msg, mood_context)
                 except Exception as e:
                     log_error("chat_send:intent_actions", e)
 
@@ -2220,10 +2307,25 @@ def chat_page():
 
     code_param = request.args.get("code", "")
 
+    # 头像/昵称/聊天背景现在从user_profile表读取，支持在账号主页里修改。
+    # CHAT_AVATAR_CHARON/CHAT_AVATAR_USER常量保留作为兜底默认值——数据库查询
+    # 失败，或者user_profile表还没跑过初始化SQL插入那两行数据时，页面依然能
+    # 正常显示默认头像，不会因为profile查询失败就让整个聊天页打不开。
+    try:
+        profiles = profile_module.load_all_profiles()
+    except Exception as e:
+        log_error("chat_page:load_all_profiles", e)
+        profiles = {}
+    user_profile = profiles.get("user") or {}
+    charon_profile = profiles.get("charon") or {}
+
     resp = app.make_response(render_template(
         "chat.html",
-        avatar_charon=CHAT_AVATAR_CHARON,
-        avatar_user=CHAT_AVATAR_USER,
+        avatar_charon=charon_profile.get("avatar_url") or CHAT_AVATAR_CHARON,
+        avatar_user=user_profile.get("avatar_url") or CHAT_AVATAR_USER,
+        nickname_charon=charon_profile.get("nickname") or "Charon",
+        nickname_user=user_profile.get("nickname") or "昭昭",
+        chat_background=user_profile.get("chat_background") or "",
         code_param=code_param,
     ))
 
@@ -2280,4 +2382,3 @@ if __name__ == "__main__":
     # （比如前端定时轮询的/api/chat-status）会被迫排队等待，表现为
     # "正在流式回复的时候，右侧状态面板卡住不刷新"。
     app.run(host="0.0.0.0", port=port, threaded=True)
-
