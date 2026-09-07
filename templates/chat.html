@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Charon</title>
 <link rel="manifest" href="/manifest.json">
-<!-- iOS "添加到主屏幕"认这个标签，不认manifest.json里的icons（Safari对Web Manifest图标支持不完整） -->
 <link rel="apple-touch-icon" href="/static/app_icon_192.jpg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -17,11 +16,10 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; padding: 0; height: 100%;
-    /* 网格径向渐变，调浅调亮为晨曦迷雾般的柔和马卡龙粉 */
     background: radial-gradient(circle at 10% 20%, #fffcfd 0%, #fbf3f5 35%, #f3e2e6 70%, #ebd3d9 100%);
     background-attachment: fixed;
     font-family: "Songti SC", "STSong", Georgia, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    color: #5a4550; /* 恢复至初始雅致深紫灰 */
+    color: #5a4550;
   }
   #app {
     display: flex;
@@ -41,13 +39,12 @@
     align-items: center;
     gap: 16px;
     padding: 24px 0;
-    background: rgba(255, 238, 241, 0.6); /* 马卡龙蜜桃粉色底色 */
+    background: rgba(255, 238, 241, 0.6);
     border-radius: 24px;
     position: relative;
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(184, 118, 138, 0.08);
   }
-  /* 纯 CSS 垂直多色渐变遮罩波点 */
   #nav::before {
     content: '';
     position: absolute;
@@ -68,10 +65,9 @@
     position: relative;
     z-index: 1;
     width: 42px; height: 42px;
-    border-radius: 50%; /* 圆形按钮 */
+    border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     border: none !important;
-    
     background: 
       radial-gradient(circle, rgba(255, 143, 163, 0.22) 15%, transparent 15.5%),
       radial-gradient(circle, rgba(255, 143, 163, 0.22) 15%, transparent 15.5%),
@@ -80,19 +76,14 @@
     background-position: 0 0, 3px 3px, 0 0 !important;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    
-    color: #ff8fa3 !important; /* 图案颜色：高保真樱花粉色 */
+    color: #ff8fa3 !important;
     text-decoration: none;
     transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
     cursor: pointer;
     padding: 0;
   }
-  .nav-icon svg {
-    width: 20px; 
-    height: 20px;
-    stroke-width: 1.5px;
-  }
+  .nav-icon svg { width: 20px; height: 20px; stroke-width: 1.5px; }
   .nav-icon:hover, #send-btn:hover {
     transform: translateY(-2px) scale(1.05);
     background-color: rgba(255, 255, 255, 0.98) !important;
@@ -106,11 +97,12 @@
   #send-btn:hover svg { transform: rotate(5deg) scale(1.1); }
   #send-btn:disabled { opacity: 0.5; filter: grayscale(50%); cursor: default; box-shadow: none !important; }
 
-  /* ---- 中间玻璃舱对话区 ---- */
+  /* ---- 中间主视图对话区 ---- */
   #main {
     flex: 1; min-width: 0; display: flex; flex-direction: column;
     background: rgba(255, 255, 255, 0.35); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
     border-radius: 28px; box-shadow: 0 12px 40px rgba(184, 118, 138, 0.10); overflow: hidden; position: relative;
+    background-size: cover; background-position: center;
   }
   #main::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -118,7 +110,7 @@
     background-size: 10px 10px; background-position: 0 0, 5px 5px; pointer-events: none; z-index: 0;
   }
   
-  /* ---- 酷黑渐变 Header ---- */
+  /* ---- Header ---- */
   #header {
     padding: 20px 24px 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0;
     display: flex; align-items: center; gap: 14px; position: relative;
@@ -131,7 +123,7 @@
     -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); pointer-events: none; z-index: 0;
   }
   
-  .avatar-wrapper { position: relative; display: inline-block; width: 36px; height: 36px; flex-shrink: 0; }
+  .avatar-wrapper { position: relative; display: inline-block; width: 36px; height: 36px; flex-shrink: 0; cursor: pointer; }
   .avatar-wrapper.header-avatar-wrap { width: 44px; height: 44px; }
   .avatar-wrapper .msg-avatar, .avatar-wrapper #header-avatar {
     border: 1.5px solid #ffffff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); 
@@ -139,12 +131,6 @@
   .avatar-wrapper .star-accent { position: absolute; font-size: 15px; pointer-events: none; user-select: none; animation: star-pulse 2s infinite ease-in-out; }
   .avatar-wrapper.charon .star-accent { top: -6px; left: -6px; color: #000000; text-shadow: 0 0 4px #000000, 0 0 10px rgba(0, 0, 0, 0.95); }
   .avatar-wrapper.user .star-accent { top: -6px; right: -6px; color: #ffb3c1; text-shadow: 0 0 4px #ff5e84, 0 0 10px rgba(255, 94, 132, 0.95); }
-  .avatar-wrapper .dust-star { position: absolute; pointer-events: none; user-select: none; color: #ffffff; text-shadow: 0 0 5px rgba(255, 255, 255, 0.8); }
-  .avatar-wrapper.charon .dust-star.d-1 { bottom: -4px; right: -4px; font-size: 9px; opacity: 0.8; }
-  .avatar-wrapper.charon .dust-star.d-2 { top: 14px; right: -7px; font-size: 8px; opacity: 0.6; }
-  .avatar-wrapper.user .dust-star.d-1 { bottom: -4px; left: -4px; font-size: 9px; opacity: 0.8; }
-  .avatar-wrapper.user .dust-star.d-2 { top: 14px; left: -7px; font-size: 8px; opacity: 0.6; }
-  @keyframes star-pulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
   
   .avatar-tag {
     position: absolute; font-family: "Dancing Script", cursive; font-size: 11px; white-space: nowrap; pointer-events: none; user-select: none; z-index: 2;
@@ -162,14 +148,10 @@
   .status-badge { background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); padding: 1px 7px; border-radius: 5px; font-size: 10px; color: #ffffff; display: inline-flex; align-items: center; gap: 4px; }
   #model-select { font-size: 10px; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 5px; padding: 1px 4px; max-width: 150px; outline: none; }
   #model-select option { color: #000; }
-  .model-select-wrap { display: inline-flex; align-items: center; gap: 4px; }
   .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #84cc9a; display: inline-block; box-shadow: 0 0 6px #84cc9a; }
   .status-dot.low { background: #c3a1ad; box-shadow: 0 0 6px #c3a1ad; }
   
   .header-signature-wrap { position: relative; z-index: 1; margin-left: auto; display: inline-flex; align-items: center; }
-  .sig-star { position: absolute; pointer-events: none; user-select: none; color: #ffffff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.9); }
-  .sig-star.s-1 { top: -4px; left: -10px; font-size: 8px; animation: star-pulse 2.5s infinite ease-in-out; }
-  .sig-star.s-2 { bottom: -4px; right: -10px; font-size: 10px; animation: star-pulse 1.8s infinite ease-in-out; }
   .header-signature { font-family: "Dancing Script", cursive; font-size: 22px; color: rgba(255, 255, 255, 0.92); text-shadow: 0 0 10px rgba(255, 255, 255, 0.6); user-select: none; pointer-events: none; }
 
   /* ---- 聊天气泡区域 ---- */
@@ -187,7 +169,7 @@
   .msg-time { font-size: 10px; color: #b08d98; margin: 4px 4px 0; }
   .msg-time-row { display: flex; align-items: center; gap: 4px; }
 
-  /* 完美的半调波普印刷微缩网点气泡 */
+  /* 半调波普印刷气泡 */
   .bubble {
     position: relative; padding: 12px 18px; line-height: 1.6; font-size: 15px; word-wrap: break-word; white-space: pre-wrap;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: pointer;
@@ -203,6 +185,26 @@
     border: none; color: #6b5460; border-radius: 4px 18px 18px 18px; box-shadow: 0 4px 15px rgba(184, 118, 138, 0.05);
   }
   .bubble.pending { opacity: 0.5; }
+
+  /* 扩展气泡渲染：图片，表情包，转账卡片 */
+  .bubble-image-container { max-width: 220px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: pointer; }
+  .bubble-image-container img { width: 100%; display: block; object-fit: cover; }
+  .bubble-image-caption { padding: 6px 12px; font-size: 13px; line-height: 1.4; border-top: 1px dashed rgba(0,0,0,0.05); background: rgba(255,255,255,0.8); color: #5a4550; }
+  
+  .bubble-sticker-container { max-width: 130px; cursor: pointer; }
+  .bubble-sticker-container img { width: 100%; display: block; }
+  
+  /* 仿真心意转账卡片 (温暖的珊瑚红橙色渐变) */
+  .bubble-transfer-container {
+    width: 220px; border-radius: 16px; background: linear-gradient(135deg, #fc6076 0%, #ff9a9e 100%);
+    box-shadow: 0 4px 15px rgba(252, 96, 118, 0.25); color: #ffffff; overflow: hidden; cursor: pointer;
+  }
+  .transfer-top { padding: 14px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+  .transfer-icon { font-size: 26px; line-height: 1; }
+  .transfer-details { display: flex; flex-direction: column; }
+  .transfer-amt { font-size: 18px; font-weight: bold; font-family: "Courier New", monospace; }
+  .transfer-msg { font-size: 12px; opacity: 0.95; margin-top: 2px; }
+  .transfer-bottom { padding: 6px 16px; font-size: 10px; opacity: 0.8; letter-spacing: 1px; display: flex; justify-content: space-between; }
 
   /* 打字指示器 */
   .typing-dots { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; }
@@ -244,19 +246,16 @@
   }
   .menu-btn:hover { color: #ffb3c1; }
   .menu-btn:not(:last-child) { border-right: 1px solid rgba(255, 255, 255, 0.15); }
-  .menu-model-hint {
-    font-size: 10px; color: rgba(226, 203, 212, 0.55); padding: 4px 12px 2px; width: 100%;
-    text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); user-select: none;
-  }
   .model-tag {
     font-size: 9px; color: #ffffff; margin: 2px 4px 0; align-self: flex-end;
     opacity: 0; transition: opacity 0.2s ease; user-select: none; pointer-events: none;
   }
   .model-tag.visible { opacity: 0.85; }
 
+  /* ---- 输入栏与扩展盘 ---- */
   #input-bar {
     display: flex; gap: 10px; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; position: relative; z-index: 1; overflow: hidden;
+    border-top: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; position: relative; z-index: 1; overflow: visible; align-items: center;
   }
   #input-bar::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -271,9 +270,36 @@
     transition: background 0.2s ease, border-color 0.2s ease; box-shadow: 0 4px 12px rgba(184, 118, 138, 0.05);
   }
   #input-bar textarea:focus { background: rgba(255, 255, 255, 0.9); border-color: rgba(229, 153, 169, 0.8); }
-  #input-bar textarea::placeholder { color: #b08d98; }
+  
+  /* 多媒体快捷功能区 */
+  .utility-trigger-btn { width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; color: #a66275; cursor: pointer; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: transform 0.2s; z-index: 1; }
+  .utility-trigger-btn:hover { transform: scale(1.05); color: #ff5e84; }
 
-  /* ---- 右侧状态面板（DESK 手账区） ---- */
+  /* 辅助面板抽屉 (表情包/多功能面板) */
+  .accessory-panel {
+    display: none; position: absolute; bottom: 100%; left: 14px; right: 14px; background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(20px); border-radius: 20px; box-shadow: 0 -8px 30px rgba(120, 80, 95, 0.15);
+    border: 1px solid rgba(255,255,255,0.7); padding: 16px; z-index: 999; animation: slide-up 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+  @keyframes slide-up { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  
+  .accessory-panel-title { font-size: 12px; color: #b08d98; margin-bottom: 12px; font-weight: bold; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+  .accessory-panel-close { background: none; border: none; font-size: 16px; color: #a66275; cursor: pointer; }
+  
+  /* 表情包选择格 */
+  .sticker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; max-height: 200px; overflow-y: auto; padding: 4px; }
+  .sticker-picker-item { border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.5); cursor: pointer; transition: transform 0.2s; border: 1px solid rgba(184,118,138,0.1); display: flex; align-items: center; justify-content: center; aspect-ratio: 1; }
+  .sticker-picker-item:hover { transform: scale(1.08); background: #ffffff; border-color: rgba(255,143,163,0.4); }
+  .sticker-picker-item img { width: 85%; height: 85%; object-fit: contain; }
+
+  /* 多媒体扩展格子 */
+  .multimedia-toolbox { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; text-align: center; }
+  .toolbox-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
+  .toolbox-icon { width: 48px; height: 48px; border-radius: 14px; background: rgba(255, 238, 241, 0.9); display: flex; align-items: center; justify-content: center; color: #ff5e84; font-size: 20px; transition: transform 0.2s, background 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+  .toolbox-item:hover .toolbox-icon { transform: translateY(-3px); background: #ffffff; }
+  .toolbox-label { font-size: 11px; color: #5a4550; font-weight: bold; }
+
+  /* ---- 右侧状态面板 (Desk 手账区) ---- */
   #panel {
     width: 260px; flex-shrink: 0; display: none; flex-direction: column;
     padding: 22px 18px; background: rgba(255, 235, 240, 0.55); border-radius: 24px; position: relative; overflow: hidden;
@@ -291,85 +317,37 @@
     font-family: "Georgia", "Songti SC", serif; font-size: 15px; letter-spacing: 3px; color: #a66275; margin-bottom: 6px; text-transform: uppercase; font-weight: bold; text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
 
-  /* --- 仿真实物便利贴堆叠留言板 --- */
-  .sticky-note-stack {
-    position: relative; width: 100%; display: flex; flex-direction: column;
-    margin-top: 15px; margin-bottom: 18px; z-index: 1;
-  }
+  /* 便签堆叠区 */
+  .sticky-note-stack { position: relative; width: 100%; display: flex; flex-direction: column; margin-top: 15px; margin-bottom: 18px; z-index: 1; }
   .sticky-note-card {
-    position: relative;
-    border: none; 
-    border-radius: 3px 14px 14px 14px;
-    padding: 12px 11px 12px 11px;
-    width: 88%; 
-    aspect-ratio: 1 / 0.572; 
+    position: relative; border-radius: 3px 14px 14px 14px; padding: 12px 11px; width: 88%; aspect-ratio: 1 / 0.572; 
     box-shadow: 0 8px 20px rgba(120, 80, 95, 0.18), 0 2px 5px rgba(120, 80, 95, 0.1);
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    -webkit-user-select: none; user-select: none; cursor: pointer;
-    flex-shrink: 0;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); -webkit-user-select: none; user-select: none; cursor: pointer; flex-shrink: 0;
   }
-  .sticky-note-card:first-child { margin-top: 0; }
-  .sticky-note-card:nth-child(1) { z-index: 20; }
-  .sticky-note-card:nth-child(2) { z-index: 19; }
-  .sticky-note-card:nth-child(3) { z-index: 18; }
-  .sticky-note-card:nth-child(4) { z-index: 17; }
-  .sticky-note-card:nth-child(5) { z-index: 16; }
-  .sticky-note-card:nth-child(n+6) { z-index: 15; }
-
   .sticky-note-card:hover {
-    transform: rotate(0deg) translateY(-4px) scale(1.03) !important;
-    z-index: 100 !important;
+    transform: rotate(0deg) translateY(-4px) scale(1.03) !important; z-index: 100 !important;
     box-shadow: 0 14px 30px rgba(120, 80, 95, 0.26), 0 3px 8px rgba(120, 80, 95, 0.15);
   }
-  .sticky-note-text {
-    font-size: 12.5px; line-height: 1.42; font-family: "Songti SC", serif; word-wrap: break-word;
-  }
+  .sticky-note-text { font-size: 12.5px; line-height: 1.42; font-family: "Songti SC", serif; word-wrap: break-word; }
   .note-star-btn {
     position: absolute; bottom: 8px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer;
-    opacity: 0.5; transition: transform 0.2s, opacity 0.2s, filter 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
+    opacity: 0.5; transition: transform 0.2s, opacity 0.2s; color: #e5a4b5; padding: 4px; line-height: 1;
   }
-  .note-star-btn:hover { transform: scale(1.15); }
-  .note-star-btn.active {
-    opacity: 1; color: #ff8fa3 !important; 
-    filter: drop-shadow(0 2px 5px rgba(255, 143, 163, 0.45));
-  }
+  .note-star-btn.active { opacity: 1; color: #ff8fa3 !important; filter: drop-shadow(0 2px 5px rgba(255, 143, 163, 0.45)); }
 
-  /* --- 秘密小抽屉收纳盒 --- */
-  .drawer-wrapper { 
-    display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px;
-  }
+  /* 秘密小抽屉 */
+  .drawer-wrapper { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 10px; }
   .drawer-btn {
     background: rgba(255, 255, 255, 0.85); border: 1px solid rgba(255,255,255,1); border-radius: 12px; 
     padding: 14px 10px; text-align: center; cursor: pointer; position: relative;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    color: #a66275; font-family: "Georgia", serif; 
-    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.08);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); color: #a66275; font-family: "Georgia", serif; 
+    box-shadow: 0 4px 15px rgba(184, 118, 138, 0.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   }
   .drawer-btn-title { font-weight: bold; font-size: 13px; letter-spacing: 1px; }
   .drawer-btn-count { font-size: 10px; opacity: 0.75; font-family: "Courier New", monospace; }
-  
-  .drawer-btn::before {
-    content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px;
-    background: 
-      radial-gradient(circle, rgba(166,98,117,0.4) 2px, transparent 2.5px) top left / 10px 10px no-repeat,
-      radial-gradient(circle, rgba(166,98,117,0.4) 2px, transparent 2.5px) top right / 10px 10px no-repeat,
-      radial-gradient(circle, rgba(166,98,117,0.4) 2px, transparent 2.5px) bottom left / 10px 10px no-repeat,
-      radial-gradient(circle, rgba(166,98,117,0.4) 2px, transparent 2.5px) bottom right / 10px 10px no-repeat;
-    pointer-events: none; opacity: 0.7;
-  }
   .drawer-btn:hover { background: #ffffff; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(184, 118, 138, 0.15); }
-  .drawer-btn:active { transform: translateY(1px); }
-  
   .drawer-btn.layer-full { background: #fff5f6; border-color: rgba(255,94,132,0.6); animation: drawer-warn-glow 1.5s infinite alternate; }
-  @keyframes drawer-warn-glow {
-    from { box-shadow: 0 0 8px rgba(255, 94, 132, 0.2); }
-    to { box-shadow: 0 0 16px rgba(255, 94, 132, 0.5), inset 0 1px 2px rgba(255,255,255,1); }
-  }
-  .new-letter-sparkle {
-    position: absolute; top: -6px; right: -6px; font-size: 18px; color: #ffffff;
-    text-shadow: 0 0 6px #fff, 0 0 12px #ff5e84; animation: star-pulse 1.2s infinite ease-in-out; pointer-events: none;
-  }
+  @keyframes drawer-warn-glow { from { box-shadow: 0 0 8px rgba(255, 94, 132, 0.2); } to { box-shadow: 0 0 16px rgba(255, 94, 132, 0.5); } }
 
   /* --- 朋友圈 (Moments) UI 重构样式 --- */
   #moments-wrapper {
@@ -382,141 +360,62 @@
     background-image: radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%), radial-gradient(rgba(255, 255, 255, 0.4) 15%, transparent 15.5%);
     background-size: 10px 10px; background-position: 0 0, 5px 5px; pointer-events: none; z-index: 0;
   }
-
-  /* 朋友圈滚动容器 */
   #moments-feed {
     flex: 1; overflow-y: auto; padding: 0 0 80px 0; display: flex; flex-direction: column; gap: 24px;
     -webkit-overflow-scrolling: touch; position: relative; z-index: 1;
   }
-
-  /* 拍立得主视觉封面背景 */
   .moments-cover-section {
     position: relative; width: 100%; height: 260px;
     background: linear-gradient(135deg, #1a121e 0%, #2c1a30 40%, #cf7d90 85%, #ffb3c1 100%);
     overflow: hidden; margin-bottom: 45px; flex-shrink: 0;
   }
-  .moments-cover-section::after {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    background-image: radial-gradient(rgba(255, 255, 255, 0.1) 15%, transparent 15.5%);
-    background-size: 8px 8px; pointer-events: none;
-  }
-  .cover-branding-text {
-    position: absolute; left: 24px; bottom: 30px; color: #ffffff; z-index: 2;
-  }
-  .cover-branding-text h1 {
-    font-family: "Georgia", "Songti SC", serif; font-size: 32px; font-style: italic; letter-spacing: 4px;
-    margin: 0; text-shadow: 0 2px 10px rgba(0,0,0,0.5); font-weight: 500;
-  }
-  .cover-branding-text p {
-    font-size: 11px; margin: 4px 0 0; opacity: 0.8; letter-spacing: 2px;
-  }
-
-  /* 头像叠加组件 (斜角拍立得相框) */
-  .moments-user-profile {
-    position: absolute; right: 28px; bottom: -30px; display: flex; align-items: flex-end; gap: 12px; z-index: 5;
-  }
+  .cover-branding-text { position: absolute; left: 24px; bottom: 30px; color: #ffffff; z-index: 2; }
+  .cover-branding-text h1 { font-family: "Georgia", "Songti SC", serif; font-size: 32px; font-style: italic; letter-spacing: 4px; margin: 0; text-shadow: 0 2px 10px rgba(0,0,0,0.5); font-weight: 500; }
+  .moments-user-profile { position: absolute; right: 28px; bottom: -30px; display: flex; align-items: flex-end; gap: 12px; z-index: 5; }
   .moments-avatar-polaroid {
     position: relative; width: 85px; height: 85px; background: #ffffff; padding: 6px 6px 14px 6px;
-    border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); transform: rotate(-3deg);
-    transition: transform 0.3s ease;
+    border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); transform: rotate(-3deg); transition: transform 0.3s ease;
   }
   .moments-avatar-polaroid:hover { transform: rotate(0deg) scale(1.05); }
   .moments-avatar-polaroid img { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
-  
-  /* 仿真手账透明胶带装饰线 */
   .washi-tape-accent {
-    position: absolute; top: -12px; left: -10px; width: 45px; height: 18px;
-    background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
-    transform: rotate(-15deg); border-left: 2px dashed rgba(229, 153, 169, 0.3); border-right: 2px dashed rgba(229, 153, 169, 0.3);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05); pointer-events: none;
+    position: absolute; top: -12px; left: -10px; width: 45px; height: 18px; background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(2px);
+    transform: rotate(-15deg); border-left: 2px dashed rgba(229, 153, 169, 0.3); border-right: 2px dashed rgba(229, 153, 169, 0.3); pointer-events: none;
   }
-  .profile-name-label {
-    font-family: "Songti SC", "Georgia", serif; font-weight: bold; font-size: 18px; color: #ffb3c1;
-    margin-bottom: 24px; text-shadow: 0 2px 8px rgba(0,0,0,0.6);
-  }
+  .profile-name-label { font-family: "Songti SC", "Georgia", serif; font-weight: bold; font-size: 18px; color: #ffb3c1; margin-bottom: 24px; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
 
-  /* 悬浮轻盈发布动态圆形按钮 (FAB) */
   .fab-publish-btn {
     position: absolute; right: 24px; bottom: 24px; width: 52px; height: 52px; border-radius: 50%;
     background: linear-gradient(135deg, #f3b0c3, #e593a4); color: #ffffff; border: none; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; z-index: 10;
-    box-shadow: 0 8px 24px rgba(229, 147, 164, 0.4);
+    display: flex; align-items: center; justify-content: center; z-index: 10; box-shadow: 0 8px 24px rgba(229, 147, 164, 0.4);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
-  .fab-publish-btn svg { width: 20px; height: 20px; stroke-width: 2px; transition: transform 0.3s ease; }
-  .fab-publish-btn:hover {
-    transform: translateY(-4px) scale(1.05);
-    box-shadow: 0 12px 30px rgba(229, 147, 164, 0.55);
-  }
-  .fab-publish-btn:hover svg { transform: rotate(90deg); }
+  .fab-publish-btn svg { width: 20px; height: 20px; stroke-width: 2px; }
 
-  /* 朋友圈单条动态卡片 (撕边手账底纹) */
-  .moment-card-container {
-    padding: 0 24px; width: 100%;
-  }
+  /* 朋友圈单条动态卡片 */
+  .moment-card-container { padding: 0 24px; width: 100%; }
   .moment-card {
-    background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border-radius: 20px; padding: 22px; box-shadow: 0 8px 24px rgba(184, 118, 138, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.9); position: relative; overflow: hidden;
-    background-image: radial-gradient(rgba(229,153,169,0.06) 1px, transparent 1px); background-size: 10px 10px;
+    background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border-radius: 20px; padding: 22px; 
+    box-shadow: 0 8px 24px rgba(184, 118, 138, 0.05); border: 1px solid rgba(255, 255, 255, 0.9); position: relative; overflow: hidden;
   }
-  
-  /* 每一个卡片上贴的一枚心情印章 */
-  .moment-retro-stamp {
-    position: absolute; top: 12px; right: 14px; font-family: "Courier New", monospace;
-    font-size: 9px; text-transform: uppercase; padding: 3px 6px; border: 1px dashed rgba(229,153,169,0.5);
-    border-radius: 4px; color: rgba(229,153,169,0.7); transform: rotate(10deg); pointer-events: none;
-  }
-
+  .moment-retro-stamp { position: absolute; top: 12px; right: 14px; font-family: "Courier New", monospace; font-size: 9px; text-transform: uppercase; padding: 3px 6px; border: 1px dashed rgba(229,153,169,0.5); border-radius: 4px; color: rgba(229,153,169,0.7); transform: rotate(10deg); pointer-events: none; }
   .moment-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .moment-author { font-family: "Georgia", "Songti SC", serif; font-size: 15px; font-weight: bold; color: #a66275; }
   .moment-time { font-family: "Courier New", monospace; font-size: 11px; color: #b08d98; margin-top: 2px; }
-  .moment-delete-link, .comment-delete-btn {
-    font-size: 10px; color: #c08ea3; cursor: pointer; text-decoration: none; margin-left: 10px; transition: color 0.15s;
-  }
-  .moment-delete-link:hover, .comment-delete-btn:hover { color: #ff5e84; }
-
-  .moment-content {
-    font-size: 14.5px; line-height: 1.7; color: #4a3742; margin-bottom: 16px; white-space: pre-wrap; word-wrap: break-word;
-  }
-  .moment-actions {
-    display: flex; gap: 16px; align-items: center; padding-top: 12px; border-top: 1px dashed rgba(229,153,169,0.2);
-  }
-  .action-btn {
-    background: none; border: none; padding: 4px 8px; font-size: 13px; color: #b08d98; cursor: pointer;
-    display: flex; align-items: center; gap: 6px; border-radius: 8px; transition: all 0.2s;
-  }
-  .action-btn:hover { background: rgba(255, 255, 255, 0.6); color: #ff5e84; }
+  .moment-delete-link, .comment-delete-btn { font-size: 10px; color: #c08ea3; cursor: pointer; text-decoration: none; margin-left: 10px; }
+  .moment-content { font-size: 14.5px; line-height: 1.7; color: #4a3742; margin-bottom: 16px; white-space: pre-wrap; word-wrap: break-word; }
+  .moment-actions { display: flex; gap: 16px; align-items: center; padding-top: 12px; border-top: 1px dashed rgba(229,153,169,0.2); }
+  .action-btn { background: none; border: none; padding: 4px 8px; font-size: 13px; color: #b08d98; cursor: pointer; display: flex; align-items: center; gap: 6px; border-radius: 8px; }
   .action-btn.liked { color: #ff5e84; }
-  
-  .moment-likes {
-    background: rgba(255, 238, 241, 0.45); border-radius: 10px; padding: 8px 12px; margin-top: 12px;
-    font-size: 12px; color: #a66275; display: flex; align-items: center; gap: 6px;
-  }
-  .moment-likes span { font-family: "Dancing Script", cursive; font-size: 14px; }
-  
-  .moment-comments {
-    margin-top: 8px; background: rgba(255, 255, 255, 0.4); border-radius: 12px; padding: 12px;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  .comment-item { 
-    font-size: 13px; line-height: 1.5; color: #5a4550; display: flex; justify-content: space-between; align-items: flex-start;
-    padding: 2px 4px; border-radius: 4px; transition: background 0.15s; cursor: pointer;
-  }
+  .moment-likes { background: rgba(255, 238, 241, 0.45); border-radius: 10px; padding: 8px 12px; margin-top: 12px; font-size: 12px; color: #a66275; }
+  .moment-comments { margin-top: 8px; background: rgba(255, 255, 255, 0.4); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .comment-item { font-size: 13px; line-height: 1.5; color: #5a4550; display: flex; justify-content: space-between; align-items: flex-start; padding: 2px 4px; border-radius: 4px; }
   .comment-item:hover { background: rgba(255, 235, 240, 0.3); }
   .comment-content-text { flex: 1; }
   .comment-author { font-weight: bold; color: #a66275; margin-right: 4px; }
-  .comment-delete-btn { font-size: 12px; padding: 0 4px; margin-left: auto; display: none; }
-  .comment-item:hover .comment-delete-btn { display: inline-block; }
-  
   .comment-input-area { display: none; margin-top: 12px; align-items: center; gap: 8px; }
   .comment-input-area.active { display: flex; }
-  .comment-input {
-    flex: 1; border: 1px solid rgba(229,153,169,0.3); border-radius: 16px; padding: 8px 12px;
-    background: rgba(255,255,255,0.8); font-size: 13px; outline: none; color: #5a4550;
-    transition: border-color 0.2s;
-  }
-  .comment-input:focus { border-color: rgba(229, 153, 169, 0.8); }
+  .comment-input { flex: 1; border: 1px solid rgba(229,153,169,0.3); border-radius: 16px; padding: 8px 12px; background: rgba(255,255,255,0.8); font-size: 13px; outline: none; color: #5a4550; }
 
   /* 统一控制：朋友圈状态下，隐藏Desk，扩展视图宽度 */
   .view-moments #main { display: none !important; }
@@ -524,11 +423,9 @@
   .view-moments #panel { display: none !important; }
 
   /* 适配移动端 Tab */
+  #bottom-tabs { display: none; }
   @media (max-width: 768px) {
-    #app {
-      padding: 8px 8px calc(64px + env(safe-area-inset-bottom)) 8px; 
-      height: 100vh; height: 100dvh; display: block; overflow: hidden;
-    }
+    #app { padding: 8px 8px calc(64px + env(safe-area-inset-bottom)) 8px; height: 100vh; height: 100dvh; display: block; overflow: hidden; }
     #nav { display: none !important; }
     #main, #panel, #moments-wrapper { display: none !important; width: 100% !important; height: 100% !important; margin: 0 !important; border-radius: 20px !important; }
     
@@ -542,57 +439,82 @@
       background: rgba(255, 238, 241, 0.85); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
       border-top: 1px solid rgba(255, 255, 255, 0.4); z-index: 1000; justify-content: space-around; align-items: center; box-shadow: 0 -4px 24px rgba(184, 118, 138, 0.08);
     }
-    .tab-item {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      color: #b08d98; cursor: pointer; opacity: 0.6; transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1); width: 60px;
-    }
-    .tab-item .tab-icon { 
-      font-size: 20px; line-height: 1.2; filter: grayscale(100%); 
-    }
+    .tab-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: #b08d98; cursor: pointer; opacity: 0.6; width: 60px; }
     .tab-item .tab-icon svg { width: 22px; height: 22px; stroke-width: 1.5px; }
-    
     .tab-item .tab-label { font-size: 10px; margin-top: 2px; font-weight: bold; }
     .tab-item.active { color: #ff5e84; opacity: 1; transform: translateY(-3px); }
-    .tab-item.active .tab-icon { filter: grayscale(0%); filter: drop-shadow(0 0 4px rgba(255, 94, 132, 0.4)); }
   }
 
-  /* --- 弹窗等 --- */
-  #letter-modal, #archive-modal, #drawer-notes-modal, #calendar-modal, #persona-modal, #publish-modal {
+  /* --- 模态抽屉弹窗统一样式 --- */
+  .letter-container {
+    background: #fffdfd; border-radius: 24px; width: 100%; max-width: 440px; max-height: 85vh;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3); display: flex; flex-direction: column; position: relative;
+    border: 1.5px solid rgba(184,118,138,0.15); overflow: hidden;
+  }
+  .letter-header { padding: 18px 22px; border-bottom: 1.5px dashed rgba(229,153,169,0.25); display: flex; justify-content: space-between; align-items: center; }
+  .letter-title { font-family: "Georgia", "Songti SC", serif; color: #a66275; font-size: 16px; font-weight: bold; letter-spacing: 2px; }
+  .close-modal { background: none; border: none; font-size: 24px; color: #a66275; cursor: pointer; padding: 0; line-height: 1; }
+  .letter-content-area { padding: 22px; overflow-y: auto; flex: 1; }
+  .single-letter { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(0,0,0,0.03); }
+  .letter-time-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .letter-time { font-family: "Courier New", monospace; font-size: 11px; color: #b08d98; }
+  .letter-text { white-space: pre-wrap; font-style: italic; }
+
+  /* 心意币钱包独立样式 */
+  .wallet-card-fancy {
+    background: linear-gradient(135deg, #ffd1d7 0%, #ffafbd 100%); border-radius: 18px; padding: 20px;
+    box-shadow: 0 10px 25px rgba(255, 175, 189, 0.35); color: #7a5a65; position: relative; overflow: hidden; margin-bottom: 20px;
+  }
+  .wallet-card-fancy::before {
+    content: '✦'; position: absolute; right: 15px; top: -10px; font-size: 120px; opacity: 0.15; color: #fff;
+  }
+  .wallet-title-small { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.8; font-weight: bold; }
+  .wallet-balances-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+  .wallet-balance-box { background: rgba(255,255,255,0.45); padding: 12px 14px; border-radius: 12px; }
+  .wallet-balance-box p { margin: 0; font-size: 11px; font-weight: bold; }
+  .wallet-balance-num { font-size: 22px; font-weight: bold; font-family: "Courier New", monospace; margin-top: 4px; }
+  
+  .wallet-logs-title { font-size: 12px; font-weight: bold; color: #a66275; letter-spacing: 1px; border-bottom: 1.5px dashed rgba(229,153,169,0.2); padding-bottom: 6px; margin: 20px 0 12px 0; }
+  .wallet-log-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(0,0,0,0.02); }
+  .wallet-log-info { display: flex; flex-direction: column; gap: 2px; }
+  .wallet-log-memo { font-size: 13px; font-weight: bold; color: #5a4550; }
+  .wallet-log-date { font-size: 10px; color: #b08d98; font-family: "Courier New", monospace; }
+  .wallet-log-amt { font-size: 14px; font-weight: bold; font-family: "Courier New", monospace; }
+  .wallet-log-amt.out { color: #e0607a; }
+  .wallet-log-amt.in { color: #7fb87f; }
+
+  /* 个人资料表单样式 */
+  .profile-form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .profile-form-group label { font-size: 12px; font-weight: bold; color: #a66275; letter-spacing: 1px; }
+  .profile-input { width: 100%; border: 1.5px solid rgba(184,118,138,0.2); border-radius: 10px; padding: 10px 14px; outline: none; font-size: 14px; color: #5a4550; background: rgba(255,255,255,0.6); }
+  .profile-input:focus { border-color: #ff5e84; }
+  .profile-avatar-row { display: flex; align-items: center; gap: 14px; background: rgba(255,238,241,0.3); padding: 12px; border-radius: 14px; margin-bottom: 16px; border: 1px solid rgba(184,118,138,0.1); }
+  .profile-avatar-row img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+
+  /* 表情包管理面板独立样式 */
+  .sticker-mgr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .sticker-mgr-item { position: relative; border-radius: 12px; overflow: hidden; background: rgba(255,255,255,0.6); border: 1px solid rgba(184,118,138,0.1); display: flex; align-items: center; justify-content: center; aspect-ratio: 1; transition: transform 0.2s; }
+  .sticker-mgr-item img { width: 80%; height: 80%; object-fit: contain; }
+  .sticker-mgr-del-btn { position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 94, 132, 0.9); border: none; color: #fff; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .sticker-mgr-upload-box { border: 2px dashed rgba(184,118,138,0.3); border-radius: 12px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: #a66275; gap: 4px; background: rgba(255,255,255,0.4); }
+  .sticker-mgr-upload-box:hover { background: rgba(255,255,255,0.8); border-color: #ff5e84; }
+
+  /* 统一通用弹出层遮罩 */
+  #letter-modal, #archive-modal, #drawer-notes-modal, #calendar-modal, #persona-modal, #publish-modal, #wallet-modal, #profile-modal, #sticker-mgr-modal, #transfer-send-modal {
     display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(26, 18, 30, 0.65); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
     z-index: 2000; align-items: center; justify-content: center; padding: 20px; animation: modal-fade 0.3s ease;
   }
   @keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
-  .letter-container {
-    background: #fffdfd; border-radius: 12px; width: 100%; max-width: 420px; max-height: 80vh;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,94,132,0.1);
-    display: flex; flex-direction: column; position: relative;
-    background-image: repeating-linear-gradient(transparent, transparent 27px, rgba(229,153,169,0.15) 27px, rgba(229,153,169,0.15) 28px); background-position: 0 40px;
-  }
-  .letter-header {
-    padding: 16px 20px; border-bottom: 1px dashed rgba(229,153,169,0.3); display: flex; justify-content: space-between; align-items: center; background: transparent;
-  }
-  .letter-title { font-family: "Georgia", "Songti SC", serif; color: #ff5e84; font-size: 16px; font-weight: bold; letter-spacing: 2px; }
-  .close-modal { background: none; border: none; font-size: 24px; color: #a66275; cursor: pointer; padding: 0; line-height: 1; }
-  .letter-content-area { padding: 20px; overflow-y: auto; flex: 1; font-family: "Songti SC", serif; font-size: 15px; color: #4a3742; line-height: 1.8; }
-  .single-letter { margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid rgba(0,0,0,0.03); position: relative; }
-  .letter-time-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .letter-time { font-family: "Courier New", monospace; font-size: 11px; color: #b08d98; }
-  .letter-act-group { display: flex; gap: 8px; align-items: center; }
-  .letter-del-btn { background: none; border: none; color: #a66275; font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
-  .letter-del-btn:hover { color: #ff5e84; background-color: rgba(255, 94, 132, 0.08); }
-  .note-act-btn.star-btn { color: #d1b3bd; font-size: 15px; }
-  .note-act-btn.star-btn.active { color: #ff5e84; filter: drop-shadow(0 1px 3px rgba(255, 94, 132, 0.45)); }
-  .letter-text { white-space: pre-wrap; font-style: italic; }
 
-  /* --- 仿真手账月经日历系统设计 --- */
+  /* 仿真手账日历 */
   .calendar-box { background: #fffdfd; border-radius: 20px; width: 100%; max-width: 440px; padding: 22px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); border: 2.5px solid #000; }
-  .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; font-family: "Georgia", "Songti SC", serif; }
+  .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
   .calendar-nav-btn { background: none; border: none; font-size: 20px; color: #a66275; cursor: pointer; }
   .calendar-title-text { font-size: 16px; font-weight: bold; color: #5a4550; letter-spacing: 2px; }
   .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: #b08d98; font-weight: bold; margin-bottom: 10px; }
   .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; text-align: center; }
-  .calendar-day { position: relative; height: 36px; display: flex; align-items: center; justify-content: center; font-family: "Courier New", monospace; font-size: 13px; color: #5a4550; cursor: pointer; border-radius: 50%; width: 36px; margin: 0 auto; transition: background 0.2s; }
+  .calendar-day { position: relative; height: 36px; display: flex; align-items: center; justify-content: center; font-family: "Courier New", monospace; font-size: 13px; color: #5a4550; cursor: pointer; border-radius: 50%; width: 36px; margin: 0 auto; }
   .calendar-day:hover { background: rgba(229,153,169,0.15); }
   .calendar-day.empty { pointer-events: none; }
   .calendar-day.period-active { background: #ffb3c1; color: #fff; font-weight: bold; box-shadow: 0 0 10px rgba(255, 94, 132, 0.4); }
@@ -603,11 +525,16 @@
   .legend-color { width: 10px; height: 10px; border-radius: 50%; }
   .legend-color.active { background: #ffb3c1; }
   .legend-color.ongoing { border: 2px dashed #ff5e84; }
+  
   .day-action-popup { display: none; position: absolute; background: rgba(26,18,30,0.95); border-radius: 8px; padding: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); z-index: 2100; flex-direction: column; gap: 8px; width: 130px; }
   .day-action-btn { border: none; border-radius: 6px; padding: 8px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; color: #fff; }
   .day-action-btn.start-period { background: #ff5e84; }
   .day-action-btn.end-period { background: #a66275; }
   .day-action-btn.cancel-action { background: transparent; color: #e2cbd4; border: 1px solid rgba(255,255,255,0.15); }
+  
+  .fancy-btn-red { background: linear-gradient(135deg, #f3b0c3, #e593a4); border: none; color: #ffffff; border-radius: 12px; padding: 12px 20px; font-size: 14px; font-weight: bold; cursor: pointer; transition: transform 0.2s, opacity 0.2s; box-shadow: 0 4px 15px rgba(229,147,164,0.3); }
+  .fancy-btn-red:hover { transform: translateY(-1.5px); opacity: 0.95; }
+  .fancy-btn-red:active { transform: translateY(0); }
 </style>
 </head>
 <body>
@@ -634,35 +561,80 @@
     <a class="nav-icon" href="javascript:void(0)" onclick="openPersonaEditor()" title="人设编辑">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
     </a>
+    <a class="nav-icon" href="javascript:void(0)" onclick="openWalletModal()" title="心意币钱包">
+      <span style="font-size: 16px; font-weight: bold; line-height: 1;">👛</span>
+    </a>
   </div>
 
   <!-- 2. 中间玻璃舱对话区 -->
   <div id="main">
     <div id="header">
-      <div class="avatar-wrapper header-avatar-wrap charon">
+      <div class="avatar-wrapper header-avatar-wrap charon" onclick="openProfileModal('charon')">
         <img id="header-avatar" src="{{ avatar_charon }}" alt="Charon">
         <span class="star-accent">✦</span>
-        <span class="dust-star d-1">✦</span>
-        <span class="dust-star d-2">✦</span>
       </div>
       <div id="header-text">
-        <div class="brand">CHARON</div>
+        <div class="brand" id="header-charon-name">CHARON</div>
         <div class="sub">
           <span class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-label">加载中…</span></span>
           <span class="model-select-wrap"><span class="status-dot" id="model-status-dot"></span><select id="model-select" title="选择模型"></select></span>
         </div>
       </div>
-      <div class="header-signature-wrap">
-        <span class="sig-star s-1">✦</span>
-        <span class="sig-star s-2">✦</span>
-        <div class="header-signature">@Seraphina</div>
+      <div class="header-signature-wrap" onclick="openProfileModal('user')">
+        <div class="header-signature" id="header-user-sig">Seraphina</div>
       </div>
       <button id="push-enable-btn" onclick="enablePushNotifications()" title="开启通知推送"
         style="display:none; position:absolute; right:10px; bottom:6px; background:none; border:none; font-size:16px; cursor:pointer; opacity:0.6;">🔔</button>
     </div>
+    
     <div id="messages"><div id="empty-hint">加载中…</div></div>
+    
+    <!-- 快捷表情包辅助面板 -->
+    <div class="accessory-panel" id="sticker-drawer">
+      <div class="accessory-panel-title">
+        <span>🐾 戳下发送表情包</span>
+        <button class="accessory-panel-close" onclick="toggleStickerDrawer(false)">×</button>
+      </div>
+      <div class="sticker-grid" id="sticker-picker-container">
+        <!-- 动态装填 -->
+      </div>
+    </div>
+
+    <!-- 更多快捷多媒体功能抽屉 -->
+    <div class="accessory-panel" id="accessory-drawer">
+      <div class="accessory-panel-title">
+        <span>🛠️ 更多手账动作</span>
+        <button class="accessory-panel-close" onclick="toggleAccessoryDrawer(false)">×</button>
+      </div>
+      <div class="multimedia-toolbox">
+        <div class="toolbox-item" onclick="triggerImageUpload()">
+          <div class="toolbox-icon">📷</div>
+          <div class="toolbox-label">发照片</div>
+        </div>
+        <div class="toolbox-item" onclick="toggleStickerDrawer(true); toggleAccessoryDrawer(false);">
+          <div class="toolbox-icon">🐱</div>
+          <div class="toolbox-label">发表情</div>
+        </div>
+        <div class="toolbox-item" onclick="openTransferSendModal(); toggleAccessoryDrawer(false);">
+          <div class="toolbox-icon">🪙</div>
+          <div class="toolbox-label">包转账</div>
+        </div>
+        <div class="toolbox-item" onclick="openStickerMgrModal(); toggleAccessoryDrawer(false);">
+          <div class="toolbox-icon">🏷️</div>
+          <div class="toolbox-label">表情管理</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 暗藏的文件上传Input -->
+    <input type="file" id="chat-image-uploader" accept="image/*" style="display: none;" onchange="handleChatImageUpload(this)">
+
     <div id="input-bar">
+      <button class="utility-trigger-btn" onclick="toggleStickerDrawer()" title="选择表情">😀</button>
+      <button class="utility-trigger-btn" onclick="toggleAccessoryDrawer()" title="更多多媒体功能">➕</button>
+      
       <textarea id="input" placeholder="说点什么…" rows="1"></textarea>
+      
       <button id="send-btn" title="发送">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -672,32 +644,22 @@
     </div>
   </div>
 
-  <!-- 2.5 朋友圈视图 (Moments Wrapper) -->
+  <!-- 2.5 朋友圈视图 -->
   <div id="moments-wrapper">
-    <!-- 右下角悬浮轻盈发布圆形按钮 (FAB) -->
     <button class="fab-publish-btn" onclick="openPublishModal()" title="发布新动态">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"></line>
         <line x1="5" y1="12" x2="19" y2="12"></line>
       </svg>
     </button>
-
-    <div id="moments-feed">
-      <!-- 动态首部封面图和个人信息通过 JS 动态渲染 -->
-    </div>
+    <div id="moments-feed"></div>
   </div>
 
   <!-- 3. 右侧状态面板 (Desk 手账区) -->
   <div id="panel">
     <div class="panel-child panel-title">DESK</div>
     <div id="panel-body" class="panel-child" style="display:flex; flex-direction:column; height:100%;">
-        
-      <!-- 冰箱贴层叠便签堆叠容器 (自然流体排版) -->
-      <div class="sticky-note-stack" id="sticky-container">
-        <!-- JS 动态灌入层叠卡片 -->
-      </div>
-
-      <!-- 秘密双抽屉 -->
+      <div class="sticky-note-stack" id="sticky-container"></div>
       <div class="drawer-wrapper">
         <div class="drawer-btn" id="drawer-notes-btn" onclick="openDrawerNotes()">
           <div class="drawer-btn-title">💌 NOTES DRAWER</div>
@@ -743,10 +705,130 @@
     </span>
     <span class="tab-label">HEALTH</span>
   </div>
+  <div class="tab-item" onclick="openWalletModal()">
+    <span class="tab-icon" style="font-size: 20px;">👛</span>
+    <span class="tab-label">WALLET</span>
+  </div>
 </div>
 
-<!-- 全局悬浮菜单 -->
 <div id="bubble-menu"></div>
+
+<!-- 钱包心意币大弹窗 Drawer -->
+<div id="wallet-modal">
+  <div class="letter-container">
+    <div class="letter-header">
+      <div class="letter-title">👛 双人恋爱钱包</div>
+      <button class="close-modal" onclick="closeWalletModal()">×</button>
+    </div>
+    <div class="letter-content-area">
+      <div class="wallet-card-fancy">
+        <div class="wallet-title-small">心意代币储蓄</div>
+        <div class="wallet-balances-grid">
+          <div class="wallet-balance-box">
+            <p>我 (User)</p>
+            <div class="wallet-balance-num" id="wallet-balance-user">0</div>
+          </div>
+          <div class="wallet-balance-box">
+            <p>Charon</p>
+            <div class="wallet-balance-num" id="wallet-balance-charon">0</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: center;">
+        <button class="fancy-btn-red" onclick="openTransferSendModal(); closeWalletModal();">🪙 发起转账</button>
+      </div>
+      <div class="wallet-logs-title">📜 账单记录 (Timeline)</div>
+      <div id="wallet-logs-container" style="max-height: 250px; overflow-y: auto;">
+        <!-- 账单明细流水 -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 资料设置大弹窗 Drawer -->
+<div id="profile-modal">
+  <div class="letter-container">
+    <div class="letter-header">
+      <div class="letter-title">👤 编辑双人资料</div>
+      <button class="close-modal" onclick="closeProfileModal()">×</button>
+    </div>
+    <div class="letter-content-area">
+      <!-- 双方头像上传表单 (multipart/form-data) -->
+      <div class="profile-avatar-row">
+        <img id="form-avatar-preview" src="" alt="预览">
+        <div>
+          <span style="font-size: 13px; font-weight: bold; color: #a66275;">更换头像 (Multipart)</span>
+          <input type="file" id="form-avatar-file" accept="image/*" style="margin-top: 6px; font-size: 11px;" onchange="submitAvatarUpdate()">
+        </div>
+      </div>
+      
+      <!-- 双人文本资料属性 -->
+      <div class="profile-form-group">
+        <label>选择修改对象</label>
+        <select class="profile-input" id="form-profile-user-id" onchange="syncProfileFormTarget()">
+          <option value="user">Seraphina (我)</option>
+          <option value="charon">Charon</option>
+        </select>
+      </div>
+      <div class="profile-form-group">
+        <label>专属昵称</label>
+        <input type="text" class="profile-input" id="form-profile-nickname" placeholder="输入甜蜜昵称">
+      </div>
+      <div class="profile-form-group">
+        <label>聊天背景 (图片URL/颜色代码)</label>
+        <input type="text" class="profile-input" id="form-profile-background" placeholder="输入网图 URL 或 #FFD1D7 色号">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button class="fancy-btn-red" id="profile-save-btn" onclick="submitProfileUpdate()">保存修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 新建转账独立弹窗 Drawer -->
+<div id="transfer-send-modal">
+  <div class="letter-container" style="max-width: 380px;">
+    <div class="letter-header">
+      <div class="letter-title">🪙 塞入心意红包</div>
+      <button class="close-modal" onclick="closeTransferSendModal()">×</button>
+    </div>
+    <div class="letter-content-area" style="background-position: 0 0;">
+      <div class="profile-form-group">
+        <label>转账方向</label>
+        <select class="profile-input" id="transfer-direction">
+          <option value="user_to_charon">我 ➔ Charon</option>
+          <option value="charon_to_user">Charon ➔ 我 (代扣)</option>
+        </select>
+      </div>
+      <div class="profile-form-group">
+        <label>心意代币金额</label>
+        <input type="number" class="profile-input" id="transfer-amount" placeholder="520" min="1">
+      </div>
+      <div class="profile-form-group">
+        <label>留言寄语</label>
+        <input type="text" class="profile-input" id="transfer-message" placeholder="给你买杯奶茶">
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+        <button class="fancy-btn-red" id="transfer-submit-btn" onclick="submitTransferAction()">打包塞入聊天气泡</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 表情包管理器独立弹窗 Drawer -->
+<div id="sticker-mgr-modal">
+  <div class="letter-container">
+    <div class="letter-header">
+      <div class="letter-title">🏷️ 管理表情素材</div>
+      <button class="close-modal" onclick="closeStickerMgrModal()">×</button>
+    </div>
+    <div class="letter-content-area">
+      <div class="sticker-mgr-grid" id="sticker-mgr-container">
+        <!-- 表情包列表 + 虚线上传占位格子 -->
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 秘密小抽屉 1：便签收纳盒 (30) -->
 <div id="drawer-notes-modal">
@@ -816,12 +898,12 @@
       <div class="legend-item"><span class="legend-color ongoing"></span><span>生理期进行中</span></div>
     </div>
     <div style="margin-top: 15px; text-align: center;">
-      <button class="health-btn end" style="padding: 6px 14px; font-size: 11px;" onclick="closePeriodCalendar()">返回桌面</button>
+      <button class="fancy-btn-red" style="padding: 6px 14px; font-size: 11px;" onclick="closePeriodCalendar()">返回桌面</button>
     </div>
   </div>
 </div>
 
-<!-- 日历日期点击操作控制悬浮板 -->
+<!-- 日历操作悬浮板 -->
 <div id="day-action-popup" class="day-action-popup">
   <button class="day-action-btn start-period" id="popup-start-btn">🩸 月经开始</button>
   <button class="day-action-btn end-period" id="popup-end-btn">🌸 月经结束</button>
@@ -846,8 +928,15 @@
 
 <script>
 const CODE = {{ code_param | tojson }};
-const AVATAR_CHARON = {{ avatar_charon | tojson }};
-const AVATAR_USER = {{ avatar_user | tojson }};
+const AVATAR_CHARON_DEFAULT = {{ avatar_charon | tojson }};
+const AVATAR_USER_DEFAULT = {{ avatar_user | tojson }};
+
+// 运行时状态变量：存储服务器最新的双人 Profile 资料
+let profileCache = {
+  user: { nickname: "Seraphina", avatar_url: AVATAR_USER_DEFAULT, chat_background: null },
+  charon: { nickname: "Charon", avatar_url: AVATAR_CHARON_DEFAULT, chat_background: null }
+};
+
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
@@ -855,18 +944,33 @@ const statusLabel = document.getElementById('status-label');
 const contextMenu = document.getElementById('bubble-menu');
 const dayActionPopup = document.getElementById('day-action-popup');
 
-// 用于临时记录评论回复目标的全局状态
 let currentReplyTargets = {};
-
-// 日历排盘与月经数据缓存
 let currentYear = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
 let periodRecords = [];
 let selectedDateStr = "";
-
-// 长按/右键/双击 触发状态记录
 let currentActiveMsgId = null;
 let currentActiveRowEl = null;
+
+// 统一的带 Auth 鉴权的 Api 请求客户端
+function apiUrl(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return CODE ? `${path}${sep}code=${encodeURIComponent(CODE)}` : path;
+}
+
+async function apiFetch(path, options = {}) {
+  const url = apiUrl(path);
+  const headers = options.headers || {};
+  if (options.body && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const response = await fetch(url, { ...options, headers });
+  const data = await response.json();
+  if (!data.ok && data.error === 'unauthorized') {
+    alert('未授权，请检查授权码。');
+  }
+  return data;
+}
 
 // 核心功能：原生兼容的双击事件绑定器
 function addDoubleTapListener(element, callback) {
@@ -882,11 +986,6 @@ function addDoubleTapListener(element, callback) {
   });
 }
 
-function apiUrl(path) {
-  const sep = path.includes('?') ? '&' : '?';
-  return CODE ? `${path}${sep}code=${encodeURIComponent(CODE)}` : path;
-}
-
 function formatTime(isoStr) {
   if (!isoStr) return '';
   const d = new Date(isoStr);
@@ -896,7 +995,60 @@ function formatTime(isoStr) {
   return h + ':' + m;
 }
 
-function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed) {
+// 朋友圈封面自适应渲染 (拉取最新资料进行展现)
+function refreshMomentsCover() {
+  const headerUserAvatar = profileCache.user.avatar_url || AVATAR_USER_DEFAULT;
+  const headerUserNick = profileCache.user.nickname || "Seraphina";
+  const userLabels = document.querySelectorAll('.profile-name-label');
+  userLabels.forEach(el => el.textContent = headerUserNick);
+  const userPolas = document.querySelectorAll('.moments-avatar-polaroid img');
+  userPolas.forEach(img => img.src = headerUserAvatar);
+}
+
+// 资料刷新绑定函数：自动注入聊天顶部、朋友圈及侧栏
+function applyProfilesData() {
+  const userNick = profileCache.user.nickname || "Seraphina";
+  const charonNick = profileCache.charon.nickname || "Charon";
+  const userAvatar = profileCache.user.avatar_url || AVATAR_USER_DEFAULT;
+  const charonAvatar = profileCache.charon.avatar_url || AVATAR_CHARON_DEFAULT;
+  const chatBackground = profileCache.charon.chat_background || profileCache.user.chat_background || '';
+
+  // 1. 聊天室头部与标识名称
+  document.getElementById('header-charon-name').textContent = charonNick.toUpperCase();
+  document.getElementById('header-user-sig').textContent = userNick;
+  document.getElementById('header-avatar').src = charonAvatar;
+
+  // 2. 聊天室自定义背景色/网图
+  const mainChatBox = document.getElementById('main');
+  if (chatBackground) {
+    if (chatBackground.startsWith('http') || chatBackground.startsWith('/') || chatBackground.startsWith('data:')) {
+      mainChatBox.style.backgroundImage = `url('${chatBackground}')`;
+    } else {
+      mainChatBox.style.background = chatBackground;
+    }
+  } else {
+    mainChatBox.style.backgroundImage = 'none';
+  }
+
+  // 3. 触发朋友圈封面刷新
+  refreshMomentsCover();
+}
+
+// ---- 加载全套资料并缓存 ----
+async function loadProfiles() {
+  try {
+    const data = await apiFetch('/api/profile');
+    if (data.ok && data.profiles) {
+      profileCache = data.profiles;
+      applyProfilesData();
+    }
+  } catch (e) {
+    console.warn("读取双人资料失败", e);
+  }
+}
+
+// 消息渲染的核心重构函数 (支持 `text`, `image`, `sticker`, `transfer` 四类气泡)
+function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed, msgType = "text", extra = null) {
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
@@ -909,12 +1061,21 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
 
   const tag = document.createElement('span');
   tag.className = 'avatar-tag';
-  tag.textContent = role === 'user' ? 'Seraphina' : 'Charon';
+  
+  // 绑定最新缓存的名字
+  const currentNickName = (role === 'user') 
+    ? (profileCache.user.nickname || 'Seraphina') 
+    : (profileCache.charon.nickname || 'Charon');
+  tag.textContent = currentNickName;
   avatarWrap.appendChild(tag);
+
+  const avatarImg = (role === 'user') 
+    ? (profileCache.user.avatar_url || AVATAR_USER_DEFAULT) 
+    : (profileCache.charon.avatar_url || AVATAR_CHARON_DEFAULT);
 
   const avatar = document.createElement('img');
   avatar.className = 'msg-avatar';
-  avatar.src = role === 'user' ? AVATAR_USER : AVATAR_CHARON;
+  avatar.src = avatarImg;
   avatarWrap.appendChild(avatar);
 
   const star = document.createElement('span');
@@ -922,28 +1083,55 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
   star.textContent = '✦';
   avatarWrap.appendChild(star);
 
-  const d1 = document.createElement('span');
-  d1.className = 'dust-star d-1';
-  d1.textContent = '✦';
-  avatarWrap.appendChild(d1);
-
-  const d2 = document.createElement('span');
-  d2.className = 'dust-star d-2';
-  d2.textContent = '✦';
-  avatarWrap.appendChild(d2);
-
   row.appendChild(avatarWrap);
 
   const col = document.createElement('div');
   col.className = 'msg-col';
 
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'charon') + (pending ? ' pending' : '');
-  if (pending && !content) {
-    bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+  let bubble = null;
+
+  // 根据 msgType 执行条件构造
+  if (msgType === "image" && extra && extra.image_url) {
+    bubble = document.createElement('div');
+    bubble.className = 'bubble-image-container';
+    bubble.innerHTML = `
+      <img src="${extra.image_url}" alt="[图片]">
+      ${content ? `<div class="bubble-image-caption">${escapeHtml(content)}</div>` : ''}
+    `;
+    bubble.onclick = () => window.open(extra.image_url, '_blank');
+  } else if (msgType === "sticker" && extra && extra.image_url) {
+    bubble = document.createElement('div');
+    bubble.className = 'bubble-sticker-container';
+    bubble.innerHTML = `<img src="${extra.image_url}" alt="[表情]">`;
+  } else if (msgType === "transfer" && extra) {
+    bubble = document.createElement('div');
+    bubble.className = 'bubble-transfer-container';
+    const toName = (role === 'user') ? (profileCache.charon.nickname || 'Charon') : (profileCache.user.nickname || '我');
+    bubble.innerHTML = `
+      <div class="transfer-top">
+        <span class="transfer-icon">🪙</span>
+        <div class="transfer-details">
+          <span class="transfer-amt">¥ ${extra.amount}</span>
+          <span class="transfer-msg">${escapeHtml(extra.message || '心意转账')}</span>
+        </div>
+      </div>
+      <div class="transfer-bottom">
+        <span>转账给 ${toName}</span>
+        <span>心意币 ➔</span>
+      </div>
+    `;
+    bubble.onclick = () => openWalletModal();
   } else {
-    bubble.textContent = content;
+    // 默认纯文本渲染模式
+    bubble = document.createElement('div');
+    bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'charon') + (pending ? ' pending' : '');
+    if (pending && !content) {
+      bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+    } else {
+      bubble.textContent = content;
+    }
   }
+
   col.appendChild(bubble);
 
   let modelTagEl = null;
@@ -961,11 +1149,10 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
   timeEl.className = 'msg-time';
   timeEl.textContent = formatTime(createdAt);
   timeRow.appendChild(timeEl);
-
-  timeRow.appendChild(timeEl);
   col.appendChild(timeRow);
   row.appendChild(col);
 
+  // 绑定双击上下文快捷菜单
   addDoubleTapListener(bubble, (e) => {
     if (row.classList.contains('editing')) return;
     currentActiveRowEl = row;
@@ -1176,7 +1363,7 @@ function hideWeChatMenu() {
 }
 
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.bubble') && !e.target.closest('.sticky-note-card') && !e.target.classList.contains('menu-btn')) {
+  if (!e.target.closest('.bubble') && !e.target.closest('.sticky-note-card') && !e.target.closest('.bubble-image-container') && !e.target.closest('.bubble-sticker-container') && !e.target.closest('.bubble-transfer-container') && !e.target.classList.contains('menu-btn')) {
     hideWeChatMenu();
   }
   if (!e.target.classList.contains('calendar-day') && !e.target.classList.contains('day-action-btn')) {
@@ -1224,6 +1411,7 @@ let oldestLoadedAt = null;
 let hasMoreHistory = true;
 let isLoadingMoreHistory = false;
 
+// 加载历史记录 (自适应绑定 `msg_type` 渲染逻辑)
 async function loadHistory() {
   try {
     const res = await fetch(apiUrl('/api/chat-messages'));
@@ -1231,7 +1419,9 @@ async function loadHistory() {
     messagesEl.innerHTML = '';
     if (!data.ok) { messagesEl.innerHTML = '<div id="empty-hint">加载失败</div>'; return; }
     if (!data.messages || data.messages.length === 0) { messagesEl.innerHTML = '<div id="empty-hint">还没有聊过，说点什么吧</div>'; return; }
-    data.messages.forEach(m => messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id, m.model)));
+    data.messages.forEach(m => {
+      messagesEl.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id, m.model, false, m.msg_type, m.extra));
+    });
     oldestLoadedAt = data.messages[0].created_at;
     hasMoreHistory = !!data.has_more;
     scrollToBottom();
@@ -1250,7 +1440,9 @@ async function loadMoreHistory() {
     }
     const prevScrollHeight = messagesEl.scrollHeight;
     const frag = document.createDocumentFragment();
-    data.messages.forEach(m => frag.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id, m.model)));
+    data.messages.forEach(m => {
+      frag.appendChild(renderMsgRow(m.role, m.content, m.created_at, false, m.id, m.model, false, m.msg_type, m.extra));
+    });
     messagesEl.insertBefore(frag, messagesEl.firstChild);
     messagesEl.scrollTop += (messagesEl.scrollHeight - prevScrollHeight);
     oldestLoadedAt = data.messages[0].created_at;
@@ -1271,7 +1463,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ---- 便签相关的操作与数据同步函数 ----
+// 便签管理
 async function deleteNote(id, sourceStr = "desk") {
   const card = document.getElementById(`drawer-note-card-${id}`) || document.getElementById(`archive-note-card-${id}`);
   if (card) card.remove();
@@ -1328,7 +1520,6 @@ async function starNote(id, isStarredNow, sourceStr, btnEl) {
       btn.classList.toggle('active', isStarredNow);
       btn.setAttribute('onclick', `starNote(${id}, ${isStarredNow}, '${sourceStr}', this)`);
     }
-    alert('网络错误，星标可能没有保存成功');
   }
 }
 
@@ -1340,10 +1531,8 @@ function getPersonalizedStyle(id, index) {
     { bg: '#e3f2fd', grad: '#bbdefb', text: '#455160', name: 'sky' },     
     { bg: '#efebe9', grad: '#d7ccc8', text: '#5c443f', name: 'coffee' }   
   ];
-  
   const color = colors[id % 5];
   let bgStyle = '';
-  
   const textureType = index % 5;
   if (textureType === 0) {
     bgStyle = `background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), radial-gradient(circle, rgba(255, 255, 255, 0.45) 15%, transparent 15.5%), ${color.bg}; background-size: 8px 8px, 8px 8px; background-position: 0 0, 4px 4px;`;
@@ -1356,15 +1545,13 @@ function getPersonalizedStyle(id, index) {
   } else {
     bgStyle = `background: linear-gradient(135deg, ${color.bg} 0%, ${color.grad} 100%);`;
   }
-  
   return { bgStyle: bgStyle, textColor: color.text };
 }
 
-// ---- 加载状态 (Desk & 堆叠便签 & 警告判定) ----
+// ---- 加载桌面基础状态 ----
 async function loadStatus() {
   try {
-    const res = await fetch(apiUrl('/api/chat-status'));
-    const data = await res.json();
+    const data = await apiFetch('/api/chat-status');
     if (!data.ok) return;
 
     statusLabel.textContent = data.status_label || '在线';
@@ -1419,8 +1606,8 @@ async function loadStatus() {
       });
     } else {
       container.innerHTML = `
-        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative; margin: 0 auto;">
-          <div class="sticky-note-text" style="color:#b08d98; text-align:center;">桌面空空的，TA还没有新的留言。</div>
+        <div class="sticky-note-card" style="transform: rotate(-1deg); position: relative; margin: 0 auto; background:#fff;">
+          <div class="sticky-note-text" style="color:#b08d98; text-align:center; padding:10px 0;">桌面空空的，TA还没有新的留言。</div>
         </div>
       `;
     }
@@ -1428,7 +1615,7 @@ async function loadStatus() {
     const notesBtn = document.getElementById('drawer-notes-btn');
     const lettersBtn = document.getElementById('drawer-letters-btn');
     
-    fetch(apiUrl('/api/sticky-notes?status=drawer')).then(res=>res.json()).then(d => {
+    apiFetch('/api/sticky-notes?status=drawer').then(d => {
       if(d.ok) {
         document.getElementById('notes-drawer-count').textContent = `${d.notes.length}/30`;
         document.getElementById('box-notes-count').textContent = `${d.notes.length}/30`;
@@ -1437,7 +1624,7 @@ async function loadStatus() {
       }
     });
 
-    fetch(apiUrl('/api/love-letters?status=drawer')).then(res=>res.json()).then(d => {
+    apiFetch('/api/love-letters?status=drawer').then(d => {
       if(d.ok) {
         document.getElementById('letters-drawer-count').textContent = `${d.letters.length}/20`;
         document.getElementById('box-letters-count').textContent = `${d.letters.length}/20`;
@@ -1447,8 +1634,8 @@ async function loadStatus() {
     });
 
     Promise.all([
-      fetch(apiUrl('/api/sticky-notes?status=archive')).then(res=>res.json()),
-      fetch(apiUrl('/api/love-letters?status=archive')).then(res=>res.json())
+      apiFetch('/api/sticky-notes?status=archive'),
+      apiFetch('/api/love-letters?status=archive')
     ]).then(([noteData, letterData]) => {
       if(noteData.ok && letterData.ok) {
         const total = noteData.notes.length + letterData.letters.length;
@@ -1461,14 +1648,24 @@ async function loadStatus() {
   } catch (e) { console.error("状态加载失败", e); }
 }
 
-async function sendMessage() {
-  const text = inputEl.value.trim();
-  if (!text) return;
-  inputEl.value = ''; inputEl.style.height = 'auto'; sendBtn.disabled = true;
-
+// 统一的流式消息发送主控制器 (完美适配 SSE 数据并兼容高级 msg_type 载荷)
+async function sendRawPayload(payload) {
+  sendBtn.disabled = true;
   const nowIso = new Date().toISOString();
-  const userRow = renderMsgRow('user', text, nowIso, false);
-  messagesEl.appendChild(userRow);
+  
+  // 用于暂存预览的假气泡
+  let localBubbleRow = null;
+  if (payload.msg_type === "image") {
+    localBubbleRow = renderMsgRow('user', payload.message || '', nowIso, false, null, null, false, "image", { image_url: payload.image_url });
+  } else if (payload.msg_type === "sticker") {
+    localBubbleRow = renderMsgRow('user', '', nowIso, false, null, null, false, "sticker", { image_url: payload.image_url });
+  } else if (payload.msg_type === "transfer") {
+    localBubbleRow = renderMsgRow('user', '', nowIso, false, null, null, false, "transfer", { amount: payload.amount, message: payload.message });
+  } else {
+    localBubbleRow = renderMsgRow('user', payload.message, nowIso, false);
+  }
+
+  messagesEl.appendChild(localBubbleRow);
   const pendingRow = renderMsgRow('charon', '', nowIso, true);
   messagesEl.appendChild(pendingRow);
   scrollToBottom();
@@ -1477,12 +1674,12 @@ async function sendMessage() {
 
   try {
     const res = await fetch(apiUrl('/api/chat-send'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    if (!res.ok || !res.body) {
-      throw new Error('网络请求失败');
-    }
+    if (!res.ok || !res.body) throw new Error('流连接建立失败');
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder('utf-8');
@@ -1507,594 +1704,388 @@ async function sendMessage() {
         if (evt.delta) {
           pendingBubble.textContent += evt.delta;
           scrollToBottom();
-        } else if (evt.error) {
         } else if (evt.done) {
           sawDone = true;
           if (evt.reply) {
-            userRow.replaceWith(renderMsgRow('user', text, nowIso, false, evt.user_msg_id));
+            // 用真实带 ID 与 msg_type 的气泡覆盖假气泡
+            localBubbleRow.replaceWith(renderMsgRow('user', payload.message || '', nowIso, false, evt.user_msg_id, null, false, payload.msg_type, payload.extra || payload));
             pendingRow.replaceWith(renderMsgRow('charon', evt.reply, nowIso, false, evt.charon_msg_id, evt.model));
           } else {
-            pendingRow.replaceWith(renderMsgRow('charon', '（没能回复：模型调用失败）', nowIso, false, null, null, true));
+            pendingRow.replaceWith(renderMsgRow('charon', '（回复生成故障）', nowIso, false, null, null, true));
           }
         }
       }
     }
-
     if (!sawDone) {
-      const partial = pendingBubble.textContent;
-      pendingRow.replaceWith(renderMsgRow('charon', partial || '（连接中断，没能收到完整回复）', nowIso, false, null, null, true));
+      pendingRow.replaceWith(renderMsgRow('charon', '（连接异常中断）', nowIso, false, null, null, true));
     }
   } catch (e) {
-    pendingRow.replaceWith(renderMsgRow('charon', '（网络错误，没发出去）', nowIso, false, null, null, true));
+    pendingRow.replaceWith(renderMsgRow('charon', '（网络请求错误）', nowIso, false, null, null, true));
   }
-  scrollToBottom(); sendBtn.disabled = false; loadStatus();
-}
-
-// ---- 月经一键点击生理记录控制台 ----
-async function recordPeriod(valueStr) {
-  if (!confirm(`确定要记录月经已“${valueStr}”吗？`)) return;
-  try {
-    const res = await fetch(apiUrl('/event'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'period', value: valueStr })
-    });
-    if (res.ok) {
-      alert(`已记录：月经${valueStr}`);
-      loadStatus(); 
-    }
-  } catch (e) { alert("网络错误，生理记录失败"); }
-}
-
-// ---- 秘密小抽屉 1：便签收纳盒 (30) 前端功能 ----
-async function openDrawerNotes() {
-  const modal = document.getElementById('drawer-notes-modal');
-  const area = document.getElementById('drawer-notes-content-area');
-  modal.style.display = 'flex';
-  area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在抽拉便签匣...</div>';
-
-  try {
-    const res = await fetch(apiUrl('/api/sticky-notes?status=drawer'));
-    const data = await res.json();
-    if (data.ok && data.notes.length > 0) {
-      let html = '';
-      data.notes.forEach(note => {
-        const starIcon = note.is_starred ? '★' : '☆';
-        const starClass = note.is_starred ? 'active' : '';
-        html += `
-          <div class="single-letter" id="drawer-note-card-${note.id}">
-            <div class="letter-time-row">
-              <span class="letter-time">💌 ${formatTime(note.created_at)} · ${note.created_at.substring(0,10)}</span>
-              <div class="letter-act-group">
-                <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'drawer', this)">${starIcon}</button>
-                <button class="letter-del-btn" style="color: #ff5e84;" onclick="moveNote(${note.id}, 'archive', 'drawer')" title="珍藏入恋爱档案箱">🗃️ 归档</button>
-                <button class="letter-del-btn" onclick="deleteNote(${note.id}, 'drawer')" title="丢弃便签">🗑️ 丢弃</button>
-              </div>
-            </div>
-            <div class="letter-text" style="font-family: inherit; font-style: normal;">${escapeHtml(note.message)}</div>
-          </div>
-        `;
-      });
-      area.innerHTML = html;
-    } else {
-      area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">抽屉里空空的，目前还没有收起过便签。</div>';
-    }
-  } catch(e) {
-    area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">打不开抽屉</div>';
-  }
-}
-function closeDrawerNotes() { document.getElementById('drawer-notes-modal').style.display = 'none'; }
-
-
-// ---- 秘密小抽屉 2：情书收纳盒 (20) 前端功能 ----
-async function openLoveLetters() {
-  const modal = document.getElementById('letter-modal');
-  const area = document.getElementById('letter-content-area');
-  modal.style.display = 'flex';
-  area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在拉开情书匣...</div>';
   
-  fetch(apiUrl('/api/love-letters/mark-read'), {method: 'POST'}).then(() => loadStatus());
+  scrollToBottom();
+  sendBtn.disabled = false;
+  loadStatus();
+}
 
+// 普通纯文本发送
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = ''; inputEl.style.height = 'auto';
+  await sendRawPayload({ message: text });
+}
+
+// ---- 表情包工具抽屉与接口实现 (Stickers) ----
+let stickersLoaded = [];
+
+function toggleStickerDrawer(forcedState) {
+  const drawer = document.getElementById('sticker-drawer');
+  const currentState = drawer.style.display === 'block';
+  const show = (forcedState !== undefined) ? forcedState : !currentState;
+  drawer.style.display = show ? 'block' : 'none';
+  if (show) {
+    toggleAccessoryDrawer(false);
+    fetchAndRenderStickers();
+  }
+}
+
+async function fetchAndRenderStickers() {
+  const container = document.getElementById('sticker-picker-container');
+  container.innerHTML = '<div style="grid-column: span 5; text-align: center; font-size: 11px; color: #b08d98; padding: 10px;">表情加载中...</div>';
   try {
-    const res = await fetch(apiUrl('/api/love-letters?status=drawer'));
-    const data = await res.json();
-    if (data.ok && data.letters.length > 0) {
-      let html = '';
-      data.letters.forEach(letter => {
-        const typeIcon = letter.letter_type === 'sweet' ? '💌' : '🌧️';
-        const starIcon = letter.is_starred ? '★' : '☆';
-        const starClass = letter.is_starred ? 'active' : '';
-        html += `
-          <div class="single-letter" id="letter-card-${letter.id}">
-            <div class="letter-time-row">
-              <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
-              <div class="letter-act-group">
-                <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'drawer', this)">${starIcon}</button>
-                <button class="letter-del-btn" style="color: #ff5e84;" onclick="archiveLetter(${letter.id})" title="珍藏入恋爱档案箱">🗃️ 归档</button>
-                <button class="letter-del-btn" onclick="deleteLetter(${letter.id})" title="丢弃这封信">🗑️ 丢弃</button>
-              </div>
-            </div>
-            <div class="letter-text">${escapeHtml(letter.content)}</div>
-          </div>
-        `;
+    const data = await apiFetch('/api/stickers');
+    if (data.ok) {
+      stickersLoaded = data.stickers;
+      container.innerHTML = '';
+      stickersLoaded.forEach(st => {
+        const item = document.createElement('div');
+        item.className = 'sticker-picker-item';
+        item.title = st.name || '';
+        item.innerHTML = `<img src="${st.image_url}" alt="${st.name || ''}">`;
+        item.onclick = () => {
+          sendRawPayload({
+            msg_type: "sticker",
+            sticker_id: st.id,
+            image_url: st.image_url
+          });
+          toggleStickerDrawer(false);
+        };
+        container.appendChild(item);
       });
-      area.innerHTML = html;
-    } else {
-      area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">抽屉里空空的，目前还没有收到信哦。</div>';
+      if (stickersLoaded.length === 0) {
+        container.innerHTML = '<div style="grid-column: span 5; text-align: center; font-size: 11px; color: #b08d98; padding: 10px;">无表情素材，请从工具箱中添加</div>';
+      }
     }
   } catch(e) {
-    area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">网络错误，打不开信箱</div>';
-  }
-}
-function closeLoveLetters() { document.getElementById('letter-modal').style.display = 'none'; }
-
-async function archiveLetter(id) {
-  const card = document.getElementById(`letter-card-${id}`);
-  if (card) card.remove();
-  try {
-    const res = await fetch(apiUrl('/api/love-letters/archive'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id })
-    });
-    const data = await res.json();
-    if (data.ok) loadStatus();
-    else alert('归档失败：' + (data.error || '未知错误'));
-  } catch(e) { alert('网络错误'); }
-}
-
-async function deleteLetter(id) {
-  if (!confirm('确定要彻底丢弃这封情书吗？它将被永久删除。')) return;
-  const card = document.getElementById(`letter-card-${id}`) || document.getElementById(`archive-letter-card-${id}`);
-  if (card) card.remove();
-  try {
-    const res = await fetch(apiUrl('/api/love-letters/delete'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id })
-    });
-    const data = await res.json();
-    if (!data.ok) alert('丢弃失败：' + (data.error || '未知错误'));
-  } catch (e) { alert('网络错误'); }
-}
-
-async function starLetter(id, isStarredNow, sourceStr, btnEl) {
-  const btn = btnEl;
-  const newStarred = !isStarredNow;
-  if (btn) {
-    btn.textContent = newStarred ? '★' : '☆';
-    btn.classList.toggle('active', newStarred);
-    btn.setAttribute('onclick', `starLetter(${id}, ${newStarred}, '${sourceStr}', this)`);
-  }
-  try {
-    const res = await fetch(apiUrl('/api/love-letters/star'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, is_starred: newStarred })
-    });
-    const data = await res.json();
-    if (!data.ok && btn) {
-      btn.textContent = isStarredNow ? '★' : '☆';
-      btn.classList.toggle('active', isStarredNow);
-      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}', this)`);
-    }
-  } catch(e) {
-    if (btn) {
-      btn.textContent = isStarredNow ? '★' : '☆';
-      btn.classList.toggle('active', isStarredNow);
-      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}', this)`);
-    }
-    alert('网络错误，星标可能没有保存成功');
+    container.innerHTML = '<div style="grid-column: span 5; text-align: center; font-size: 11px; color: #b08d98; padding: 10px;">表情加载失败</div>';
   }
 }
 
-// ---- 3. 恋爱档案箱 (容量 200) ----
-async function openArchiveBox() {
-  const modal = document.getElementById('archive-modal');
-  const area = document.getElementById('archive-content-area');
-  modal.style.display = 'flex';
-  area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在开启尘封的恋爱箱...</div>';
-
-  try {
-    const [noteRes, letterRes] = await Promise.all([
-      fetch(apiUrl('/api/sticky-notes?status=archive')),
-      fetch(apiUrl('/api/love-letters?status=archive'))
-    ]);
-    const noteData = await noteRes.json();
-    const letterData = await letterRes.json();
-
-    if (noteData.ok && letterData.ok) {
-      let html = '';
-      
-      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Pinned Notes (${noteData.notes.length}/100)</div>`;
-      if (noteData.notes.length > 0) {
-        noteData.notes.forEach(note => {
-          const starIcon = note.is_starred ? '★' : '☆';
-          const starClass = note.is_starred ? 'active' : '';
-          html += `
-            <div class="single-letter" id="archive-note-card-${note.id}">
-              <div class="letter-time-row">
-                <span class="letter-time">📌 ${formatTime(note.created_at)} · ${note.created_at.substring(0,10)}</span>
-                <div class="letter-act-group">
-                  <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'archive', this)">${starIcon}</button>
-                  <button class="letter-del-btn" style="color: #a66275;" onclick="moveNote(${note.id}, 'drawer', 'archive')" title="取出，移回便签抽屉">📤 取出</button>
-                  <button class="letter-del-btn" onclick="deleteNote(${note.id}, 'archive')" title="永久删除">🗑️ 丢弃</button>
-                </div>
-              </div>
-              <div class="letter-text" style="font-family: inherit; font-style: normal;">${escapeHtml(note.message)}</div>
-            </div>
-          `;
-        });
-      } else html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档便签...</div>';
-
-      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-top:30px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ Letters Box (${letterData.letters.length}/100)</div>`;
-      if (letterData.letters.length > 0) {
-        letterData.letters.forEach(letter => {
-          const typeIcon = letter.letter_type === 'sweet' ? '💌' : '🌧️';
-          const starIcon = letter.is_starred ? '★' : '☆';
-          const starClass = letter.is_starred ? 'active' : '';
-          html += `
-            <div class="single-letter" id="archive-letter-card-${letter.id}">
-              <div class="letter-time-row">
-                <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
-                <div class="letter-act-group">
-                  <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'archive', this)">${starIcon}</button>
-                  <button class="letter-del-btn" onclick="deleteLetter(${letter.id})" title="永久删除">🗑️ 丢弃</button>
-                </div>
-              </div>
-              <div class="letter-text">${escapeHtml(letter.content)}</div>
-            </div>
-          `;
-        });
-      } else html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">这里还没有归档情书...</div>';
-
-      area.innerHTML = html;
-    }
-  } catch(e) {
-    area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">档案箱锁死，无法开启</div>';
+// 更多工具栏切换
+function toggleAccessoryDrawer(forcedState) {
+  const drawer = document.getElementById('accessory-drawer');
+  const currentState = drawer.style.display === 'block';
+  const show = (forcedState !== undefined) ? forcedState : !currentState;
+  drawer.style.display = show ? 'block' : 'none';
+  if (show) {
+    toggleStickerDrawer(false);
   }
 }
-function closeArchiveBox() { document.getElementById('archive-modal').style.display = 'none'; }
 
-// ---- 人设 / 长期记忆编辑面板 ----
-async function openPersonaEditor() {
-  const modal = document.getElementById('persona-modal');
-  const textarea = document.getElementById('persona-textarea');
-  const errorEl = document.getElementById('persona-error');
-  const statusEl = document.getElementById('persona-status');
-  modal.style.display = 'flex';
-  statusEl.textContent = '';
-  errorEl.textContent = '';
-  try {
-    const res = await fetch(apiUrl('/api/persona'));
-    const data = await res.json();
-    if (data.ok) {
-      textarea.value = data.text;
-    } else {
-      errorEl.textContent = '加载失败：' + (data.error || '未知错误');
-    }
-  } catch (e) {
-    errorEl.textContent = '加载失败：网络错误';
-  }
+// 发送照片 (先上传，后发图)
+function triggerImageUpload() {
+  document.getElementById('chat-image-uploader').click();
+  toggleAccessoryDrawer(false);
 }
-function closePersonaEditor() { document.getElementById('persona-modal').style.display = 'none'; }
 
-async function savePersona() {
-  const btn = document.getElementById('persona-save-btn');
-  const statusEl = document.getElementById('persona-status');
-  const errorEl = document.getElementById('persona-error');
-  const text = document.getElementById('persona-textarea').value;
-  statusEl.textContent = '';
-  errorEl.textContent = '';
-  btn.disabled = true;
+async function handleChatImageUpload(inputNode) {
+  if (inputNode.files.length === 0) return;
+  const file = inputNode.files[0];
+  inputNode.value = ''; // 清空指针
+
+  const formData = new FormData();
+  formData.append('file', file);
+
   try {
-    const res = await fetch(apiUrl('/api/persona'), {
+    statusLabel.textContent = "图片上传中...";
+    const data = await apiFetch('/api/chat-upload-image', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: formData
     });
-    const data = await res.json();
-    if (data.ok) {
-      statusEl.textContent = '已保存';
-      setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    if (data.ok && data.image_url) {
+      // 携带 URL 组装气泡并发送
+      await sendRawPayload({
+        msg_type: "image",
+        image_url: data.image_url,
+        message: ""
+      });
     } else {
-      errorEl.textContent = '保存失败：' + (data.error || '未知错误');
+      alert("上传照片失败: " + (data.error || "未知原因"));
     }
   } catch (e) {
-    errorEl.textContent = '保存失败：网络错误';
+    alert("网络异常，无法发送图片");
+  } finally {
+    loadStatus();
+  }
+}
+
+// ---- 表情包后台管理 Drawer (Sticker Management) ----
+function openStickerMgrModal() {
+  document.getElementById('sticker-mgr-modal').style.display = 'flex';
+  renderStickerMgrGrid();
+}
+function closeStickerMgrModal() {
+  document.getElementById('sticker-mgr-modal').style.display = 'none';
+}
+
+async function renderStickerMgrGrid() {
+  const container = document.getElementById('sticker-mgr-container');
+  container.innerHTML = '<div style="grid-column: span 4; text-align: center; font-size: 12px; color: #b08d98; padding: 20px;">加载列表中...</div>';
+  try {
+    const data = await apiFetch('/api/stickers');
+    if (data.ok) {
+      container.innerHTML = '';
+      
+      // 表情素材网格
+      data.stickers.forEach(st => {
+        const item = document.createElement('div');
+        item.className = 'sticker-mgr-item';
+        item.innerHTML = `
+          <img src="${st.image_url}">
+          <button class="sticker-mgr-del-btn" onclick="submitStickerDelete('${st.id}')">×</button>
+        `;
+        container.appendChild(item);
+      });
+
+      // 尾部上传占位
+      const uploadBox = document.createElement('div');
+      uploadBox.className = 'sticker-mgr-upload-box';
+      uploadBox.innerHTML = `<span style="font-size:24px;">+</span><span style="font-size:10px;">添加表情</span>`;
+      uploadBox.onclick = () => {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.onchange = async () => {
+          if (fileInput.files.length === 0) return;
+          const formData = new FormData();
+          formData.append('file', fileInput.files[0]);
+          formData.append('uploaded_by', 'user');
+          try {
+            const upRes = await apiFetch('/api/stickers/upload', {
+              method: 'POST',
+              body: formData
+            });
+            if (upRes.ok) {
+              renderStickerMgrGrid();
+            } else {
+              alert('上传表情失败: ' + (upRes.error || '未知'));
+            }
+          } catch(e) { alert('表情上传网络错误'); }
+        };
+        fileInput.click();
+      };
+      container.appendChild(uploadBox);
+    }
+  } catch(e) {
+    container.innerHTML = '<div style="grid-column: span 4; text-align: center; font-size: 12px; color: #b08d98;">网络失败</div>';
+  }
+}
+
+async function submitStickerDelete(id) {
+  if(!confirm('确定移除这个表情包吗？')) return;
+  try {
+    const data = await apiFetch('/api/stickers/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id })
+    });
+    if (data.ok) {
+      renderStickerMgrGrid();
+    }
+  } catch(e) {}
+}
+
+// ---- 双人钱包大弹窗接口与渲染 (Wallet & Transfers) ----
+function openWalletModal() {
+  document.getElementById('wallet-modal').style.display = 'flex';
+  syncWalletMetrics();
+}
+function closeWalletModal() {
+  document.getElementById('wallet-modal').style.display = 'none';
+}
+
+async function syncWalletMetrics() {
+  const container = document.getElementById('wallet-logs-container');
+  container.innerHTML = '<div style="text-align: center; font-size: 11px; color: #b08d98; padding: 20px;">正在获取账目明细...</div>';
+  try {
+    // 1. 获取双人钱包余额
+    const balData = await apiFetch('/api/wallet/balance');
+    if (balData.ok && balData.balance) {
+      document.getElementById('wallet-balance-user').textContent = balData.balance.user;
+      document.getElementById('wallet-balance-charon').textContent = balData.balance.charon;
+    }
+
+    // 2. 拉取钱包明细流水 (旧➔新顺序渲染)
+    const txData = await apiFetch('/api/wallet/transfers');
+    if (txData.ok && txData.transfers) {
+      container.innerHTML = '';
+      txData.transfers.forEach(tx => {
+        const item = document.createElement('div');
+        item.className = 'wallet-log-item';
+        
+        // 渲染标识：若是 Charon 扣款/转账，改变方向
+        const isFromUser = tx.from_user === 'user';
+        const senderLabel = isFromUser ? '向Charon转账' : 'Charon赠予我';
+        const amountSign = isFromUser ? `-${tx.amount}` : `+${tx.amount}`;
+        const amountClass = isFromUser ? 'out' : 'in';
+        const labelTag = tx.source === 'auto_intent' ? ' (AI主动)' : '';
+
+        item.innerHTML = `
+          <div class="wallet-log-info">
+            <span class="wallet-log-memo">${senderLabel}${labelTag}</span>
+            <span class="wallet-log-date">${tx.created_at.substring(0, 16).replace('T', ' ')} · "${tx.message || ''}"</span>
+          </div>
+          <span class="wallet-log-amt ${amountClass}">${amountSign}</span>
+        `;
+        container.appendChild(item);
+      });
+      if (txData.transfers.length === 0) {
+        container.innerHTML = '<div style="text-align: center; font-size: 11px; color: #b08d98; padding: 20px;">尚无往来流水明细</div>';
+      }
+    }
+  } catch(e) {
+    container.innerHTML = '<div style="text-align: center; font-size: 11px; color: #b08d98; padding: 20px;">数据获取故障</div>';
+  }
+}
+
+// 唤起转账打包弹窗
+function openTransferSendModal() {
+  document.getElementById('transfer-send-modal').style.display = 'flex';
+  document.getElementById('transfer-amount').value = '';
+  document.getElementById('transfer-message').value = '';
+}
+function closeTransferSendModal() {
+  document.getElementById('transfer-send-modal').style.display = 'none';
+}
+
+// 点击完成转账：独立发起流式发送包
+async function submitTransferAction() {
+  const amtInput = document.getElementById('transfer-amount');
+  const amount = parseInt(amtInput.value);
+  const message = document.getElementById('transfer-message').value.trim() || "给你买杯奶茶";
+  const dir = document.getElementById('transfer-direction').value;
+
+  if (isNaN(amount) || amount <= 0) {
+    alert('请输入正确的转账代币数额');
+    return;
+  }
+
+  const fromUser = (dir === 'user_to_charon') ? 'user' : 'charon';
+  const toUser = (dir === 'user_to_charon') ? 'charon' : 'user';
+
+  closeTransferSendModal();
+
+  // 直接执行真正的 /api/chat-send 并携带 "transfer" msg_type 
+  // 这将触发聊天气泡的同时，同步更新后端资产库
+  await sendRawPayload({
+    msg_type: "transfer",
+    from: fromUser,
+    to: toUser,
+    amount: amount,
+    message: message
+  });
+}
+
+// ---- 双人个人资料修改 (Profiles Update) ----
+let formTargetUserId = "user";
+
+function openProfileModal(targetUserId) {
+  document.getElementById('profile-modal').style.display = 'flex';
+  if (targetUserId) {
+    document.getElementById('form-profile-user-id').value = targetUserId;
+  }
+  syncProfileFormTarget();
+}
+function closeProfileModal() {
+  document.getElementById('profile-modal').style.display = 'none';
+}
+
+function syncProfileFormTarget() {
+  formTargetUserId = document.getElementById('form-profile-user-id').value;
+  const currentProfile = profileCache[formTargetUserId] || { nickname: '', avatar_url: '', chat_background: '' };
+  
+  document.getElementById('form-profile-nickname').value = currentProfile.nickname || '';
+  document.getElementById('form-profile-background').value = currentProfile.chat_background || '';
+  
+  const defaultAva = (formTargetUserId === 'user') ? AVATAR_USER_DEFAULT : AVATAR_CHARON_DEFAULT;
+  document.getElementById('form-avatar-preview').src = currentProfile.avatar_url || defaultAva;
+}
+
+// 保存纯文本属性 (昵称，背景)
+async function submitProfileUpdate() {
+  const btn = document.getElementById('profile-save-btn');
+  const nick = document.getElementById('form-profile-nickname').value.trim();
+  const bg = document.getElementById('form-profile-background').value.trim();
+
+  if(!nick) { alert("昵称不可真空"); return; }
+  btn.disabled = true;
+
+  try {
+    const data = await apiFetch('/api/profile/update', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: formTargetUserId,
+        nickname: nick,
+        chat_background: bg || null
+      })
+    });
+    if (data.ok) {
+      // 本地缓存同步，全页面渲染应用
+      profileCache[formTargetUserId] = data.profile;
+      applyProfilesData();
+      closeProfileModal();
+    } else {
+      alert("资料更新失败: " + (data.error || '未知'));
+    }
+  } catch(e) {
+    alert("更新资料网络异常");
   } finally {
     btn.disabled = false;
   }
 }
 
-// ---- 朋友圈 (Moments) JS 交互功能 ----
+// 模拟表单 multipart/form-data 头像异步更替
+async function submitAvatarUpdate() {
+  const fileInput = document.getElementById('form-avatar-file');
+  if (fileInput.files.length === 0) return;
 
-function switchMainView(view) {
-  const mainEl = document.getElementById('main');
-  const momentsEl = document.getElementById('moments-wrapper');
-  
-  if (view === 'moments') {
-    mainEl.style.display = 'none';
-    momentsEl.style.display = 'flex';
-    fetchMoments();
-  } else {
-    mainEl.style.display = 'flex';
-    momentsEl.style.display = 'none';
-    if (view === 'chat') {
-      scrollToBottom();
-    }
-  }
-}
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('user_id', formTargetUserId);
 
-function openPublishModal() {
-  document.getElementById('publish-modal').style.display = 'flex';
-  document.getElementById('moment-input-textarea').value = '';
-}
-
-function closePublishModal() {
-  document.getElementById('publish-modal').style.display = 'none';
-}
-
-async function fetchMoments() {
-  const feed = document.getElementById('moments-feed');
-  feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:80px;">正在加载朋友圈...</div>';
-  
   try {
-    const res = await fetch(apiUrl('/api/moments'));
-    const data = await res.json();
-    if (data.ok) {
-      renderMoments(data.moments);
-    } else {
-      feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:80px;">加载朋友圈失败</div>';
-    }
-  } catch (e) {
-    feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:80px;">网络错误，无法加载朋友圈</div>';
-  }
-}
-
-function renderMoments(moments) {
-  const feed = document.getElementById('moments-feed');
-  feed.innerHTML = '';
-  
-  // 1. 先追加精致主视觉封面与斜角拍立得头像组件 (WeChat / Qzone Style)
-  const coverSection = document.createElement('div');
-  coverSection.className = 'moments-cover-section';
-  coverSection.innerHTML = `
-    <div class="cover-branding-text">
-      <h1>MOMENTS</h1>
-      <p>私密双人朋友圈 · Time stands still when with you.</p>
-    </div>
-    <div class="moments-user-profile">
-      <div class="profile-name-label">Seraphina</div>
-      <div class="moments-avatar-polaroid">
-        <div class="washi-tape-accent"></div>
-        <img src="${AVATAR_USER}" alt="Seraphina">
-      </div>
-    </div>
-  `;
-  feed.appendChild(coverSection);
-
-  if (!moments || moments.length === 0) {
-    const emptyHint = document.createElement('div');
-    emptyHint.style.cssText = 'text-align:center; color:#b08d98; padding: 40px 24px;';
-    emptyHint.innerHTML = '空间空空的，发条动态记录此刻吧。';
-    feed.appendChild(emptyHint);
-    return;
-  }
-
-  // 2. 依次渲染动态卡片
-  moments.forEach((m, idx) => {
-    const isUser = m.author === 'user';
-    const authorName = isUser ? 'Seraphina' : 'Charon';
-    const avatar = isUser ? AVATAR_USER : AVATAR_CHARON;
-    const isLikedByUser = m.likes && m.likes.includes('user');
-    
-    // 点赞渲染
-    let likesHtml = '';
-    if (m.likes && m.likes.length > 0) {
-      const likeNames = m.likes.map(l => l === 'user' ? 'Seraphina' : 'Charon').join(', ');
-      likesHtml = `<div class="moment-likes">♥ <span>${likeNames} 觉得很赞</span></div>`;
-    }
-
-    // 评论列表与删除绑定
-    let commentsHtml = '';
-    if (m.comments && m.comments.length > 0) {
-      commentsHtml = `<div class="moment-comments">`;
-      m.comments.forEach((c, cIdx) => {
-        const cName = c.author === 'user' ? 'Seraphina' : 'Charon';
-        // 如果是自己发的评论，允许删除
-        const deleteBtnHtml = (c.author === 'user') 
-          ? `<span class="comment-delete-btn" onclick="event.stopPropagation(); deleteComment('${m.id}', ${cIdx})">×</span>` 
-          : '';
-
-        commentsHtml += `
-          <div class="comment-item" onclick="setCommentReplyTarget('${m.id}', '${cName}')">
-            <span class="comment-content-text">
-              <span class="comment-author">${cName}:</span>${escapeHtml(c.content)}
-            </span>
-            ${deleteBtnHtml}
-          </div>
-        `;
-      });
-      commentsHtml += `</div>`;
-    }
-
-    // 动态卡片的删除操作链接
-    const deleteLinkHtml = (m.author === 'user') 
-      ? `<span class="moment-delete-link" onclick="deleteMoment('${m.id}')">删除</span>` 
-      : '';
-
-    // 格纹心情印章 (手账细节贴纸)
-    const stampText = isUser ? 'Seraphina' : 'Charon';
-
-    const cardContainer = document.createElement('div');
-    cardContainer.className = 'moment-card-container';
-    cardContainer.innerHTML = `
-      <div class="moment-card">
-        <div class="moment-retro-stamp">POSTED BY ${stampText}</div>
-        <div class="moment-header">
-          <div class="avatar-wrapper ${isUser ? 'user' : 'charon'}" style="width:36px; height:36px;">
-            <img class="msg-avatar" src="${avatar}">
-            <span class="star-accent">✦</span>
-          </div>
-          <div style="margin-left: 10px;">
-            <div class="moment-author">${authorName}</div>
-            <div class="moment-time">${formatTime(m.created_at)} ${deleteLinkHtml}</div>
-          </div>
-        </div>
-        <div class="moment-content">${escapeHtml(m.content)}</div>
-        
-        <div class="moment-actions">
-          <button class="action-btn ${isLikedByUser ? 'liked' : ''}" onclick="toggleLike('${m.id}', ${isLikedByUser})">
-            ♥ ${isLikedByUser ? '已赞' : '点赞'}
-          </button>
-          <button class="action-btn" onclick="toggleCommentBox('${m.id}')">
-            💬 评论
-          </button>
-        </div>
-        
-        ${likesHtml}
-        ${commentsHtml}
-        
-        <div class="comment-input-area" id="comment-box-${m.id}">
-          <input type="text" class="comment-input" placeholder="写下温和的评论..." id="comment-input-${m.id}">
-          <button class="publish-btn" style="padding: 6px 12px; font-size: 11px;" onclick="submitComment('${m.id}')">发送</button>
-        </div>
-      </div>
-    `;
-    feed.appendChild(cardContainer);
-  });
-}
-
-// 展开评论框并重置状态
-function toggleCommentBox(momentId) {
-  const box = document.getElementById(`comment-box-${momentId}`);
-  const input = document.getElementById(`comment-input-${momentId}`);
-  box.classList.toggle('active');
-  if (box.classList.contains('active')) {
-    input.focus();
-    // 默认清除回复指向
-    delete currentReplyTargets[momentId];
-    input.placeholder = "写下温和的评论...";
-  }
-}
-
-// 点击某条评论进行回复
-function setCommentReplyTarget(momentId, replyToAuthor) {
-  const box = document.getElementById(`comment-box-${momentId}`);
-  const input = document.getElementById(`comment-input-${momentId}`);
-  box.classList.add('active');
-  input.focus();
-  currentReplyTargets[momentId] = replyToAuthor;
-  input.placeholder = `回复 @${replyToAuthor}: `;
-}
-
-async function submitMoment() {
-  const text = document.getElementById('moment-input-textarea').value.trim();
-  if (!text) return;
-  const saveBtn = document.getElementById('moment-save-btn');
-  saveBtn.disabled = true;
-  
-  try {
-    const res = await fetch(apiUrl('/api/moments'), {
+    statusLabel.textContent = "正在同步头像...";
+    const data = await apiFetch('/api/profile/avatar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text })
+      body: formData
     });
-    const data = await res.json();
-    if (data.ok) {
-      closePublishModal();
-      fetchMoments();
-      loadStatus();
+    if (data.ok && data.profile) {
+      profileCache[formTargetUserId] = data.profile;
+      applyProfilesData();
+      syncProfileFormTarget(); // 实时更替表单内的预览图
     } else {
-      alert('发布失败：' + (data.error || '未知错误'));
+      alert('头像上传故障：' + (data.error || '未知'));
     }
-  } catch (e) {
-    alert('发布失败：网络错误');
+  } catch(e) {
+    alert('网络故障，头像同步失败');
   } finally {
-    saveBtn.disabled = false;
+    loadStatus();
   }
 }
 
-async function deleteMoment(momentId) {
-  if (!confirm('确定要删除这条动态吗？')) return;
-  try {
-    const res = await fetch(apiUrl('/api/moments/delete'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: momentId })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      fetchMoments();
-    } else {
-      alert('删除失败：' + (data.error || '未知错误'));
-    }
-  } catch (e) {
-    alert('网络错误');
-  }
-}
 
-async function toggleLike(id, isLiked) {
-  try {
-    const res = await fetch(apiUrl('/api/moments/like'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      fetchMoments();
-    }
-  } catch (e) {
-    alert('网络错误');
-  }
-}
-
-async function submitComment(id) {
-  const input = document.getElementById(`comment-input-${id}`);
-  let text = input.value.trim();
-  if (!text) return;
-  
-  // 如果处于回复状态，自动在前缀拼接回复标识 (保证与后端最纯粹地结构化兼容)
-  const replyTarget = currentReplyTargets[id];
-  if (replyTarget) {
-    text = `回复 @${replyTarget} : ${text}`;
-  }
-
-  try {
-    const res = await fetch(apiUrl('/api/moments/comment'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, content: text })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      input.value = '';
-      delete currentReplyTargets[id];
-      fetchMoments();
-    } else {
-      alert('评论失败：' + (data.error || '未知错误'));
-    }
-  } catch (e) {
-    alert('评论失败：网络错误');
-  }
-}
-
-async function deleteComment(momentId, commentIndex) {
-  if (!confirm('确定要删除这条评论吗？')) return;
-  try {
-    const res = await fetch(apiUrl('/api/moments/comment/delete'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: momentId, comment_index: commentIndex })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      fetchMoments();
-    } else {
-      alert('删除评论失败：' + (data.error || '未知错误'));
-    }
-  } catch (e) {
-    alert('网络错误');
-  }
-}
-
-// ---- 日历逻辑 ----
+// ---- 月经日历逻辑 ----
 async function openPeriodCalendar() {
   document.getElementById('calendar-modal').style.display = 'flex';
   await fetchPeriodData(currentYear);
@@ -2105,8 +2096,7 @@ function closePeriodCalendar() {
 
 async function fetchPeriodData(year) {
   try {
-    const res = await fetch(apiUrl(`/api/period/calendar?year=${year}`));
-    const data = await res.json();
+    const data = await apiFetch(`/api/period/calendar?year=${year}`);
     if (data.ok) {
       periodRecords = data.records;
       renderCalendarGrid();
@@ -2189,20 +2179,465 @@ function hideDayActionPopup() { dayActionPopup.style.display = 'none'; }
 
 async function savePeriodDate(actionType) {
   try {
-    const res = await fetch(apiUrl('/api/period/save'), {
+    const data = await apiFetch('/api/period/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: actionType, date: selectedDateStr })
     });
-    const data = await res.json();
     if (data.ok) {
-      alert(`已成功标记：${actionType === 'start' ? '开始' : '结束'}`);
+      alert(`已标记：${actionType === 'start' ? '开始' : '结束'}`);
       fetchPeriodData(currentYear); loadStatus(); hideDayActionPopup();
     }
   } catch (e) { alert('网络错误'); }
 }
 
 
+// ---- 冰箱贴留言/档案箱/抽屉 ----
+async function openDrawerNotes() {
+  const modal = document.getElementById('drawer-notes-modal');
+  const area = document.getElementById('drawer-notes-content-area');
+  modal.style.display = 'flex';
+  area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在抽拉便签匣...</div>';
+
+  try {
+    const data = await apiFetch('/api/sticky-notes?status=drawer');
+    if (data.ok && data.notes.length > 0) {
+      let html = '';
+      data.notes.forEach(note => {
+        const starIcon = note.is_starred ? '★' : '☆';
+        const starClass = note.is_starred ? 'active' : '';
+        html += `
+          <div class="single-letter" id="drawer-note-card-${note.id}">
+            <div class="letter-time-row">
+              <span class="letter-time">💌 ${formatTime(note.created_at)} · ${note.created_at.substring(0,10)}</span>
+              <div class="letter-act-group">
+                <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'drawer', this)">${starIcon}</button>
+                <button class="letter-del-btn" style="color: #ff5e84;" onclick="moveNote(${note.id}, 'archive', 'drawer')" title="珍藏入恋爱档案箱">🗃️ 归档</button>
+                <button class="letter-del-btn" onclick="deleteNote(${note.id}, 'drawer')" title="丢弃便签">🗑️ 丢弃</button>
+              </div>
+            </div>
+            <div class="letter-text" style="font-family: inherit; font-style: normal;">${escapeHtml(note.message)}</div>
+          </div>
+        `;
+      });
+      area.innerHTML = html;
+    } else {
+      area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">目前还没有收起过便签。</div>';
+    }
+  } catch(e) {
+    area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">无法打开</div>';
+  }
+}
+function closeDrawerNotes() { document.getElementById('drawer-notes-modal').style.display = 'none'; }
+
+async function openLoveLetters() {
+  const modal = document.getElementById('letter-modal');
+  const area = document.getElementById('letter-content-area');
+  modal.style.display = 'flex';
+  area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在拉开情书匣...</div>';
+  apiFetch('/api/love-letters/mark-read', {method: 'POST'}).then(() => loadStatus());
+
+  try {
+    const data = await apiFetch('/api/love-letters?status=drawer');
+    if (data.ok && data.letters.length > 0) {
+      let html = '';
+      data.letters.forEach(letter => {
+        const typeIcon = letter.letter_type === 'sweet' ? '💌' : '🌧️';
+        const starIcon = letter.is_starred ? '★' : '☆';
+        const starClass = letter.is_starred ? 'active' : '';
+        html += `
+          <div class="single-letter" id="letter-card-${letter.id}">
+            <div class="letter-time-row">
+              <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
+              <div class="letter-act-group">
+                <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'drawer', this)">${starIcon}</button>
+                <button class="letter-del-btn" style="color: #ff5e84;" onclick="archiveLetter(${letter.id})" title="归档">🗃️ 归档</button>
+                <button class="letter-del-btn" onclick="deleteLetter(${letter.id})" title="丢弃">🗑️ 丢弃</button>
+              </div>
+            </div>
+            <div class="letter-text">${escapeHtml(letter.content)}</div>
+          </div>
+        `;
+      });
+      area.innerHTML = html;
+    } else {
+      area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">收纳盒里还没有收到信件。</div>';
+    }
+  } catch(e) {
+    area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">网络错误，打不开信箱</div>';
+  }
+}
+function closeLoveLetters() { document.getElementById('letter-modal').style.display = 'none'; }
+
+async function archiveLetter(id) {
+  const card = document.getElementById(`letter-card-${id}`);
+  if (card) card.remove();
+  try {
+    const data = await apiFetch('/api/love-letters/archive', {
+      method: 'POST', body: JSON.stringify({ id: id })
+    });
+    if (data.ok) loadStatus();
+  } catch(e) { alert('归档发生异常'); }
+}
+
+async function deleteLetter(id) {
+  if (!confirm('确定删除吗？')) return;
+  const card = document.getElementById(`letter-card-${id}`) || document.getElementById(`archive-letter-card-${id}`);
+  if (card) card.remove();
+  try {
+    await apiFetch('/api/love-letters/delete', {
+      method: 'POST', body: JSON.stringify({ id: id })
+    });
+  } catch (e) {}
+}
+
+async function starLetter(id, isStarredNow, sourceStr, btnEl) {
+  const btn = btnEl;
+  const newStarred = !isStarredNow;
+  if (btn) {
+    btn.textContent = newStarred ? '★' : '☆';
+    btn.classList.toggle('active', newStarred);
+    btn.setAttribute('onclick', `starLetter(${id}, ${newStarred}, '${sourceStr}', this)`);
+  }
+  try {
+    const data = await apiFetch('/api/love-letters/star', {
+      method: 'POST', body: JSON.stringify({ id: id, is_starred: newStarred })
+    });
+    if (!data.ok && btn) {
+      btn.textContent = isStarredNow ? '★' : '☆';
+      btn.classList.toggle('active', isStarredNow);
+      btn.setAttribute('onclick', `starLetter(${id}, ${isStarredNow}, '${sourceStr}', this)`);
+    }
+  } catch(e) {}
+}
+
+async function openArchiveBox() {
+  const modal = document.getElementById('archive-modal');
+  const area = document.getElementById('archive-content-area');
+  modal.style.display = 'flex';
+  area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">正在开启恋爱归档箱...</div>';
+
+  try {
+    const [noteData, letterData] = await Promise.all([
+      apiFetch('/api/sticky-notes?status=archive'),
+      apiFetch('/api/love-letters?status=archive')
+    ]);
+
+    if (noteData.ok && letterData.ok) {
+      let html = '';
+      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ 归档 Notes (${noteData.notes.length}/100)</div>`;
+      if (noteData.notes.length > 0) {
+        noteData.notes.forEach(note => {
+          const starIcon = note.is_starred ? '★' : '☆';
+          const starClass = note.is_starred ? 'active' : '';
+          html += `
+            <div class="single-letter" id="archive-note-card-${note.id}">
+              <div class="letter-time-row">
+                <span class="letter-time">📌 ${formatTime(note.created_at)} · ${note.created_at.substring(0,10)}</span>
+                <div class="letter-act-group">
+                  <button class="note-act-btn star-btn ${starClass}" onclick="starNote(${note.id}, ${note.is_starred}, 'archive', this)">${starIcon}</button>
+                  <button class="letter-del-btn" style="color: #a66275;" onclick="moveNote(${note.id}, 'drawer', 'archive')" title="取出">📤 取出</button>
+                  <button class="letter-del-btn" onclick="deleteNote(${note.id}, 'archive')" title="删除">🗑️ 丢弃</button>
+                </div>
+              </div>
+              <div class="letter-text" style="font-family: inherit; font-style: normal;">${escapeHtml(note.message)}</div>
+            </div>
+          `;
+        });
+      } else html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">无归档便签...</div>';
+
+      html += `<div style="font-family: 'Georgia', serif; font-size:14px; color:#a66275; margin-top:30px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">★ 归档 Letters (${letterData.letters.length}/100)</div>`;
+      if (letterData.letters.length > 0) {
+        letterData.letters.forEach(letter => {
+          const typeIcon = letter.letter_type === 'sweet' ? '💌' : '🌧️';
+          const starIcon = letter.is_starred ? '★' : '☆';
+          const starClass = letter.is_starred ? 'active' : '';
+          html += `
+            <div class="single-letter" id="archive-letter-card-${letter.id}">
+              <div class="letter-time-row">
+                <span class="letter-time">${typeIcon} ${formatTime(letter.created_at)} · ${letter.created_at.substring(0,10)}</span>
+                <div class="letter-act-group">
+                  <button class="note-act-btn star-btn ${starClass}" onclick="starLetter(${letter.id}, ${letter.is_starred}, 'archive', this)">${starIcon}</button>
+                  <button class="letter-del-btn" onclick="deleteLetter(${letter.id})" title="删除">🗑️ 丢弃</button>
+                </div>
+              </div>
+              <div class="letter-text">${escapeHtml(letter.content)}</div>
+            </div>
+          `;
+        });
+      } else html += '<div style="text-align:center; color:#b08d98; margin:15px 0; font-size:12px;">无归档情书...</div>';
+
+      area.innerHTML = html;
+    }
+  } catch(e) {
+    area.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:40px;">无法开启</div>';
+  }
+}
+function closeArchiveBox() { document.getElementById('archive-modal').style.display = 'none'; }
+
+// ---- 人设 / 长期记忆编辑面板 ----
+async function openPersonaEditor() {
+  const modal = document.getElementById('persona-modal');
+  const textarea = document.getElementById('persona-textarea');
+  const errorEl = document.getElementById('persona-error');
+  const statusEl = document.getElementById('persona-status');
+  modal.style.display = 'flex';
+  statusEl.textContent = '';
+  errorEl.textContent = '';
+  try {
+    const data = await apiFetch('/api/persona');
+    if (data.ok) textarea.value = data.text;
+  } catch (e) {}
+}
+function closePersonaEditor() { document.getElementById('persona-modal').style.display = 'none'; }
+
+async function savePersona() {
+  const btn = document.getElementById('persona-save-btn');
+  const text = document.getElementById('persona-textarea').value;
+  btn.disabled = true;
+  try {
+    const data = await apiFetch('/api/persona', {
+      method: 'POST', body: JSON.stringify({ text })
+    });
+    if (data.ok) {
+      document.getElementById('persona-status').textContent = '已保存';
+      setTimeout(() => { document.getElementById('persona-status').textContent = ''; }, 2000);
+    }
+  } catch (e) {} finally { btn.disabled = false; }
+}
+
+
+// ---- 朋友圈 (Moments) JS 交互功能 ----
+function switchMainView(view) {
+  const mainEl = document.getElementById('main');
+  const momentsEl = document.getElementById('moments-wrapper');
+  
+  if (view === 'moments') {
+    mainEl.style.display = 'none';
+    momentsEl.style.display = 'flex';
+    fetchMoments();
+  } else {
+    mainEl.style.display = 'flex';
+    momentsEl.style.display = 'none';
+    if (view === 'chat') scrollToBottom();
+  }
+}
+
+function openPublishModal() {
+  document.getElementById('publish-modal').style.display = 'flex';
+  document.getElementById('moment-input-textarea').value = '';
+}
+function closePublishModal() {
+  document.getElementById('publish-modal').style.display = 'none';
+}
+
+async function fetchMoments() {
+  const feed = document.getElementById('moments-feed');
+  feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:80px;">正在拉取朋友圈...</div>';
+  try {
+    const data = await apiFetch('/api/moments');
+    if (data.ok) {
+      renderMoments(data.moments);
+    }
+  } catch (e) {}
+}
+
+function renderMoments(moments) {
+  const feed = document.getElementById('moments-feed');
+  feed.innerHTML = '';
+  
+  // 1. 朋友圈头部与最新资料装载
+  const coverSection = document.createElement('div');
+  coverSection.className = 'moments-cover-section';
+  const userNick = profileCache.user.nickname || "Seraphina";
+  const userAvatar = profileCache.user.avatar_url || AVATAR_USER_DEFAULT;
+
+  coverSection.innerHTML = `
+    <div class="cover-branding-text">
+      <h1>MOMENTS</h1>
+      <p>私密双人朋友圈 · Time stands still when with you.</p>
+    </div>
+    <div class="moments-user-profile">
+      <div class="profile-name-label">${escapeHtml(userNick)}</div>
+      <div class="moments-avatar-polaroid">
+        <div class="washi-tape-accent"></div>
+        <img src="${userAvatar}" alt="Seraphina">
+      </div>
+    </div>
+  `;
+  feed.appendChild(coverSection);
+
+  if (!moments || moments.length === 0) {
+    const emptyHint = document.createElement('div');
+    emptyHint.style.cssText = 'text-align:center; color:#b08d98; padding: 40px 24px;';
+    emptyHint.innerHTML = '空间空空的，发条动态记录此刻吧。';
+    feed.appendChild(emptyHint);
+    return;
+  }
+
+  // 2. 依次按数组顺序（新➔旧）进行排列渲染
+  moments.forEach((m) => {
+    const isUser = m.author === 'user';
+    
+    // 获取实时的发布昵称
+    const authorName = isUser 
+      ? (profileCache.user.nickname || 'Seraphina') 
+      : (profileCache.charon.nickname || 'Charon');
+    const avatar = isUser 
+      ? (profileCache.user.avatar_url || AVATAR_USER_DEFAULT) 
+      : (profileCache.charon.avatar_url || AVATAR_CHARON_DEFAULT);
+
+    const isLikedByUser = m.likes && m.likes.includes('user');
+    
+    let likesHtml = '';
+    if (m.likes && m.likes.length > 0) {
+      const likeNames = m.likes.map(l => l === 'user' ? (profileCache.user.nickname || 'Seraphina') : (profileCache.charon.nickname || 'Charon')).join(', ');
+      likesHtml = `<div class="moment-likes">♥ <span>${escapeHtml(likeNames)} 觉得很赞</span></div>`;
+    }
+
+    let commentsHtml = '';
+    if (m.comments && m.comments.length > 0) {
+      commentsHtml = `<div class="moment-comments">`;
+      m.comments.forEach((c, cIdx) => {
+        const cName = c.author === 'user' ? (profileCache.user.nickname || 'Seraphina') : (profileCache.charon.nickname || 'Charon');
+        const deleteBtnHtml = (c.author === 'user') 
+          ? `<span class="comment-delete-btn" onclick="event.stopPropagation(); deleteComment('${m.id}', ${cIdx})">×</span>` 
+          : '';
+
+        commentsHtml += `
+          <div class="comment-item" onclick="setCommentReplyTarget('${m.id}', '${cName}')">
+            <span class="comment-content-text">
+              <span class="comment-author">${escapeHtml(cName)}:</span>${escapeHtml(c.content)}
+            </span>
+            ${deleteBtnHtml}
+          </div>
+        `;
+      });
+      commentsHtml += `</div>`;
+    }
+
+    const deleteLinkHtml = (m.author === 'user') 
+      ? `<span class="moment-delete-link" onclick="deleteMoment('${m.id}')">删除</span>` 
+      : '';
+
+    const cardContainer = document.createElement('div');
+    cardContainer.className = 'moment-card-container';
+    cardContainer.innerHTML = `
+      <div class="moment-card">
+        <div class="moment-retro-stamp">POSTED BY ${escapeHtml(authorName.toUpperCase())}</div>
+        <div class="moment-header">
+          <div class="avatar-wrapper ${isUser ? 'user' : 'charon'}" style="width:36px; height:36px;">
+            <img class="msg-avatar" src="${avatar}">
+            <span class="star-accent">✦</span>
+          </div>
+          <div style="margin-left: 10px;">
+            <div class="moment-author">${escapeHtml(authorName)}</div>
+            <div class="moment-time">${formatTime(m.created_at)} ${deleteLinkHtml}</div>
+          </div>
+        </div>
+        <div class="moment-content">${escapeHtml(m.content)}</div>
+        
+        <div class="moment-actions">
+          <button class="action-btn ${isLikedByUser ? 'liked' : ''}" onclick="toggleLike('${m.id}', ${isLikedByUser})">
+            ♥ ${isLikedByUser ? '已赞' : '点赞'}
+          </button>
+          <button class="action-btn" onclick="toggleCommentBox('${m.id}')">
+            💬 评论
+          </button>
+        </div>
+        
+        ${likesHtml}
+        ${commentsHtml}
+        
+        <div class="comment-input-area" id="comment-box-${m.id}">
+          <input type="text" class="comment-input" placeholder="写下温和的评论..." id="comment-input-${m.id}">
+          <button class="fancy-btn-red" style="padding: 6px 12px; font-size: 11px;" onclick="submitComment('${m.id}')">发送</button>
+        </div>
+      </div>
+    `;
+    feed.appendChild(cardContainer);
+  });
+}
+
+function toggleCommentBox(momentId) {
+  const box = document.getElementById(`comment-box-${momentId}`);
+  const input = document.getElementById(`comment-input-${momentId}`);
+  box.classList.toggle('active');
+  if (box.classList.contains('active')) {
+    input.focus();
+    delete currentReplyTargets[momentId];
+    input.placeholder = "写下温和的评论...";
+  }
+}
+
+function setCommentReplyTarget(momentId, replyToAuthor) {
+  const box = document.getElementById(`comment-box-${momentId}`);
+  const input = document.getElementById(`comment-input-${momentId}`);
+  box.classList.add('active');
+  input.focus();
+  currentReplyTargets[momentId] = replyToAuthor;
+  input.placeholder = `回复 @${replyToAuthor}: `;
+}
+
+async function submitMoment() {
+  const text = document.getElementById('moment-input-textarea').value.trim();
+  if (!text) return;
+  const saveBtn = document.getElementById('moment-save-btn');
+  saveBtn.disabled = true;
+  try {
+    const data = await apiFetch('/api/moments', {
+      method: 'POST', body: JSON.stringify({ content: text })
+    });
+    if (data.ok) { closePublishModal(); fetchMoments(); loadStatus(); }
+  } catch (e) {} finally { saveBtn.disabled = false; }
+}
+
+async function deleteMoment(momentId) {
+  if (!confirm('确定要删除这条动态吗？')) return;
+  try {
+    const data = await apiFetch('/api/moments/delete', {
+      method: 'POST', body: JSON.stringify({ id: momentId })
+    });
+    if (data.ok) fetchMoments();
+  } catch (e) {}
+}
+
+async function toggleLike(id) {
+  try {
+    const data = await apiFetch('/api/moments/like', {
+      method: 'POST', body: JSON.stringify({ id })
+    });
+    if (data.ok) fetchMoments();
+  } catch (e) {}
+}
+
+async function submitComment(id) {
+  const input = document.getElementById(`comment-input-${id}`);
+  let text = input.value.trim();
+  if (!text) return;
+  
+  const replyTarget = currentReplyTargets[id];
+  if (replyTarget) text = `回复 @${replyTarget} : ${text}`;
+
+  try {
+    const data = await apiFetch('/api/moments/comment', {
+      method: 'POST', body: JSON.stringify({ id: id, content: text })
+    });
+    if (data.ok) { input.value = ''; delete currentReplyTargets[id]; fetchMoments(); }
+  } catch (e) {}
+}
+
+async function deleteComment(momentId, commentIndex) {
+  if (!confirm('确定要删除这条评论吗？')) return;
+  try {
+    const data = await apiFetch('/api/moments/comment/delete', {
+      method: 'POST', body: JSON.stringify({ id: momentId, comment_index: commentIndex })
+    });
+    if (data.ok) fetchMoments();
+  } catch (e) {}
+}
+
+
+// ---- UI 与消息自适应布局监听绑定 ----
 sendBtn.addEventListener('click', sendMessage);
 inputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -2227,10 +2662,10 @@ const MODEL_DISPLAY_NAME = {
   'gemini-3.5-flash-lite': 'gemini-3.5-flash-lite(官方)',
   'gemini-official-pro': 'gemini-3.1-pro(官方)'
 };
+
 async function loadModelSelector() {
   try {
-    const res = await fetch(apiUrl('/api/chat-model'));
-    const data = await res.json();
+    const data = await apiFetch('/api/chat-model');
     if (!data.ok) return;
     modelSelect.innerHTML = '';
     const health = data.model_health || {};
@@ -2239,10 +2674,6 @@ async function loadModelSelector() {
       const opt = document.createElement('option');
       opt.value = m;
       opt.textContent = MODEL_DISPLAY_NAME[m] || m;
-      const h = health[m];
-      if (h && h.healthy === false && h.last_error) {
-        opt.title = '最近失败：' + h.last_error;
-      }
       if (m === data.current_model) opt.selected = true;
       modelSelect.appendChild(opt);
     });
@@ -2256,27 +2687,24 @@ function updateModelStatusDot(modelId) {
   const h = (window._modelHealthMap || {})[modelId];
   const healthy = !h || h.healthy !== false;
   dotEl.className = 'status-dot' + (healthy ? '' : ' low');
-  dotEl.title = h && h.healthy === false && h.last_error ? ('最近失败：' + h.last_error) : '';
 }
+
 modelSelect.addEventListener('change', async () => {
   const chosen = modelSelect.value;
   updateModelStatusDot(chosen);
   try {
-    const res = await fetch(apiUrl('/api/chat-model'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: chosen })
+    const data = await apiFetch('/api/chat-model', {
+      method: 'POST', body: JSON.stringify({ model: chosen })
     });
-    const data = await res.json();
-    if (!data.ok) { alert('切换失败：' + (data.error || '未知错误')); loadModelSelector(); }
-  } catch (e) { alert('网络错误'); loadModelSelector(); }
+    if (!data.ok) { loadModelSelector(); }
+  } catch (e) { loadModelSelector(); }
 });
 
-// 手机端/PC端 统一路由视图控制
 function switchTab(tabName) {
   const appEl = document.getElementById('app');
-  appEl.className = ''; 
-  appEl.classList.add('view-' + tabName);
+  appEl.className = 'view-' + tabName;
 
-  document.querySelectorAll('.tab-item').forEach(item => { item.classList.remove('active'); });
+  document.querySelectorAll('.tab-item').forEach(item => item.classList.remove('active'));
   const tabItems = document.querySelectorAll('.tab-item');
   if (tabName === 'chat') {
     tabItems[0].classList.add('active');
@@ -2288,12 +2716,16 @@ function switchTab(tabName) {
     tabItems[2].classList.add('active');
   }
 }
-if (window.innerWidth <= 768) { document.getElementById('app').className = 'view-chat'; }
 
-loadHistory();
-loadStatus();
-loadModelSelector();
-setInterval(loadModelSelector, 120000);
+// 首次拉取资料、数据并启动轮询
+(async function init() {
+  if (window.innerWidth <= 768) { document.getElementById('app').className = 'view-chat'; }
+  await loadProfiles();
+  await loadHistory();
+  await loadStatus();
+  await loadModelSelector();
+  setInterval(loadModelSelector, 120000);
+})();
 
 // ---- Web Push 订阅 ----
 function urlBase64ToUint8Array(base64String) {
@@ -2307,31 +2739,25 @@ function urlBase64ToUint8Array(base64String) {
 
 async function setupPushNotifications() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-
   try {
     const registration = await navigator.serviceWorker.register('/service-worker.js');
-
     if (Notification.permission === 'denied') return; 
-
     let subscription = await registration.pushManager.getSubscription();
     if (subscription) return; 
-
     const btn = document.getElementById('push-enable-btn');
     if (btn) btn.style.display = 'block';
-
     if (Notification.permission === 'granted') {
       await subscribeToPush(registration);
       if (btn) btn.style.display = 'none';
     }
   } catch (e) {
-    console.warn('Service worker注册失败', e);
+    console.warn('SW 启动失败', e);
   }
 }
 
 async function subscribeToPush(registration) {
   try {
-    const keyRes = await fetch(apiUrl('/api/push/vapid-public-key'));
-    const keyData = await keyRes.json();
+    const keyData = await apiFetch('/api/push/vapid-public-key');
     if (!keyData.ok) return;
 
     const subscription = await registration.pushManager.subscribe({
@@ -2339,35 +2765,21 @@ async function subscribeToPush(registration) {
       applicationServerKey: urlBase64ToUint8Array(keyData.public_key)
     });
 
-    await fetch(apiUrl('/api/push/subscribe'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscription.toJSON())
+    await apiFetch('/api/push/subscribe', {
+      method: 'POST', body: JSON.stringify(subscription.toJSON())
     });
-  } catch (e) {
-    console.warn('订阅推送失败', e);
-  }
+  } catch (e) {}
 }
 
 window.enablePushNotifications = async function() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert('当前浏览器不支持推送通知');
-    return;
-  }
   try {
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      alert('未授权通知权限，无法开启推送');
-      return;
-    }
+    if (permission !== 'granted') return;
     const registration = await navigator.serviceWorker.ready;
     await subscribeToPush(registration);
     const btn = document.getElementById('push-enable-btn');
     if (btn) btn.style.display = 'none';
-    alert('推送通知已开启');
-  } catch (e) {
-    alert('开启失败：' + e.message);
-  }
+  } catch (e) {}
 };
 
 setupPushNotifications();
