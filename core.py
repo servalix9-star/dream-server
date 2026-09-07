@@ -106,6 +106,67 @@ def _supabase_request(method, table, params=None, json_body=None, headers_extra=
             return None
     return None
 
+
+# ---- Supabase Storage：图片上传（头像 / 聊天图片 / 表情包 / 朋友圈配图） ----
+# 需要先在 Supabase 控制台的 Storage 里手动创建一个名为 "media" 的 Public bucket
+# （Public是因为这是两个人用的私有小应用，图片本身不敏感，图床URL没必要额外加签名机制；
+# 如果以后要做更严格的访问控制，再改成private bucket + 签名URL）。
+# Storage走的是独立的REST端点（不是PostgREST那一套/rest/v1/），所以不能复用
+# _supabase_request，这里单独封装。
+SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "media")
+
+
+def _guess_content_type(filename):
+    """根据文件名后缀猜Content-Type。猜不出来就用通用二进制类型兜底，
+    不阻断上传（Supabase Storage不强制严格校验这个头）。"""
+    ext = (filename or "").rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
+    return {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+        "gif": "image/gif", "webp": "image/webp",
+    }.get(ext, "application/octet-stream")
+
+
+def upload_image_to_storage(file_bytes, filename, folder="uploads"):
+    """把图片字节流上传到 Supabase Storage，返回可直接访问的 public URL。
+    folder用于bucket内分类存放（avatars/ stickers/ chat/ moments/），纯粹方便
+    以后在Supabase后台按目录找文件，不影响任何读取逻辑。
+    文件名用时间戳+随机数生成，避免不同上传方偶然撞名互相覆盖。"""
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+        raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
+
+    ext = filename.rsplit(".", 1)[-1].lower() if filename and "." in filename else "jpg"
+    object_path = f"{folder}/{int(time.time() * 1000)}-{random.randint(1000, 9999)}.{ext}"
+
+    url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_STORAGE_BUCKET}/{object_path}"
+    headers = {
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
+        "Content-Type": _guess_content_type(filename),
+    }
+    resp = _supabase_session.post(url, headers=headers, data=file_bytes, timeout=30)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Supabase Storage 上传失败: status={resp.status_code} body={resp.text}")
+
+    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/{object_path}"
+
+
+def delete_image_from_storage(image_url):
+    """按public URL反推object_path并删除Storage里的文件。用于换头像/删表情包时
+    清理旧图片。失败不抛出去（比如URL格式对不上、文件本来就不在Storage里，
+    像初始的/static/默认头像那种）——调用方不应该因为"清理旧文件"这个收尾动作
+    失败，就连带让"设置新内容"这个主要操作也失败。"""
+    try:
+        marker = f"/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/"
+        if marker not in (image_url or ""):
+            return
+        object_path = image_url.split(marker, 1)[1]
+        url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_STORAGE_BUCKET}/{object_path}"
+        headers = {"apikey": SUPABASE_SECRET_KEY, "Authorization": f"Bearer {SUPABASE_SECRET_KEY}"}
+        _supabase_session.delete(url, headers=headers, timeout=15)
+    except Exception as e:
+        log_error("delete_image_from_storage", e)
+
+
 # DeepSeek 已在 2026-07-24 停用 deepseek-chat / deepseek-reasoner 这两个旧模型名，
 # 现在可选的是 deepseek-v4-flash（对话，高性价比，关闭思考模式，快速直接作答）
 # 和 deepseek-v4-pro（深度推理，更贵，开启思考模式，回复慢一点但推理更深）。
