@@ -1873,6 +1873,9 @@ function closePublishModal() {
   document.getElementById('publish-modal').style.display = 'none';
 }
 
+// ---- 朋友圈静默轮询用的"上次快照"，需要在 fetchMoments/silentRefreshMoments 之前声明 ----
+let lastMomentsSnapshot = null;
+
 async function fetchMoments() {
   const feed = document.getElementById('moments-feed');
   feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:80px;">正在加载朋友圈...</div>';
@@ -1882,11 +1885,45 @@ async function fetchMoments() {
     const data = await res.json();
     if (data.ok) {
       renderMoments(data.moments);
+      lastMomentsSnapshot = summarizeMoments(data.moments);
     } else {
       feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:80px;">加载朋友圈失败</div>';
     }
   } catch (e) {
     feed.innerHTML = '<div style="text-align:center; color:#b08d98; margin-top:80px;">网络错误，无法加载朋友圈</div>';
+  }
+}
+
+// ---- 朋友圈静默轮询 ----
+// fetchMoments()每次都会清空feed整个重渲染，如果直接拿它做定时轮询，
+// 用户正在朋友圈页面滚动/评论时画面会被强制打断、滚动位置和输入框内容都被冲掉。
+// 所以轮询走这个单独的函数：先只拿数据比对"有没有变化"，真的变了才调用fetchMoments()整体刷新，
+// 没变化就什么都不做，用户完全无感知。（lastMomentsSnapshot声明在上面fetchMoments之前了）
+
+function summarizeMoments(moments) {
+  // 用"条数 + 最新一条的id + 最新一条的点赞数和评论数"拼一个简单指纹，
+  // 用来判断朋友圈有没有发生变化（新动态/新点赞/新评论），不需要逐字比较整个数组。
+  if (!moments || moments.length === 0) return 'empty';
+  const latest = moments[moments.length - 1];
+  const likeCount = (latest.likes || []).length;
+  const commentCount = (latest.comments || []).length;
+  return `${moments.length}:${latest.id}:${likeCount}:${commentCount}`;
+}
+
+async function silentRefreshMoments() {
+  try {
+    const res = await fetch(apiUrl('/api/moments'));
+    const data = await res.json();
+    if (!data.ok) return;
+    const snapshot = summarizeMoments(data.moments);
+    if (snapshot !== lastMomentsSnapshot) {
+      // 数据真的变了（比如Charon自动发了条动态、或者对方点了赞），这时才值得打断用户重新渲染
+      lastMomentsSnapshot = snapshot;
+      renderMoments(data.moments);
+    }
+    // snapshot没变化就什么都不做，用户不会感觉到这次轮询发生过
+  } catch (e) {
+    // 轮询失败静默忽略，不打扰用户，反正下一次轮询还会再试
   }
 }
 
@@ -2303,7 +2340,9 @@ modelSelect.addEventListener('change', async () => {
 });
 
 // 核心修复：纯 CSS 驱动的统一视图切换控制器，不留任何内联 style.display 污染
+let currentActiveTab = 'chat';  // 记录当前停留在哪个tab，供下面的自动刷新定时器判断要刷新什么，避免刷不必要的接口浪费请求
 function switchTab(tabName) {
+  currentActiveTab = tabName;
   const appEl = document.getElementById('app');
   appEl.className = 'view-' + tabName;
 
@@ -2339,6 +2378,42 @@ loadHistory();
 loadStatus();
 loadModelSelector();
 setInterval(loadModelSelector, 120000);
+
+// ---- 自动刷新机制（解决"要手动刷新/杀后台重进才能看到Charon自动发的内容"的问题）----
+// 之前 loadStatus()/fetchMoments() 只在用户自己做了某个操作后才会被调用，
+// Charon后台自己写的便签/情书/朋友圈完全没有触发点去通知前端，导致必须手动刷新才能看到。
+// 这里加两层机制：
+//   1. 定时轮询：页面停留期间，每隔一段时间主动问一次后端"有没有新内容"
+//   2. 页面重新可见时刷新：从后台切回前台（或者切换回这个浏览器标签页）时立即刷一次，
+//      不用等下一次定时轮询的时间点，体验上更接近"刚打开就是最新的"
+
+const STATUS_POLL_INTERVAL = 30000;   // 30秒刷一次chat-status（决定桌面便签/情书抽屉数字这些）
+const MOMENTS_POLL_INTERVAL = 20000;  // 朋友圈刷得稍勤一点，20秒——只有停留在朋友圈tab时才会真的去刷
+
+setInterval(() => {
+  // chat-status不管当前停留在哪个tab都刷，因为便签桌面在chat视图里，
+  // 而且情书/便签的"有新消息"提示是跨tab都要看到的
+  loadStatus();
+}, STATUS_POLL_INTERVAL);
+
+setInterval(() => {
+  // 朋友圈只有正停留在这个tab时才刷，没必要在聊天页也偷偷跑朋友圈请求。
+  // 用静默刷新，不用fetchMoments()，避免用户正在看/评论时被强制清空重渲染打断。
+  if (currentActiveTab === 'moments') {
+    silentRefreshMoments();
+  }
+}, MOMENTS_POLL_INTERVAL);
+
+// 页面从后台切回前台时（比如iOS上把App切到后台又切回来、或者切换浏览器标签页又切回来），
+// 立即刷新一次，不用干等下一次定时轮询——这是解决"必须杀后台重进"体验问题的关键。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    loadStatus();
+    if (currentActiveTab === 'moments') {
+      silentRefreshMoments();
+    }
+  }
+});
 
 // Web Push 订阅
 function urlBase64ToUint8Array(base64String) {
