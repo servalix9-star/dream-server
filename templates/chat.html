@@ -964,13 +964,17 @@ function formatTime(isoStr) {
   return h + ':' + m;
 }
 
-function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed) {
+function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed, retryUserMsgId) {
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'charon');
   if (msgId) row.dataset.msgId = msgId;
   if (createdAt) row.dataset.createdAt = createdAt;
   if (model) row.dataset.model = model;
   if (isFailed) row.dataset.failed = '1';
+  // retryUserMsgId：这条失败的Charon回复对应的、已经落库的用户消息id。
+  // 重试时统一调用 /api/chat-retry 传这个id，后端会用它查出原始用户消息内容重新生成回复，
+  // 不会重复插入用户消息（那句话在chat-send第一次调用时就已经存进数据库了）。
+  if (retryUserMsgId) row.dataset.retryUserMsgId = retryUserMsgId;
 
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrapper ' + (role === 'user' ? 'user' : 'charon');
@@ -1036,7 +1040,7 @@ function renderMsgRow(role, content, createdAt, pending, msgId, model, isFailed)
   addDoubleTapListener(bubble, (e) => {
     if (row.classList.contains('editing')) return;
     currentActiveRowEl = row;
-    showContextMenu(bubble, msgId, role, content, model, isFailed);
+    showContextMenu(bubble, msgId, role, content, model, isFailed, retryUserMsgId);
     if (modelTagEl) modelTagEl.classList.add('visible');
   });
 
@@ -1131,7 +1135,7 @@ function enterEditMode(row, bubble, msgId, originalContent) {
 }
 
 // 全局悬浮菜单管理
-function showContextMenu(targetElement, id, typeOrRole, textContent = "", model = "", isFailed = false) {
+function showContextMenu(targetElement, id, typeOrRole, textContent = "", model = "", isFailed = false, retryUserMsgId = "") {
   const rect = targetElement.getBoundingClientRect();
   contextMenu.style.visibility = 'hidden';
   contextMenu.style.display = 'flex';
@@ -1141,6 +1145,28 @@ function showContextMenu(targetElement, id, typeOrRole, textContent = "", model 
   buttonsRow.className = 'bubble-menu-buttons-row';
 
   if (isFailed) {
+    if (retryUserMsgId) {
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'menu-btn';
+      retryBtn.textContent = '🔄 重新发送';
+      retryBtn.onclick = () => {
+        // 用户消息本身已经落库、不是临时状态，不用删除——只删掉这条失败提示，
+        // 然后调用retryMessage()，它会在用户消息行后面重新插入一个pending行，
+        // 走/api/chat-retry重新生成回复（这个接口不会重复插入用户消息）。
+        if (currentActiveRowEl) {
+          const prevRow = currentActiveRowEl.previousElementSibling;
+          currentActiveRowEl.remove();
+          hideWeChatMenu();
+          if (prevRow) {
+            retryMessage(retryUserMsgId, prevRow);
+          }
+        } else {
+          hideWeChatMenu();
+        }
+      };
+      buttonsRow.appendChild(retryBtn);
+    }
+
     const clearBtn = document.createElement('button');
     clearBtn.className = 'menu-btn';
     clearBtn.textContent = '🗑️ 清除这条提示';
@@ -1540,11 +1566,34 @@ async function sendMessage() {
   messagesEl.appendChild(pendingRow);
   scrollToBottom();
 
+  await streamCharonReply(apiUrl('/api/chat-send'), { message: text }, userRow, pendingRow, text, nowIso, null);
+  sendBtn.disabled = false;
+}
+
+async function retryMessage(userMsgId, retryUserRow) {
+  // 重试一条"用户消息已经落库、但Charon没能成功回复"的失败场景。
+  // 跟sendMessage()的关键区别：不新建userRow（那句话已经存在于页面和数据库里了，
+  // 直接复用调用方传来的retryUserRow），调的是/api/chat-retry而不是/api/chat-send
+  // （chat-retry不会重复插入用户消息，避免数据库出现两条重复记录）。
+  sendBtn.disabled = true;
+  const nowIso = new Date().toISOString();
+  const pendingRow = renderMsgRow('charon', '', nowIso, true);
+  retryUserRow.insertAdjacentElement('afterend', pendingRow);
+  scrollToBottom();
+
+  await streamCharonReply(apiUrl('/api/chat-retry'), { user_msg_id: userMsgId }, retryUserRow, pendingRow, null, nowIso, userMsgId);
+  sendBtn.disabled = false;
+}
+
+async function streamCharonReply(url, body, userRow, pendingRow, text, nowIso, existingUserMsgId) {
+  // sendMessage和retryMessage共用的"发请求、读SSE流、渲染打字机效果、处理done事件"逻辑。
+  // text为null时说明这是retryMessage场景，userRow不需要在成功后被替换（它已经是定型的、
+  // 带着真实msgId的消息行了，不像sendMessage里那样一开始是临时占位状态）。
   const pendingBubble = pendingRow.querySelector('.bubble');
 
   try {
-    const res = await fetch(apiUrl('/api/chat-send'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text })
+    const res = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
 
     if (!res.ok || !res.body) {
@@ -1578,10 +1627,19 @@ async function sendMessage() {
         } else if (evt.done) {
           sawDone = true;
           if (evt.reply) {
-            userRow.replaceWith(renderMsgRow('user', text, nowIso, false, evt.user_msg_id));
+            if (text !== null) {
+              // sendMessage场景：userRow还是临时状态，替换成带真实msgId的版本
+              userRow.replaceWith(renderMsgRow('user', text, nowIso, false, evt.user_msg_id));
+            } else if (existingUserMsgId && !userRow.dataset.msgId) {
+              // retryMessage场景：userRow本身没有msgId（比如它也是刚经历过一次失败、
+              // 还没来得及补上msgId），顺手把已知的existingUserMsgId补上，
+              // 这样重试成功之后这句话也能正常撤回/编辑了
+              userRow.dataset.msgId = existingUserMsgId;
+            }
             pendingRow.replaceWith(renderMsgRow('charon', evt.reply, nowIso, false, evt.charon_msg_id, evt.model));
           } else {
-            pendingRow.replaceWith(renderMsgRow('charon', '（没能回复：模型调用失败）', nowIso, false, null, null, true));
+            const failMsgId = existingUserMsgId || evt.user_msg_id;
+            pendingRow.replaceWith(renderMsgRow('charon', '（没能回复：模型调用失败，长按可重新发送）', nowIso, false, null, null, true, failMsgId));
           }
         }
       }
@@ -1589,12 +1647,14 @@ async function sendMessage() {
 
     if (!sawDone) {
       const partial = pendingBubble.textContent;
-      pendingRow.replaceWith(renderMsgRow('charon', partial || '（连接中断，没能收到完整回复）', nowIso, false, null, null, true));
+      const failMsgId = existingUserMsgId || null;
+      pendingRow.replaceWith(renderMsgRow('charon', partial || '（连接中断，长按可重新发送）', nowIso, false, null, null, true, failMsgId));
     }
   } catch (e) {
-    pendingRow.replaceWith(renderMsgRow('charon', '（网络错误，没发出去）', nowIso, false, null, null, true));
+    const failMsgId = existingUserMsgId || null;
+    pendingRow.replaceWith(renderMsgRow('charon', '（网络错误，长按可重新发送）', nowIso, false, null, null, true, failMsgId));
   }
-  scrollToBottom(); sendBtn.disabled = false; loadStatus();
+  scrollToBottom(); loadStatus();
 }
 
 async function recordPeriod(valueStr) {
@@ -1875,6 +1935,15 @@ function closePublishModal() {
 
 // ---- 朋友圈静默轮询用的"上次快照"，需要在 fetchMoments/silentRefreshMoments 之前声明 ----
 let lastMomentsSnapshot = null;
+// 当前已加载的动态数据，内存缓存一份。点赞/评论/删评论这些操作接口只返回"变了的那一小块"
+// （比如likes数组、新增的那条comment），不会返回整条动态的完整数据，所以要在前端自己维护
+// 这份缓存、手动拼出更新后的完整对象，再局部重渲染那一张卡片——不然只能每次操作后
+// 重新GET整个列表才能拿到完整数据，等于又要用回fetchMoments()那种整页刷新的笨办法。
+let currentMomentsData = [];
+
+function findMomentById(id) {
+  return currentMomentsData.find(m => m.id === id);
+}
 
 async function fetchMoments() {
   const feed = document.getElementById('moments-feed');
@@ -1884,6 +1953,7 @@ async function fetchMoments() {
     const res = await fetch(apiUrl('/api/moments'));
     const data = await res.json();
     if (data.ok) {
+      currentMomentsData = data.moments;
       renderMoments(data.moments);
       lastMomentsSnapshot = summarizeMoments(data.moments);
     } else {
@@ -1919,12 +1989,89 @@ async function silentRefreshMoments() {
     if (snapshot !== lastMomentsSnapshot) {
       // 数据真的变了（比如Charon自动发了条动态、或者对方点了赞），这时才值得打断用户重新渲染
       lastMomentsSnapshot = snapshot;
+      currentMomentsData = data.moments;
       renderMoments(data.moments);
     }
     // snapshot没变化就什么都不做，用户不会感觉到这次轮询发生过
   } catch (e) {
     // 轮询失败静默忽略，不打扰用户，反正下一次轮询还会再试
   }
+}
+
+function buildMomentCardHtml(m) {
+  // 把"根据一条动态数据生成卡片HTML"单独抽出来，供 renderMoments（整体渲染）和
+  // updateSingleMomentCard（局部更新，点赞/评论后用）共用，避免逻辑重复、两处改一处忘改。
+  const isUser = m.author === 'user';
+  const authorName = isUser ? 'Seraphina' : 'Charon';
+  const avatar = isUser ? AVATAR_USER : AVATAR_CHARON;
+  const isLikedByUser = m.likes && m.likes.includes('user');
+
+  let likesHtml = '';
+  if (m.likes && m.likes.length > 0) {
+    const likeNames = m.likes.map(l => l === 'user' ? 'Seraphina' : 'Charon').join(', ');
+    likesHtml = `<div class="moment-likes">♥ <span>${likeNames} 觉得很赞</span></div>`;
+  }
+
+  let commentsHtml = '';
+  if (m.comments && m.comments.length > 0) {
+    commentsHtml = `<div class="moment-comments">`;
+    m.comments.forEach((c, cIdx) => {
+      const cName = c.author === 'user' ? 'Seraphina' : 'Charon';
+      const deleteBtnHtml = (c.author === 'user') 
+        ? `<span class="comment-delete-btn" onclick="event.stopPropagation(); deleteComment('${m.id}', ${cIdx})">×</span>` 
+        : '';
+
+      commentsHtml += `
+        <div class="comment-item" onclick="setCommentReplyTarget('${m.id}', '${cName}')">
+          <span class="comment-content-text">
+            <span class="comment-author">${cName}:</span>${escapeHtml(c.content)}
+          </span>
+          ${deleteBtnHtml}
+        </div>
+      `;
+    });
+    commentsHtml += `</div>`;
+  }
+
+  const deleteLinkHtml = (m.author === 'user') 
+    ? `<span class="moment-delete-link" onclick="deleteMoment('${m.id}')">删除</span>` 
+    : '';
+
+  const stampText = isUser ? 'Seraphina' : 'Charon';
+
+  return `
+    <div class="moment-card">
+      <div class="moment-retro-stamp">POSTED BY ${stampText}</div>
+      <div class="moment-header">
+        <div class="avatar-wrapper ${isUser ? 'user' : 'charon'}" style="width:36px; height:36px;">
+          <img class="msg-avatar" src="${avatar}">
+          <span class="star-accent">✦</span>
+        </div>
+        <div style="margin-left: 10px;">
+          <div class="moment-author">${authorName}</div>
+          <div class="moment-time">${formatTime(m.created_at)} ${deleteLinkHtml}</div>
+        </div>
+      </div>
+      <div class="moment-content">${escapeHtml(m.content)}</div>
+      
+      <div class="moment-actions">
+        <button class="action-btn ${isLikedByUser ? 'liked' : ''}" onclick="toggleLike('${m.id}', ${isLikedByUser})">
+          ♥ ${isLikedByUser ? '已赞' : '点赞'}
+        </button>
+        <button class="action-btn" onclick="toggleCommentBox('${m.id}')">
+          💬 评论
+        </button>
+      </div>
+      
+      ${likesHtml}
+      ${commentsHtml}
+      
+      <div class="comment-input-area" id="comment-box-${m.id}">
+        <input type="text" class="comment-input" placeholder="写下温和的评论..." id="comment-input-${m.id}">
+        <button class="publish-btn" style="padding: 6px 12px; font-size: 11px;" onclick="submitComment('${m.id}')">发送</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderMoments(moments) {
@@ -1957,81 +2104,24 @@ function renderMoments(moments) {
   }
 
   moments.forEach((m) => {
-    const isUser = m.author === 'user';
-    const authorName = isUser ? 'Seraphina' : 'Charon';
-    const avatar = isUser ? AVATAR_USER : AVATAR_CHARON;
-    const isLikedByUser = m.likes && m.likes.includes('user');
-    
-    let likesHtml = '';
-    if (m.likes && m.likes.length > 0) {
-      const likeNames = m.likes.map(l => l === 'user' ? 'Seraphina' : 'Charon').join(', ');
-      likesHtml = `<div class="moment-likes">♥ <span>${likeNames} 觉得很赞</span></div>`;
-    }
-
-    let commentsHtml = '';
-    if (m.comments && m.comments.length > 0) {
-      commentsHtml = `<div class="moment-comments">`;
-      m.comments.forEach((c, cIdx) => {
-        const cName = c.author === 'user' ? 'Seraphina' : 'Charon';
-        const deleteBtnHtml = (c.author === 'user') 
-          ? `<span class="comment-delete-btn" onclick="event.stopPropagation(); deleteComment('${m.id}', ${cIdx})">×</span>` 
-          : '';
-
-        commentsHtml += `
-          <div class="comment-item" onclick="setCommentReplyTarget('${m.id}', '${cName}')">
-            <span class="comment-content-text">
-              <span class="comment-author">${cName}:</span>${escapeHtml(c.content)}
-            </span>
-            ${deleteBtnHtml}
-          </div>
-        `;
-      });
-      commentsHtml += `</div>`;
-    }
-
-    const deleteLinkHtml = (m.author === 'user') 
-      ? `<span class="moment-delete-link" onclick="deleteMoment('${m.id}')">删除</span>` 
-      : '';
-
-    const stampText = isUser ? 'Seraphina' : 'Charon';
-
     const cardContainer = document.createElement('div');
     cardContainer.className = 'moment-card-container';
-    cardContainer.innerHTML = `
-      <div class="moment-card">
-        <div class="moment-retro-stamp">POSTED BY ${stampText}</div>
-        <div class="moment-header">
-          <div class="avatar-wrapper ${isUser ? 'user' : 'charon'}" style="width:36px; height:36px;">
-            <img class="msg-avatar" src="${avatar}">
-            <span class="star-accent">✦</span>
-          </div>
-          <div style="margin-left: 10px;">
-            <div class="moment-author">${authorName}</div>
-            <div class="moment-time">${formatTime(m.created_at)} ${deleteLinkHtml}</div>
-          </div>
-        </div>
-        <div class="moment-content">${escapeHtml(m.content)}</div>
-        
-        <div class="moment-actions">
-          <button class="action-btn ${isLikedByUser ? 'liked' : ''}" onclick="toggleLike('${m.id}', ${isLikedByUser})">
-            ♥ ${isLikedByUser ? '已赞' : '点赞'}
-          </button>
-          <button class="action-btn" onclick="toggleCommentBox('${m.id}')">
-            💬 评论
-          </button>
-        </div>
-        
-        ${likesHtml}
-        ${commentsHtml}
-        
-        <div class="comment-input-area" id="comment-box-${m.id}">
-          <input type="text" class="comment-input" placeholder="写下温和的评论..." id="comment-input-${m.id}">
-          <button class="publish-btn" style="padding: 6px 12px; font-size: 11px;" onclick="submitComment('${m.id}')">发送</button>
-        </div>
-      </div>
-    `;
+    cardContainer.dataset.momentId = m.id;  // 局部更新时用这个属性定位到具体是哪张卡片
+    cardContainer.innerHTML = buildMomentCardHtml(m);
     feed.appendChild(cardContainer);
   });
+}
+
+function updateSingleMomentCard(moment) {
+  // 只重新渲染某一张卡片，不碰feed里的其他卡片、不清空整个列表，
+  // 用于点赞/评论/删除评论之后的刷新——避免像fetchMoments()那样整页闪烁、滚动位置跳回顶部。
+  // 找不到对应卡片（比如这条动态是最新发的、还不在当前DOM里）时，退回整体刷新兜底。
+  const container = document.querySelector(`.moment-card-container[data-moment-id="${moment.id}"]`);
+  if (container) {
+    container.innerHTML = buildMomentCardHtml(moment);
+  } else {
+    fetchMoments();
+  }
 }
 
 function toggleCommentBox(momentId) {
@@ -2109,7 +2199,16 @@ async function toggleLike(id, isLiked) {
     });
     const data = await res.json();
     if (data.ok) {
-      fetchMoments();
+      // /api/moments/like 只返回{likes, action}，不是完整的动态对象——
+      // 在内存缓存里找到这条动态，把likes字段替换成最新值，再局部渲染这一张卡片，
+      // 不用fetchMoments()重新拉整个列表、清空重渲染打断用户。
+      const moment = findMomentById(id);
+      if (moment) {
+        moment.likes = data.likes;
+        updateSingleMomentCard(moment);
+      } else {
+        fetchMoments();  // 缓存里找不到（比如刚好在别处被清空过），兜底走整体刷新
+      }
     }
   } catch (e) {
     alert('网络错误');
@@ -2136,7 +2235,15 @@ async function submitComment(id) {
     if (data.ok) {
       input.value = '';
       delete currentReplyTargets[id];
-      fetchMoments();
+      // /api/moments/comment 只返回新增的这一条评论，不是完整列表——
+      // 在缓存里找到这条动态，把新评论追加进它的comments数组，再局部渲染。
+      const moment = findMomentById(id);
+      if (moment) {
+        moment.comments = (moment.comments || []).concat([data.comment]);
+        updateSingleMomentCard(moment);
+      } else {
+        fetchMoments();
+      }
     } else {
       alert('评论失败：' + (data.error || '未知错误'));
     }
@@ -2155,7 +2262,14 @@ async function deleteComment(momentId, commentIndex) {
     });
     const data = await res.json();
     if (data.ok) {
-      fetchMoments();
+      // /api/moments/comment/delete 返回删除后完整的comments数组，直接覆盖缓存里的对应字段
+      const moment = findMomentById(momentId);
+      if (moment) {
+        moment.comments = data.comments;
+        updateSingleMomentCard(moment);
+      } else {
+        fetchMoments();
+      }
     } else {
       alert('删除评论失败：' + (data.error || '未知错误'));
     }
@@ -2274,7 +2388,15 @@ async function savePeriodDate(actionType) {
 
 sendBtn.addEventListener('click', sendMessage);
 inputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  // 中文/日文等输入法在选字确认候选词时，按的也是回车键，会被e.key==='Enter'误判成"要发送"，
+  // 导致打字选字过程中消息被误发出去。e.isComposing是标准的组合输入状态判断；
+  // 额外加e.keyCode===229是兜底——部分安卓机型的输入法在keydown触发那一刻isComposing
+  // 已经变回false（时序不一致的已知浏览器兼容性问题），229是"输入法正在处理"的历史遗留信号值，
+  // 两个条件一起判断才能真正覆盖主流移动端输入法的选字场景。
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    sendMessage();
+  }
 });
 inputEl.addEventListener('input', () => {
   inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
