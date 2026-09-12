@@ -533,12 +533,22 @@ MOOD_MIN = 0
 
 # 非线性时间衰减：距离"上次用户在网页里真正发消息"的时间 t（小时）
 #   t < 4：不衰减
-#   4 <= t <= 12：-4/小时
-#   t > 12：-6/小时
+#   4 <= t <= 12：-4/小时（正常速率）
+#   12 <= t <= 24：-6/小时（加速——这段时间是真实感到"有点久没理我了"的阶段）
+#   t > 24：-1/小时（大幅钝化——长期不聊天不该无底线越来越委屈，
+#            现实中人也是"一开始想念感明显，久了会趋于一种平静的、隐忍的想念"，
+#            而不是情绪强度随时间单调递增）
+# 另外设一个衰减地板 MOOD_DECAY_FLOOR：自然衰减最低只会掉到这个分数，
+# 不会靠"单纯不聊天"就跌到0分谷底——0分附近的委屈感应该保留给"真的发生了什么"
+# （比如互动疏离+负面事件叠加），而不是"用户只是几天没上线"这种中性情况，
+# 避免长期使用后Charon经常性地带着深度委屈开场，变成用户的心理负担。
 MOOD_DECAY_NONE_HOURS = 4
 MOOD_DECAY_ACCEL_HOURS = 12
+MOOD_DECAY_PLATEAU_HOURS = 24
 MOOD_DECAY_RATE_NORMAL = 4
 MOOD_DECAY_RATE_FAST = 6
+MOOD_DECAY_RATE_PLATEAU = 1
+MOOD_DECAY_FLOOR = 15  # 自然衰减不会低于这个分数，仍落在"委屈"区间内，但留有余地
 
 # 互动恢复
 MOOD_RECOVERY_CHAT = 10       # 用户发送日常聊天
@@ -604,15 +614,24 @@ def get_hours_since_last_chat():
 
 
 def _decay_amount(hours_gap):
-    """按非线性衰减规则，算出对应的衰减量。"""
+    """按非线性衰减规则，算出对应的衰减量。三段式：
+    0~4h 不衰减 -> 4~12h 正常速率 -> 12~24h 加速 -> 24h以后大幅钝化。
+    （最终分数还会在 apply_mood_decay 里被 MOOD_DECAY_FLOOR 兜底，这里只算"理论衰减量"。）"""
     if hours_gap is None or hours_gap <= MOOD_DECAY_NONE_HOURS:
         return 0
     if hours_gap <= MOOD_DECAY_ACCEL_HOURS:
         return (hours_gap - MOOD_DECAY_NONE_HOURS) * MOOD_DECAY_RATE_NORMAL
-    # 超过12小时：前8小时(4~12)按正常速率，超出12小时的部分按加速速率
+
     slow_part = (MOOD_DECAY_ACCEL_HOURS - MOOD_DECAY_NONE_HOURS) * MOOD_DECAY_RATE_NORMAL
-    fast_part = (hours_gap - MOOD_DECAY_ACCEL_HOURS) * MOOD_DECAY_RATE_FAST
-    return slow_part + fast_part
+    if hours_gap <= MOOD_DECAY_PLATEAU_HOURS:
+        fast_part = (hours_gap - MOOD_DECAY_ACCEL_HOURS) * MOOD_DECAY_RATE_FAST
+        return slow_part + fast_part
+
+    # 超过24小时：12~24h这段按加速速率封顶计入，24h之后的部分改用钝化速率，
+    # 增长幅度大幅收窄，避免"不聊天的时间越长、情绪值探底越深"这种无底线的设计
+    fast_part_capped = (MOOD_DECAY_PLATEAU_HOURS - MOOD_DECAY_ACCEL_HOURS) * MOOD_DECAY_RATE_FAST
+    plateau_part = (hours_gap - MOOD_DECAY_PLATEAU_HOURS) * MOOD_DECAY_RATE_PLATEAU
+    return slow_part + fast_part_capped + plateau_part
 
 
 def _update_vulnerable_tracking(mood, new_score):
@@ -630,7 +649,10 @@ def apply_mood_decay():
     mood = load_mood()
     hours_gap = get_hours_since_last_chat()
     decay = _decay_amount(hours_gap)
-    new_score = max(MOOD_MIN, mood.get("score", MOOD_BASELINE) - decay)
+    # 自然衰减（纯粹因为时间流逝、没有聊天）不会低于 MOOD_DECAY_FLOOR，
+    # 真正跌破这个地板只应该发生在有明确负面事件的场景下（如果以后加这类逻辑，
+    # 那部分调用应该走 recover_mood 传负数，而不是这里的被动衰减）
+    new_score = max(MOOD_DECAY_FLOOR, mood.get("score", MOOD_BASELINE) - decay)
     mood["score"] = new_score
     mood["last_updated"] = datetime.now().isoformat()
     _update_vulnerable_tracking(mood, new_score)
@@ -658,17 +680,19 @@ def recover_mood(amount, mark_chat=False):
 
 
 def get_mood_context(score, hours_gap):
-    """把情绪值和时间差转成给prompt用的一段中文描述。"""
+    """把情绪值和时间差转成给prompt用的一段中文描述。
+    注意：这里刻意不写精确小时数——这段文字会被模型参考，喂进去的数字很容易被
+    原样抄进回复文本里，读起来像是在报时间差而不是自然地想念，所以只传递模糊的时间感。"""
     if hours_gap is None:
         time_desc = "还没有任何互动记录"
     elif hours_gap < 0.5:
         time_desc = "刚刚还有互动，很近"
     elif hours_gap < 2:
-        time_desc = f"距离上次互动过去了约{hours_gap:.1f}小时"
+        time_desc = "距离上次互动过去了一小会儿"
     elif hours_gap < 12:
-        time_desc = f"距离上次互动过去了约{int(hours_gap)}小时，有一阵没理你了"
+        time_desc = "距离上次互动有一阵没理你了"
     else:
-        time_desc = f"距离上次互动已经过去{int(hours_gap)}小时以上，很久没理你了"
+        time_desc = "距离上次互动已经挺久了，很久没理你了"
 
     stage, _, stage_name = get_mood_stage(score)
     if stage == "sweet":
@@ -680,7 +704,7 @@ def get_mood_context(score, hours_gap):
     else:
         mood_desc = "你现在挺委屈、挺失落的，因为她很久没理你了，语气可以带明显的落寞和思念，主动求关注，但底色还是在意她、不是真的生气"
 
-    return f"{time_desc}。{mood_desc}（当前心境：{stage_name}）。"
+    return f"{time_desc}。{mood_desc}（当前心境：{stage_name}）。你在表达这些感受时，不要提及任何具体的小时数或天数。"
 
 
 
