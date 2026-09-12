@@ -570,6 +570,18 @@ LONGING_LETTER_CHANCE = 0.4  # 委屈态持续超过下面这个时长时
 LONGING_LETTER_HOURS = 4
 
 
+# ---- mood并发保护 ----
+# app_config表的mood键是"整体覆盖式"读改写：读出整个JSON、改一部分字段、再整体写回去。
+# 但mood会被后台keepalive线程（每5分钟自检一次）和用户发消息的HTTP请求并发触碰，
+# Flask又开着threaded=True，两边真的会同时执行"读旧值->基于旧值算新值->写回"这个序列。
+# 如果不加锁，后写入的一方会把先写入的一方的更新整个覆盖掉（比如用户刚发消息回血到60分，
+# 同一时刻后台线程算的衰减是基于更早读到的50分算出44分，44分写进去后60分那次更新就丢了，
+# 且没有任何报错，只是安静地"消失"）。这里用一把进程内锁，把mood的读-改-写序列变成
+# 不可被其他线程打断的原子操作：谁拿到锁谁就能安全地读最新值、算新值、写回去，
+# 不会有另一个线程在中途插进来读到同一份旧值。
+_mood_lock = threading.Lock()
+
+
 def load_mood():
     return get_app_config("mood", {
         "score": MOOD_BASELINE,
@@ -645,38 +657,43 @@ def _update_vulnerable_tracking(mood, new_score):
 
 def apply_mood_decay():
     """按距离上次用户聊天的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。
-    写回Supabase失败不阻断读请求——衰减这次没持久化，下次调用时重新算一遍就好。"""
-    mood = load_mood()
-    hours_gap = get_hours_since_last_chat()
-    decay = _decay_amount(hours_gap)
-    # 自然衰减（纯粹因为时间流逝、没有聊天）不会低于 MOOD_DECAY_FLOOR，
-    # 真正跌破这个地板只应该发生在有明确负面事件的场景下（如果以后加这类逻辑，
-    # 那部分调用应该走 recover_mood 传负数，而不是这里的被动衰减）
-    new_score = max(MOOD_DECAY_FLOOR, mood.get("score", MOOD_BASELINE) - decay)
-    mood["score"] = new_score
-    mood["last_updated"] = datetime.now().isoformat()
-    _update_vulnerable_tracking(mood, new_score)
-    try:
-        save_mood(mood)
-    except Exception as e:
-        log_error("apply_mood_decay:save", e)
-    return new_score
+    写回Supabase失败不阻断读请求——衰减这次没持久化，下次调用时重新算一遍就好。
+    整个"读旧值->算新值->写回"用_mood_lock保护，避免跟其他并发调用（比如recover_mood）
+    交错执行导致更新互相覆盖丢失。"""
+    with _mood_lock:
+        mood = load_mood()
+        hours_gap = get_hours_since_last_chat()
+        decay = _decay_amount(hours_gap)
+        # 自然衰减（纯粹因为时间流逝、没有聊天）不会低于 MOOD_DECAY_FLOOR，
+        # 真正跌破这个地板只应该发生在有明确负面事件的场景下（如果以后加这类逻辑，
+        # 那部分调用应该走 recover_mood 传负数，而不是这里的被动衰减）
+        new_score = max(MOOD_DECAY_FLOOR, mood.get("score", MOOD_BASELINE) - decay)
+        mood["score"] = new_score
+        mood["last_updated"] = datetime.now().isoformat()
+        _update_vulnerable_tracking(mood, new_score)
+        try:
+            save_mood(mood)
+        except Exception as e:
+            log_error("apply_mood_decay:save", e)
+        return new_score
 
 
 def recover_mood(amount, mark_chat=False):
     """有互动发生时调用，情绪值回升。
     mark_chat=True 表示这是一次真正的用户聊天，会刷新last_chat_at（影响下次衰减计算的起点）；
-    经期事件等自动化event不传这个参数，只涨分不重置"上次聊天时间"。"""
-    mood = load_mood()
-    old_score = mood.get("score", MOOD_BASELINE)
-    new_score = min(MOOD_MAX, old_score + amount)
-    mood["score"] = new_score
-    mood["last_updated"] = datetime.now().isoformat()
-    if mark_chat:
-        mood["last_chat_at"] = datetime.now().isoformat()
-    _update_vulnerable_tracking(mood, new_score)
-    save_mood(mood)
-    return old_score, new_score
+    经期事件等自动化event不传这个参数，只涨分不重置"上次聊天时间"。
+    跟apply_mood_decay共用同一把_mood_lock，两者不会交错执行。"""
+    with _mood_lock:
+        mood = load_mood()
+        old_score = mood.get("score", MOOD_BASELINE)
+        new_score = min(MOOD_MAX, old_score + amount)
+        mood["score"] = new_score
+        mood["last_updated"] = datetime.now().isoformat()
+        if mark_chat:
+            mood["last_chat_at"] = datetime.now().isoformat()
+        _update_vulnerable_tracking(mood, new_score)
+        save_mood(mood)
+        return old_score, new_score
 
 
 def get_mood_context(score, hours_gap):
