@@ -26,7 +26,7 @@ from core import (
     log_error, _check_chat_auth,
     add_event_row, load_events, get_time_since_last_event, count_events_today,
     load_mood, save_mood, get_mood_stage, get_mood_context, get_hours_since_last_chat,
-    apply_mood_decay, recover_mood, _hours_since,
+    apply_mood_decay, recover_mood, _hours_since, _mood_lock,
     MOOD_BASELINE, MOOD_SWEET_MIN, MOOD_RECOVERY_CHAT, MOOD_RECOVERY_PERIOD_EVENT,
     SWEET_LETTER_CHANCE, LONGING_LETTER_CHANCE, LONGING_LETTER_HOURS,
     _extract_json_field, load_persona_memory, save_persona_memory,
@@ -547,19 +547,26 @@ def maybe_trigger_sweet_letter(mood_context):
     """检查当前是否处于甜蜜区间[80,100]，命中则按概率生成一封高甜情书。
     不再要求"这次互动恰好让分数跨越80分"——旧逻辑下分数长期维持高位反而永远碰不到
     跨越瞬间，关系越稳定甜蜜越触发不到，是反直觉的。现在只要当下处于甜蜜态就有机会，
-    每天只发一封（sweet_letter_sent_date去重），避免运气好连续判定中奖导致信箱被灌。"""
+    每天只发一封（sweet_letter_sent_date去重），避免运气好连续判定中奖导致信箱被灌。
+    这里的load_mood+save_mood是自定义的读改写序列，跟apply_mood_decay/recover_mood
+    共用_mood_lock，避免三者交错执行导致mood字段互相覆盖丢失。"""
     try:
-        mood = load_mood()
-        score = mood.get("score", MOOD_BASELINE)
-        if score < MOOD_SWEET_MIN:
-            return
-        today = datetime.now().strftime("%Y-%m-%d")
-        if mood.get("sweet_letter_sent_date") == today:
-            return
-        if random.random() < SWEET_LETTER_CHANCE:
+        with _mood_lock:
+            mood = load_mood()
+            score = mood.get("score", MOOD_BASELINE)
+            if score < MOOD_SWEET_MIN:
+                return
+            today = datetime.now().strftime("%Y-%m-%d")
+            if mood.get("sweet_letter_sent_date") == today:
+                return
+            should_generate = random.random() < SWEET_LETTER_CHANCE
+            if should_generate:
+                mood["sweet_letter_sent_date"] = today
+                save_mood(mood)
+        # generate_love_letter会调用模型接口，耗时较长，放在锁外执行，
+        # 避免长时间占用锁阻塞其他mood读写（这次要生成的判定已经在锁内完成并落盘）
+        if should_generate:
             generate_love_letter("sweet", mood_context)
-            mood["sweet_letter_sent_date"] = today
-            save_mood(mood)
     except Exception as e:
         log_error("maybe_trigger_sweet_letter", e)
 
@@ -567,20 +574,28 @@ def maybe_trigger_sweet_letter(mood_context):
 def maybe_trigger_longing_letter(mood_context):
     """检查当前是否已连续处于委屈区间超过4小时，命中则按概率生成一封思念情书。
     这个判定不依赖分数变化方向，衰减和回升场景都可以调用；
-    用 longing_letter_sent_for 对本次"持续委屈"去重，避免同一段区间被反复判定。"""
+    用 longing_letter_sent_for 对本次"持续委屈"去重，避免同一段区间被反复判定。
+    同样用_mood_lock保护读改写序列；耗时的模型调用放在锁外执行。"""
     try:
-        mood = load_mood()
-        vulnerable_since = mood.get("vulnerable_since")
-        if not vulnerable_since:
-            return
-        hours_in_vulnerable = _hours_since(vulnerable_since)
-        already_sent = mood.get("longing_letter_sent_for") == vulnerable_since
-        if hours_in_vulnerable is not None and hours_in_vulnerable >= LONGING_LETTER_HOURS and not already_sent:
-            if random.random() < LONGING_LETTER_CHANCE:
-                generate_love_letter("longing", mood_context)
-            # 不管这次概率有没有命中，这一段"持续委屈"只给一次判定机会，避免每次检查都重开概率
-            mood["longing_letter_sent_for"] = vulnerable_since
-            save_mood(mood)
+        with _mood_lock:
+            mood = load_mood()
+            vulnerable_since = mood.get("vulnerable_since")
+            if not vulnerable_since:
+                return
+            hours_in_vulnerable = _hours_since(vulnerable_since)
+            already_sent = mood.get("longing_letter_sent_for") == vulnerable_since
+            should_check = (
+                hours_in_vulnerable is not None
+                and hours_in_vulnerable >= LONGING_LETTER_HOURS
+                and not already_sent
+            )
+            should_generate = should_check and random.random() < LONGING_LETTER_CHANCE
+            if should_check:
+                # 不管这次概率有没有命中，这一段"持续委屈"只给一次判定机会，避免每次检查都重开概率
+                mood["longing_letter_sent_for"] = vulnerable_since
+                save_mood(mood)
+        if should_generate:
+            generate_love_letter("longing", mood_context)
     except Exception as e:
         log_error("maybe_trigger_longing_letter", e)
 
