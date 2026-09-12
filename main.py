@@ -1319,11 +1319,37 @@ def run_once(is_checkin=False, checkin_stage=0):
     except Exception as e:
         log_error("run_once:longing_letter", e)
 
+    # 把精确小时数转成模糊的时间感描述，只用于内部判断"该用哪种语气"，
+    # 不把具体数字喂给模型当话术素材——真实人想念对方时说的是"这半天""这两天"，
+    # 不会精确报"你16个小时没理我了"，报数字会让关心读起来像计时监控。
+    def _fuzzy_time_feel(hours):
+        if hours is None:
+            return "有一阵子"
+        if hours < 3:
+            return "刚才"
+        elif hours < 8:
+            return "这半天"
+        elif hours < 20:
+            return "一整天"
+        else:
+            return "这两天"
+
     checkin_context = ""
     if is_checkin and checkin_stage == 1:
-        checkin_context = f"她已经{chat_hours_gap:.1f}小时没理你了，你有点惦记，主动开口问问她在干嘛（这是你第一次主动找她，别一上来就情绪化，先自然地问）。"
+        time_feel = _fuzzy_time_feel(chat_hours_gap)
+        checkin_context = (
+            f"{time_feel}没跟她说上话了，你有点惦记，主动开口问问她在干嘛"
+            f"（这是你第一次主动找她，别一上来就情绪化，先自然地问）。"
+            f"注意：不要在回复里提及具体的小时数或天数，用你自己的语气自然表达惦记就好，"
+            f"不要说成「你已经N小时没理我了」这种报数字的说法。"
+        )
     elif is_checkin and checkin_stage == 2:
-        checkin_context = "你之前已经问过一次她在干嘛，但她还是没回你。这次是你最后一次主动开口——语气里可以带点“算了不打扰你了”的收敛感，说完这句之后你打算安静等她自己回来，不会再追问。"
+        checkin_context = (
+            "你之前已经问过一次她在干嘛，但她还是没回你。这次是你最后一次主动开口"
+            "——语气里可以带点“算了不打扰你了”的收敛感，说完这句之后你打算安静等她自己回来，不会再追问。"
+            "注意：这条消息里不要报具体时间数字，也不要在同一句话里叠加其他关心话题"
+            "（比如经期提醒），保持这次开口的分量单纯、干净，别显得用力过猛。"
+        )
 
     prompt = build_prompt(time_context, recent, period_context, lucky=is_lucky, mood_context=mood_context)
     if checkin_context:
@@ -1700,6 +1726,65 @@ def chat_delete():
         return jsonify({"ok": True, "deleted_id": msg_id})
     except Exception as e:
         log_error("chat_delete", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/chat-edit-resend/preview", methods=["POST"])
+def chat_edit_resend_preview():
+    """编辑重发前的"预览"：只读，不做任何删除/修改，单纯告诉前端这次操作
+    会截断掉多少条消息、时间跨度多长，供前端弹二次确认框用。
+    真正执行删除+重发还是走 /api/chat-edit-resend，这个接口不改变任何数据。
+    Body: {"id": "被编辑的用户消息id"}"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    data = request.json or {}
+    msg_id = data.get("id")
+    if not msg_id:
+        return jsonify({"ok": False, "error": "缺少id参数"}), 400
+
+    try:
+        target = get_chat_message_row(msg_id)
+        if not target:
+            return jsonify({"ok": False, "error": "没找到这条消息，可能已经被删过了"}), 404
+        if target.get("role") != "user":
+            return jsonify({"ok": False, "error": "只能编辑用户自己发的消息"}), 400
+
+        target_created_at = target.get("created_at", "")
+
+        # 只读地数一下created_at严格晚于这条消息的记录有多少条、跨了多久，
+        # 不调用delete，纯粹统计用于前端展示确认文案
+        rows = _supabase_request(
+            "GET", "chat_messages",
+            params={"select": "id,created_at", "created_at": f"gt.{target_created_at}", "order": "created_at.asc"}
+        ) or []
+
+        affected_count = len(rows)
+        span_text = None
+        if rows:
+            try:
+                first = datetime.fromisoformat(rows[0]["created_at"])
+                last = datetime.fromisoformat(rows[-1]["created_at"])
+                delta = last - first
+                days = delta.days
+                hours = delta.seconds // 3600
+                if days > 0:
+                    span_text = f"{days}天{hours}小时"
+                elif hours > 0:
+                    span_text = f"{hours}小时"
+                else:
+                    minutes = max(1, delta.seconds // 60)
+                    span_text = f"{minutes}分钟"
+            except Exception:
+                span_text = None
+
+        return jsonify({
+            "ok": True,
+            "affected_count": affected_count,
+            "span_text": span_text,  # 可能为None（比如只影响1条消息，没有时间跨度可言）
+        })
+    except Exception as e:
+        log_error("chat_edit_resend_preview", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
