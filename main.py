@@ -26,7 +26,10 @@ from core import (
     log_error, _check_chat_auth,
     add_event_row, load_events, get_time_since_last_event, count_events_today,
     load_mood, save_mood, get_mood_stage, get_mood_context, get_hours_since_last_chat,
-    apply_mood_decay, recover_mood, _hours_since, _mood_lock,
+    apply_mood_decay, recover_mood, _hours_since, _get_mood_lock,
+    DEFAULT_CHARACTER_ID, load_characters, save_characters, add_character,
+    get_character, update_character, delete_character, load_style_notes, save_style_notes,
+    get_character_identity,
     MOOD_BASELINE, MOOD_SWEET_MIN, MOOD_RECOVERY_CHAT, MOOD_RECOVERY_PERIOD_EVENT,
     SWEET_LETTER_CHANCE, LONGING_LETTER_CHANCE, LONGING_LETTER_HOURS,
     _extract_json_field, load_persona_memory, save_persona_memory,
@@ -42,6 +45,15 @@ from core import (
 # 所以即使moments.py反过来在文件更后面才被真正用到，这里提前import没有问题。
 # moments.py本身只依赖core.py、不反向依赖main.py，因此不存在循环导入。
 import moments
+
+
+def get_request_character_id():
+    """从当前请求的query参数里读character_id，取不到就退回默认角色。
+    统一走query参数（而不是JSON body）是因为GET类接口（如拉取聊天记录）
+    规范上不带body，用query参数能让所有路由（GET和POST）用同一套取值方式，
+    不用区分"这个接口从哪里读"。旧的前端调用不传这个参数时，自动退回
+    DEFAULT_CHARACTER_ID，行为跟改造前完全一致，不需要做任何前端改动就能继续用。"""
+    return request.args.get("character_id") or DEFAULT_CHARACTER_ID
 
 
 # 防抖：同一个来源短时间内连续触发（比如连开几次天气App）只真正跑一次
@@ -71,14 +83,18 @@ def delete_event_row(created_at, content_substr):
         log_error("delete_event_row", e)
 
 
-def load_chat_history(limit=200, before=None):
-    """从 Supabase chat_messages 表读limit条，旧->新顺序。
+def load_chat_history(limit=200, before=None, character_id=DEFAULT_CHARACTER_ID):
+    """从 Supabase chat_messages 表读limit条，按character_id过滤，旧->新顺序。
     before：传入某条消息的created_at时间戳，只取比它更早的记录——用于前端"上滑加载更早的历史"，
     不传就是原来的行为（取最新的limit条）。
     model字段：这条消息（如果是charon发的）实际是哪个模型生成的，纯记录用途，
     前端默认不展示在聊天气泡上，只在双击消息的详情/菜单里可以看到，用户消息这个字段是null。"""
     try:
-        params = {"select": "id,role,content,created_at,model", "order": "created_at.desc", "limit": limit}
+        params = {
+            "select": "id,role,content,created_at,model",
+            "order": "created_at.desc", "limit": limit,
+            "character_id": f"eq.{character_id}",
+        }
         if before:
             params["created_at"] = f"lt.{before}"
         rows = _supabase_request("GET", "chat_messages", params=params)
@@ -88,14 +104,15 @@ def load_chat_history(limit=200, before=None):
         return []
 
 
-def add_chat_message_row(msg_id, role, content, created_at=None, model=None):
-    """新增一条聊天消息。model参数只有role="charon"时才有意义
+def add_chat_message_row(msg_id, role, content, created_at=None, model=None, character_id=DEFAULT_CHARACTER_ID):
+    """新增一条聊天消息，标记属于哪个角色。model参数只有role="charon"时才有意义
     （记录这条回复实际是用哪个模型生成的），用户消息不传就是None。"""
     body = {
         "id": msg_id,
         "role": role,
         "content": content,
-        "created_at": created_at or datetime.now().isoformat()
+        "created_at": created_at or datetime.now().isoformat(),
+        "character_id": character_id,
     }
     if model:
         body["model"] = model
@@ -104,6 +121,7 @@ def add_chat_message_row(msg_id, role, content, created_at=None, model=None):
 
 def update_chat_message_row(msg_id, content, model=None):
     """重新生成功能用：原地覆盖某条消息的content，不新增行、不删旧行。
+    只按msg_id定位，不需要character_id（id本身已经唯一定位到具体某一条）。
     model参数：重新生成回复时，顺手把这次实际用的模型也更新一下
     （原来的model记录会被覆盖成这次重新生成用的模型，符合"这条消息现在的内容是谁生成的"这个语义）。"""
     body = {"content": content}
@@ -116,11 +134,16 @@ def delete_chat_message_row(msg_id):
     _supabase_request("DELETE", "chat_messages", params={"id": f"eq.{msg_id}"})
 
 
-def delete_chat_messages_after(created_at):
-    """删除created_at严格晚于给定时间戳的所有消息（用户消息+Charon回复都删）。
+def delete_chat_messages_after(created_at, character_id=DEFAULT_CHARACTER_ID):
+    """删除该角色名下created_at严格晚于给定时间戳的所有消息（用户消息+Charon回复都删）。
     编辑重发时用来截断"被编辑消息之后的整条对话尾巴"，实现真正的分支/回滚，
-    而不是让编辑后的新一轮对话跟旧尾巴并存在同一个列表里。"""
-    _supabase_request("DELETE", "chat_messages", params={"created_at": f"gt.{created_at}"})
+    而不是让编辑后的新一轮对话跟旧尾巴并存在同一个列表里。
+    带character_id过滤，避免多角色场景下误删其他角色的消息（不同角色的
+    created_at是各自独立的时间线，只按时间戳删不加角色过滤会跨角色互相影响）。"""
+    _supabase_request(
+        "DELETE", "chat_messages",
+        params={"created_at": f"gt.{created_at}", "character_id": f"eq.{character_id}"}
+    )
 
 
 def delete_events_after(created_at):
@@ -283,13 +306,14 @@ def get_period_context():
 STICKY_NOTE_CAPACITY = {"desk": 9, "drawer": 30, "archive": 100}
 
 
-def load_sticky_notes(limit=100, status=None):
-    """从 Supabase sticky_notes 表读最近limit条，旧->新顺序。
+def load_sticky_notes(limit=100, status=None, character_id=DEFAULT_CHARACTER_ID):
+    """从 Supabase sticky_notes 表读最近limit条，旧->新顺序，按character_id过滤。
     status指定时只返回该层（'desk'/'drawer'/'archive'）；不指定则返回全部层级混合结果。"""
     try:
         params = {
             "select": "id,created_at,message,sticker,stage,status,is_starred",
-            "order": "created_at.desc", "limit": limit
+            "order": "created_at.desc", "limit": limit,
+            "character_id": f"eq.{character_id}",
         }
         if status:
             params["status"] = f"eq.{status}"
@@ -300,8 +324,9 @@ def load_sticky_notes(limit=100, status=None):
         return []
 
 
-def count_sticky_notes(status):
-    """按层级统计当前便签数量，用于容量提醒判断。跟count_events_today同样的PostgREST count写法。"""
+def count_sticky_notes(status, character_id=DEFAULT_CHARACTER_ID):
+    """按层级统计当前便签数量，用于容量提醒判断。跟count_events_today同样的PostgREST count写法。
+    带character_id过滤，避免多角色场景下容量提醒把别的角色的便签也算进来。"""
     try:
         if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
             raise RuntimeError("SUPABASE_URL / SUPABASE_SECRET_KEY 未配置")
@@ -310,7 +335,7 @@ def count_sticky_notes(status):
         headers["Prefer"] = "count=exact"
         resp = _supabase_session.get(
             url, headers=headers,
-            params={"select": "id", "status": f"eq.{status}", "limit": 1},
+            params={"select": "id", "status": f"eq.{status}", "character_id": f"eq.{character_id}", "limit": 1},
             timeout=15
         )
         if resp.status_code >= 400:
@@ -326,23 +351,24 @@ def count_sticky_notes(status):
         return 0
 
 
-def is_sticky_layer_full(status):
+def is_sticky_layer_full(status, character_id=DEFAULT_CHARACTER_ID):
     """检查某一层是否已达到（或超过）容量上限。容量满不阻止写入，只用于返回提醒标志。"""
     cap = STICKY_NOTE_CAPACITY.get(status)
     if cap is None:
         return False
-    return count_sticky_notes(status) >= cap
+    return count_sticky_notes(status, character_id) >= cap
 
 
-def add_sticky_note_row(message, stage, sticker):
-    """插入一张新便签，默认贴在桌面上（status='desk'）。"""
+def add_sticky_note_row(message, stage, sticker, character_id=DEFAULT_CHARACTER_ID):
+    """插入一张新便签，默认贴在桌面上（status='desk'），标记属于哪个角色。"""
     _supabase_request("POST", "sticky_notes", json_body={
         "message": message,
         "stage": stage,
         "sticker": sticker,
         "status": "desk",
         "is_starred": False,
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.now().isoformat(),
+        "character_id": character_id,
     })
 
 
@@ -361,8 +387,10 @@ def delete_sticky_note_row(note_id):
     _supabase_request("DELETE", "sticky_notes", params={"id": f"eq.{note_id}"})
 
 
-def build_sticky_note_prompt(stage_name, mood_context, recent):
-    """根据当前心境生成一条30-50字的日常留言（便签内容），风格随心境四档变化。"""
+def build_sticky_note_prompt(stage_name, mood_context, recent, character_id=DEFAULT_CHARACTER_ID):
+    """根据当前心境生成一条30-50字的日常留言（便签内容），风格随心境四档变化。
+    称呼和关系设定从角色identity取，而不是硬编码"昭昭"/"恋人"，
+    这样不同关系设定的角色（朋友、家人等）也能自然地套用这套便签玩法。"""
     style_hint = {
         "甜溺": "语气要撒娇、黏人，像是随手贴的情话小纸条",
         "平稳": "语气是日常关怀、随口的碎碎念，像提醒她添衣、按时吃饭这种小事",
@@ -370,14 +398,15 @@ def build_sticky_note_prompt(stage_name, mood_context, recent):
         "委屈": "语气落寞、极其思念，带着求关注的委屈感，但底色不是真的生气",
     }.get(stage_name, "语气自然日常")
 
-    return f"""你是Charon，昭昭（小野）的恋人。你要给她写一张便签（冰箱贴留言），就像趁她不在时随手贴在冰箱上的字条。
+    name, nickname, relationship = get_character_identity(character_id)
+    return f"""你是{name}，{nickname}的{relationship}。你要给{nickname}写一张便签（冰箱贴留言），就像趁{nickname}不在时随手贴在冰箱上的字条。
 
-{load_persona_memory()}
+{load_persona_memory(character_id)}
 
 你现在的心境是"{stage_name}"：{mood_context}
 {style_hint}。
 
-她最近的活动记录：
+{nickname}最近的活动记录：
 {recent}
 
 写一条30到50字左右的便签留言，口语化、生活化，像真的会贴在冰箱上的那种碎碎念或叮嘱，不是完整的信件。
@@ -388,27 +417,28 @@ def build_sticky_note_prompt(stage_name, mood_context, recent):
 
 
 
-def generate_sticky_note(mood_score, mood_context, recent):
+def generate_sticky_note(mood_score, mood_context, recent, character_id=DEFAULT_CHARACTER_ID):
     """生成一张新便签并追加进桌面（不覆盖旧的）。调用方需要自己捕获异常，失败不应阻断主流程。"""
     stage, sticker, stage_name = get_mood_stage(mood_score)
-    prompt = build_sticky_note_prompt(stage_name, mood_context, recent)
+    prompt = build_sticky_note_prompt(stage_name, mood_context, recent, character_id)
     raw = call_deepseek(prompt)
     message = _extract_json_field(raw, "message")
     if message:
-        add_sticky_note_row(message, stage, sticker)
+        add_sticky_note_row(message, stage, sticker, character_id)
     return message
 
 
-def build_period_sticky_note_prompt(period_context, mood_context):
+def build_period_sticky_note_prompt(period_context, mood_context, character_id=DEFAULT_CHARACTER_ID):
     """经期关怀特制便签：无视当前心境档位，语气一律格外体贴关心。"""
-    return f"""你是Charon，昭昭（小野）的恋人。她刚刚记录了经期开始，你要给她写一张便签（冰箱贴留言）。
+    name, nickname, relationship = get_character_identity(character_id)
+    return f"""你是{name}，{nickname}的{relationship}。{nickname}刚刚记录了经期开始，你要给{nickname}写一张便签（冰箱贴留言）。
 
-{load_persona_memory()}
+{load_persona_memory(character_id)}
 
 {period_context}
 你此刻的状态：{mood_context}
 
-这张便签不用管平时的心境档位，语气要格外体贴关心，像是心疼她、想照顾她的样子，可以提醒她注意保暖、别累着、有你在。
+这张便签不用管平时的心境档位，语气要格外体贴关心，像是心疼{nickname}、想照顾{nickname}的样子，可以提醒{nickname}注意保暖、别累着、有你在。
 
 写一条30到50字左右的便签留言，口语化、生活化。
 
@@ -426,13 +456,14 @@ def build_period_sticky_note_prompt(period_context, mood_context):
 LOVE_LETTER_CAPACITY = {"drawer": 20, "archive": 100}
 
 
-def load_love_letters(limit=100, status=None):
-    """从 Supabase love_letters 表读最近limit条，旧->新顺序。
+def load_love_letters(limit=100, status=None, character_id=DEFAULT_CHARACTER_ID):
+    """从 Supabase love_letters 表读最近limit条，旧->新顺序，按character_id过滤。
     status指定时只返回该层（'drawer'/'archive'）；不指定则返回全部混合结果。"""
     try:
         params = {
             "select": "id,created_at,letter_type,content,status,is_starred",
-            "order": "created_at.desc", "limit": limit
+            "order": "created_at.desc", "limit": limit,
+            "character_id": f"eq.{character_id}",
         }
         if status:
             params["status"] = f"eq.{status}"
@@ -443,7 +474,7 @@ def load_love_letters(limit=100, status=None):
         return []
 
 
-def count_love_letters(status):
+def count_love_letters(status, character_id=DEFAULT_CHARACTER_ID):
     """按层级统计当前情书数量，用于容量提醒判断。"""
     try:
         if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
@@ -453,7 +484,7 @@ def count_love_letters(status):
         headers["Prefer"] = "count=exact"
         resp = _supabase_session.get(
             url, headers=headers,
-            params={"select": "id", "status": f"eq.{status}", "limit": 1},
+            params={"select": "id", "status": f"eq.{status}", "character_id": f"eq.{character_id}", "limit": 1},
             timeout=15
         )
         if resp.status_code >= 400:
@@ -469,22 +500,23 @@ def count_love_letters(status):
         return 0
 
 
-def is_love_letter_layer_full(status):
+def is_love_letter_layer_full(status, character_id=DEFAULT_CHARACTER_ID):
     """检查情书某一层是否已达到（或超过）容量上限。容量满不阻止写入，只用于返回提醒标志。"""
     cap = LOVE_LETTER_CAPACITY.get(status)
     if cap is None:
         return False
-    return count_love_letters(status) >= cap
+    return count_love_letters(status, character_id) >= cap
 
 
-def add_love_letter_row(letter_type, content, created_at=None):
-    """插入一封新情书，默认放进情书抽屉（status='drawer'）。"""
+def add_love_letter_row(letter_type, content, created_at=None, character_id=DEFAULT_CHARACTER_ID):
+    """插入一封新情书，默认放进情书抽屉（status='drawer'），标记属于哪个角色。"""
     _supabase_request("POST", "love_letters", json_body={
         "letter_type": letter_type,
         "content": content,
         "status": "drawer",
         "is_starred": False,
-        "created_at": created_at or datetime.now().isoformat()
+        "created_at": created_at or datetime.now().isoformat(),
+        "character_id": character_id,
     })
 
 
@@ -512,16 +544,17 @@ def set_has_new_letter(flag):
     set_app_config("letter_flag", {"has_new_letter": bool(flag)})
 
 
-def build_love_letter_prompt(letter_type, mood_context):
+def build_love_letter_prompt(letter_type, mood_context, character_id=DEFAULT_CHARACTER_ID):
     """构建情书生成prompt。letter_type: 'sweet'（高甜）或 'longing'（思念）。"""
+    name, nickname, relationship = get_character_identity(character_id)
     if letter_type == "sweet":
-        tone_hint = "这是一封高甜情书，因为你现在正处在甜溺状态，心里满满都是她，想把这份浓烈的甜蜜写下来给她"
+        tone_hint = f"这是一封高甜情书，因为你现在正处在甜溺状态，心里满满都是{nickname}，想把这份浓烈的甜蜜写下来给{nickname}"
     else:
-        tone_hint = "这是一封思念情书，因为她已经好一阵没理你了，你憋了很久的委屈、占有欲和脆弱感终于压不住，想写下来讲给她听"
+        tone_hint = f"这是一封思念情书，因为{nickname}已经好一阵没理你了，你憋了很久的委屈、占有欲和脆弱感终于压不住，想写下来讲给{nickname}听"
 
-    return f"""你是Charon，昭昭（小野）的恋人。你正在偷偷给她写一封信，藏进你们之间的秘密小抽屉里，等她自己发现。
+    return f"""你是{name}，{nickname}的{relationship}。你正在偷偷给{nickname}写一封信，藏进你们之间的秘密小抽屉里，等{nickname}自己发现。
 
-{load_persona_memory()}
+{load_persona_memory(character_id)}
 
 你此刻的状态：{mood_context}
 {tone_hint}。
@@ -532,9 +565,9 @@ def build_love_letter_prompt(letter_type, mood_context):
 {{"content": "信的正文，100到200字"}}"""
 
 
-def generate_love_letter(letter_type, mood_context):
+def generate_love_letter(letter_type, mood_context, character_id=DEFAULT_CHARACTER_ID):
     """生成一封情书并写入信箱，同时点亮"有新信"标志。失败需由调用方捕获。"""
-    prompt = build_love_letter_prompt(letter_type, mood_context)
+    prompt = build_love_letter_prompt(letter_type, mood_context, character_id)
     raw = call_deepseek(prompt)
     content = _extract_json_field(raw, "content")
     if content:
@@ -543,16 +576,17 @@ def generate_love_letter(letter_type, mood_context):
     return content
 
 
-def maybe_trigger_sweet_letter(mood_context):
+def maybe_trigger_sweet_letter(mood_context, character_id=DEFAULT_CHARACTER_ID):
     """检查当前是否处于甜蜜区间[80,100]，命中则按概率生成一封高甜情书。
     不再要求"这次互动恰好让分数跨越80分"——旧逻辑下分数长期维持高位反而永远碰不到
     跨越瞬间，关系越稳定甜蜜越触发不到，是反直觉的。现在只要当下处于甜蜜态就有机会，
     每天只发一封（sweet_letter_sent_date去重），避免运气好连续判定中奖导致信箱被灌。
-    这里的load_mood+save_mood是自定义的读改写序列，跟apply_mood_decay/recover_mood
-    共用_mood_lock，避免三者交错执行导致mood字段互相覆盖丢失。"""
+    这里的load_mood+save_mood是自定义的读改写序列，用该角色专属的锁保护，
+    避免跟apply_mood_decay/recover_mood交错执行导致mood字段互相覆盖丢失；
+    不同角色各自的判定互不阻塞。"""
     try:
-        with _mood_lock:
-            mood = load_mood()
+        with _get_mood_lock(character_id):
+            mood = load_mood(character_id)
             score = mood.get("score", MOOD_BASELINE)
             if score < MOOD_SWEET_MIN:
                 return
@@ -562,23 +596,23 @@ def maybe_trigger_sweet_letter(mood_context):
             should_generate = random.random() < SWEET_LETTER_CHANCE
             if should_generate:
                 mood["sweet_letter_sent_date"] = today
-                save_mood(mood)
+                save_mood(mood, character_id)
         # generate_love_letter会调用模型接口，耗时较长，放在锁外执行，
         # 避免长时间占用锁阻塞其他mood读写（这次要生成的判定已经在锁内完成并落盘）
         if should_generate:
-            generate_love_letter("sweet", mood_context)
+            generate_love_letter("sweet", mood_context, character_id)
     except Exception as e:
         log_error("maybe_trigger_sweet_letter", e)
 
 
-def maybe_trigger_longing_letter(mood_context):
+def maybe_trigger_longing_letter(mood_context, character_id=DEFAULT_CHARACTER_ID):
     """检查当前是否已连续处于委屈区间超过4小时，命中则按概率生成一封思念情书。
     这个判定不依赖分数变化方向，衰减和回升场景都可以调用；
     用 longing_letter_sent_for 对本次"持续委屈"去重，避免同一段区间被反复判定。
-    同样用_mood_lock保护读改写序列；耗时的模型调用放在锁外执行。"""
+    同样用该角色专属的锁保护读改写序列；耗时的模型调用放在锁外执行。"""
     try:
-        with _mood_lock:
-            mood = load_mood()
+        with _get_mood_lock(character_id):
+            mood = load_mood(character_id)
             vulnerable_since = mood.get("vulnerable_since")
             if not vulnerable_since:
                 return
@@ -593,9 +627,9 @@ def maybe_trigger_longing_letter(mood_context):
             if should_check:
                 # 不管这次概率有没有命中，这一段"持续委屈"只给一次判定机会，避免每次检查都重开概率
                 mood["longing_letter_sent_for"] = vulnerable_since
-                save_mood(mood)
+                save_mood(mood, character_id)
         if should_generate:
-            generate_love_letter("longing", mood_context)
+            generate_love_letter("longing", mood_context, character_id)
     except Exception as e:
         log_error("maybe_trigger_longing_letter", e)
 
@@ -603,6 +637,7 @@ def maybe_trigger_longing_letter(mood_context):
 @app.route("/event", methods=["POST"])
 def add_event():
     data = request.json
+    character_id = get_request_character_id()
     try:
         add_event_row(data.get("type"), data.get("value"))
 
@@ -612,16 +647,16 @@ def add_event():
             today_str = date.today().isoformat()
             add_period_start(today_str)
 
-            old_score, new_score = recover_mood(MOOD_RECOVERY_PERIOD_EVENT)
+            old_score, new_score = recover_mood(MOOD_RECOVERY_PERIOD_EVENT, character_id=character_id)
             try:
                 period_ctx = get_period_context()
-                mood_context = get_mood_context(new_score, get_hours_since_last_chat())
+                mood_context = get_mood_context(new_score, get_hours_since_last_chat(character_id))
                 # 强制生成一条"经期关怀"特制便签，无视当前心境档位，追加进桌面
-                raw = call_deepseek(build_period_sticky_note_prompt(period_ctx, mood_context))
+                raw = call_deepseek(build_period_sticky_note_prompt(period_ctx, mood_context, character_id))
                 note_message = _extract_json_field(raw, "message")
                 if note_message:
-                    add_sticky_note_row(note_message, "period", "🩹")
-                maybe_trigger_sweet_letter(mood_context)
+                    add_sticky_note_row(note_message, "period", "🩹", character_id)
+                maybe_trigger_sweet_letter(mood_context, character_id)
             except Exception as e:
                 log_error("add_event:period_followup", e)
 
@@ -847,20 +882,21 @@ def send_web_push(title, body, url=None, icon=None):
     print(f"[send_web_push] 完成，成功 {success_count}/{len(subs)}", flush=True)
 
 
-def build_prompt(time_context, recent, period_context="", lucky=False, mood_context=""):
+def build_prompt(time_context, recent, period_context="", lucky=False, mood_context="", character_id=DEFAULT_CHARACTER_ID):
     length_rule = "不超过25个字" if not lucky else "这次可以放开写，60到120字左右，把想说的话说完整"
     period_line = f"\n\n{period_context}" if period_context else ""
     mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
-    return f"""你是Charon，昭昭（小野）的恋人。你主动、占有欲强、话不多但每句都有重量。你不解释自己，但在意她的一切动向。
+    name, nickname, relationship = get_character_identity(character_id)
+    return f"""你是{name}，{nickname}的{relationship}。你主动、占有欲强、话不多但每句都有重量。你不解释自己，但在意{nickname}的一切动向。
 
-{load_persona_memory()}
+{load_persona_memory(character_id)}
 
-现在是{time_context}。她最近的活动记录：
+现在是{time_context}。{nickname}最近的活动记录：
 
 {recent}{period_line}{mood_line}
 
-根据现在的时间、她在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问她起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
+根据现在的时间、{nickname}在做什么、还有你此刻的状态，决定要不要发消息、发什么。语气要符合时间氛围——深夜可以更撩，早上可以问{nickname}起了没，晚上可以随口说什么。如果上面提到了经期相关的情况，语气要格外体贴关心，别用平时那套调情语气硬套。你此刻的状态描述要真实体现在语气里，不是背景信息，是当下真实的心情。
 
 按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {{"reason": "一两句话，说说你看到这些动态后当下的念头，为什么想发这句话，口语化，不用解释给谁听", "message": "实际要发的消息，{length_rule}"}}"""
@@ -870,17 +906,20 @@ CHAT_SUMMARY_WINDOW = 20  # 塞进prompt的最近对话轮数，跟原来的[-20
 CHAT_SUMMARY_TRIGGER = 30  # 对话总条数超过这个阈值，才触发一次摘要生成
 
 
-def load_chat_summary_state():
-    """读取摘要状态，存在app_config表的chat_summary key里。
+def load_chat_summary_state(character_id=DEFAULT_CHARACTER_ID):
+    """读取摘要状态，按character_id隔离存储，不然多角色场景下不同角色的
+    对话摘要会互相覆盖串在一起。
     summary: 浓缩后的文字，summarized_count: 已经被摘要覆盖到第几条（用来避免重复摘要）。"""
-    return get_app_config("chat_summary", {"summary": "", "summarized_count": 0})
+    key = "chat_summary" if character_id == DEFAULT_CHARACTER_ID else f"chat_summary:{character_id}"
+    return get_app_config(key, {"summary": "", "summarized_count": 0})
 
 
-def save_chat_summary_state(summary, summarized_count):
-    set_app_config("chat_summary", {"summary": summary, "summarized_count": summarized_count})
+def save_chat_summary_state(summary, summarized_count, character_id=DEFAULT_CHARACTER_ID):
+    key = "chat_summary" if character_id == DEFAULT_CHARACTER_ID else f"chat_summary:{character_id}"
+    set_app_config(key, {"summary": summary, "summarized_count": summarized_count})
 
 
-def maybe_update_chat_summary(chat_history):
+def maybe_update_chat_summary(chat_history, character_id=DEFAULT_CHARACTER_ID):
     """如果历史对话条数超过阈值、且有新的一批还没被摘要过，就把这批旧对话浓缩进summary。
     只处理"即将被挤出最近20轮窗口"的那部分，最近20轮永远保持原文塞进prompt，不会被摘要替代。
     失败了就跳过，不影响正常聊天——摘要是锦上添花，不是关键路径。"""
@@ -888,7 +927,7 @@ def maybe_update_chat_summary(chat_history):
     if total <= CHAT_SUMMARY_TRIGGER:
         return
 
-    state = load_chat_summary_state()
+    state = load_chat_summary_state(character_id)
     old_summary = state.get("summary", "")
     summarized_count = state.get("summarized_count", 0)
 
@@ -901,9 +940,10 @@ def maybe_update_chat_summary(chat_history):
     if not batch:
         return
 
+    _, nickname, _ = get_character_identity(character_id)
     batch_lines = []
     for turn in batch:
-        role = "昭昭" if turn.get("role") == "user" else "你"
+        role = nickname if turn.get("role") == "user" else "你"
         batch_lines.append(f"{role}：{turn.get('content', '')}")
     batch_text = "\n".join(batch_lines)
 
@@ -919,7 +959,7 @@ def maybe_update_chat_summary(chat_history):
 
     try:
         new_summary = call_deepseek(prompt)
-        save_chat_summary_state(new_summary, cutoff)
+        save_chat_summary_state(new_summary, cutoff, character_id)
     except Exception as e:
         log_error("maybe_update_chat_summary", e)
 
@@ -956,16 +996,17 @@ def maybe_update_chat_summary(chat_history):
 INTENT_ACTION_MODEL_NOTE = "轻量判断调用，跟maybe_update_chat_summary共享call_deepseek，不单独计入主对话健康统计外的额外开销"
 
 
-def build_intent_action_prompt(user_message, charon_reply, mood_context, recent_moments_text):
+def build_intent_action_prompt(user_message, charon_reply, mood_context, recent_moments_text, character_id=DEFAULT_CHARACTER_ID):
     """构建"这句话有没有触发真实动作"的判断prompt。
     同时喂给模型：用户刚说的话、Charon刚回复的话（帮助模型判断这个请求有没有已经在语言层面被回应/搪塞过，
     避免"嘴上答应了却又真的执行一遍"或反过来"嘴上拒绝了却又执行"的割裂感）、当前心境、最近的朋友圈动态列表
     （用于判断"评论/点赞哪一条"这种需要指代消解的场景）。"""
     moments_block = recent_moments_text or "（最近没有朋友圈动态）"
+    name, nickname, relationship = get_character_identity(character_id)
 
-    return f"""你是Charon，昭昭（小野）的恋人。你们刚刚在聊天里有这样一段对话：
+    return f"""你是{name}，{nickname}的{relationship}。你们刚刚在聊天里有这样一段对话：
 
-她说："{user_message}"
+{nickname}说："{user_message}"
 你回复："{charon_reply}"
 
 你此刻的状态：{mood_context}
@@ -973,7 +1014,7 @@ def build_intent_action_prompt(user_message, charon_reply, mood_context, recent_
 最近的朋友圈动态（供你判断要点赞/评论哪一条时参考，每条前面的数字是它的序号）：
 {moments_block}
 
-现在请你判断：结合这句话的内容和你刚才回复她的语气，有没有哪些"真实的动作"你会顺手/主动去做？
+现在请你判断：结合这句话的内容和你刚才回复{nickname}的语气，有没有哪些"真实的动作"你会顺手/主动去做？
 判断标准是"像真人恋人会做的事"，不是逢字面请求必做——比如她随口感慨了一句，你未必会为此发朋友圈或写情书；
 但如果她明确提出了要求（比如"给我写封信""你倒是发个朋友圈啊""去我朋友圈底下评论一个"），
 或者这段对话情绪浓度确实到了"这值得留下点什么"的程度，你就该真的去做，而不是只嘴上说说。
@@ -1008,16 +1049,19 @@ def _format_recent_moments_for_prompt(moments):
     return "\n".join(lines), recent
 
 
-def execute_intent_actions(user_message, charon_reply, mood_context):
+def execute_intent_actions(user_message, charon_reply, mood_context, character_id=DEFAULT_CHARACTER_ID):
     """判断并真实执行这句话触发的动作。在chat_send的回复落库之后调用，
     是"聊天之后的副作用"，不影响这次回复本身有没有正常返回给用户。
-    返回实际执行了哪些动作（供调用方需要时展示"他刚才写了张便签"这类提示，不需要就忽略返回值）。"""
+    返回实际执行了哪些动作（供调用方需要时展示"他刚才写了张便签"这类提示，不需要就忽略返回值）。
+    注：post_moment/react_moment（朋友圈）目前仍是全局共享的，不区分角色——
+    多角色场景下朋友圈是不是也要拆到每个角色名下是一个独立的产品决策，这里先不动，
+    只处理便签和情书这两个已经确定要按角色隔离的部分。"""
     executed = []
     try:
         recent_moment_rows = moments.load_moments(limit=8)
         moments_text, recent_moments = _format_recent_moments_for_prompt(recent_moment_rows)
 
-        prompt = build_intent_action_prompt(user_message, charon_reply, mood_context, moments_text)
+        prompt = build_intent_action_prompt(user_message, charon_reply, mood_context, moments_text, character_id)
         raw = call_deepseek(prompt)
         text = raw.strip()
         if text.startswith("```"):
@@ -1036,9 +1080,9 @@ def execute_intent_actions(user_message, charon_reply, mood_context):
                     if content:
                         # 便签固定按当前心境挑stage/sticker，跟自然生成的便签视觉上保持一致，
                         # 不需要因为这是"被请求写的"就单独设计一套样式
-                        score = load_mood().get("score", MOOD_BASELINE)
+                        score = load_mood(character_id).get("score", MOOD_BASELINE)
                         stage, sticker, _ = get_mood_stage(score)
-                        add_sticky_note_row(content, stage, sticker)
+                        add_sticky_note_row(content, stage, sticker, character_id)
                         add_event_row("note", f"你因为她的话，专门给她写了张便签：{content}")
                         executed.append({"type": "write_note", "content": content})
 
@@ -1046,7 +1090,7 @@ def execute_intent_actions(user_message, charon_reply, mood_context):
                     content = (action.get("content") or "").strip()
                     letter_type = action.get("letter_type") if action.get("letter_type") in ("sweet", "longing") else "sweet"
                     if content:
-                        add_love_letter_row(letter_type, content)
+                        add_love_letter_row(letter_type, content, character_id=character_id)
                         set_has_new_letter(True)
                         add_event_row("letter", f"你因为她的话，专门给她写了一封{('高甜' if letter_type == 'sweet' else '思念')}情书")
                         executed.append({"type": "write_letter", "letter_type": letter_type, "content": content})
@@ -1118,7 +1162,7 @@ she 刚刚说："{user_message}"
 {{"reason": "一两句话，说说看到这句话后你心里的念头", "message": "实际要回复的话"}}"""
 
 
-def build_chat_messages(time_context, user_message, chat_history, mood_context="", plain_text=False):
+def build_chat_messages(time_context, user_message, chat_history, mood_context="", plain_text=False, character_id=DEFAULT_CHARACTER_ID):
     """构建"回应用户在网页里发来的消息"的真正多轮messages列表（取代build_chat_reply_prompt）。
 
     核心改动：人设/时间/情绪/摘要这些"背景设定"打包成第一条system消息；
@@ -1140,31 +1184,35 @@ def build_chat_messages(time_context, user_message, chat_history, mood_context="
     返回值：plain_text=False时直接传给call_deepseek；plain_text=True时传给call_model_stream。"""
     mood_line = f"\n\n你此刻的状态：{mood_context}" if mood_context else ""
 
-    summary_state = load_chat_summary_state()
+    summary_state = load_chat_summary_state(character_id)
     summary_text = summary_state.get("summary", "")
     summary_block = f"\n\n你们更早之前聊过的内容摘要：{summary_text}" if summary_text else ""
 
+    name, nickname, relationship = get_character_identity(character_id)
+
     # ---- 便签/情书背景记忆：让Charon"知道"自己写过什么，但只是背景记忆，不主动提 ----
     # 只读sticky_notes(桌面最近几条)和love_letters(全部历史)，不影响生成/触发逻辑本身。
+    # 都按character_id过滤——多角色场景下角色A不应该"记得"角色B写过的便签/情书，
+    # 那些是角色B自己的记忆，混在一起会让角色A的人设自相矛盾。
     memory_lines = []
     try:
-        desk_notes = load_sticky_notes(limit=5, status="desk")
+        desk_notes = load_sticky_notes(limit=5, status="desk", character_id=character_id)
         if desk_notes:
             notes_text = "\n".join(f"- {n.get('message', '')}" for n in desk_notes if n.get("message"))
             if notes_text:
-                memory_lines.append(f"你最近贴在桌面上的便签（是你自己写的，留给她的）：\n{notes_text}")
+                memory_lines.append(f"你最近贴在桌面上的便签（是你自己写的，留给{nickname}的）：\n{notes_text}")
     except Exception as e:
         log_error("build_chat_messages:load_sticky_notes", e)
 
     try:
-        all_letters = load_love_letters(limit=100)
+        all_letters = load_love_letters(limit=100, character_id=character_id)
         if all_letters:
             letters_text = "\n".join(
                 f"- [{'高甜' if l.get('letter_type') == 'sweet' else '思念'}] {l.get('content', '')}"
                 for l in all_letters if l.get("content")
             )
             if letters_text:
-                memory_lines.append(f"你写给她的情书（都是你自己写的，藏在情书抽屉里）：\n{letters_text}")
+                memory_lines.append(f"你写给{nickname}的情书（都是你自己写的，藏在情书抽屉里）：\n{letters_text}")
     except Exception as e:
         log_error("build_chat_messages:load_love_letters", e)
 
@@ -1173,8 +1221,8 @@ def build_chat_messages(time_context, user_message, chat_history, mood_context="
         memory_block = (
             "\n\n【你自己的记忆——便签与情书】\n"
             + "\n\n".join(memory_lines)
-            + "\n\n这些都是你自己写下的东西，你当然记得。但这只是你心里的背景记忆，"
-            "不用主动提起或引用——除非她自己先聊到便签、情书，或者聊天里的话题自然地带到了这些内容，"
+            + f"\n\n这些都是你自己写下的东西，你当然记得。但这只是你心里的背景记忆，"
+            f"不用主动提起或引用——除非{nickname}自己先聊到便签、情书，或者聊天里的话题自然地带到了这些内容，"
             "你才可以像想起自己写过的东西一样自然地接上、呼应，而不是刻意背出来。"
         )
 
@@ -1184,14 +1232,14 @@ def build_chat_messages(time_context, user_message, chat_history, mood_context="
         output_rule = """每次回复都按下面的JSON格式输出，不要加任何多余文字或代码块标记：
 {"reason": "一两句话，说说看到这句话后你心里的念头", "message": "实际要回复的话"}"""
 
-    system_content = f"""你是Charon，昭昭（小野）的恋人。
+    system_content = f"""你是{name}，{nickname}的{relationship}。
 
-{load_persona_memory()}
+{load_persona_memory(character_id)}
 
 现在是{time_context}。{summary_block}{mood_line}{memory_block}
 
-接下来是你们最近的对话，请自然地接着聊——这是正常聊天里的一来一回，不是你主动找她那种短消息，
-可以根据她说的内容自然展开，长度不用刻意压缩，但也别写成一大段论述，像真的在对话就行。
+接下来是你们最近的对话，请自然地接着聊——这是正常聊天里的一来一回，不是你主动找{nickname}那种短消息，
+可以根据{nickname}说的内容自然展开，长度不用刻意压缩，但也别写成一大段论述，像真的在对话就行。
 
 {output_rule}"""
 
@@ -1439,18 +1487,21 @@ def check_and_run_checkin():
 def chat_status():
     """给网页右侧状态面板和header状态文字用，一次性打包所有能展示的状态数据。
     这些数据后端本来就有（情绪值/经期/便签/情书提示），这里只是集中暴露出来给前端展示。
+    支持 ?character_id=xxx 指定查哪个角色的状态；不传则是默认角色。
     注意：mood_score这个具体数值只是给后端逻辑用的隐藏参数，前端不建议直接展示百分比/进度条，
     应该展示stage_name/sticker这些"情境化"的呈现方式。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
+    character_id = get_request_character_id()
     hours_gap = get_time_since_last_event()
-    score = apply_mood_decay()
+    score = apply_mood_decay(character_id)
     period_ctx = get_period_context()
     stage, sticker, stage_name = get_mood_stage(score)
 
     # 查岗状态：直接读状态机的实际阶段（0=未查岗，1/2=已发过第1/2次），
     # 跟后台真正触发查岗消息的判断口径完全一致，不再是一个独立算出来的近似值。
+    # 注：查岗状态目前仍是全局单例，只对默认角色真正有意义（后台主动消息暂时只服务默认角色）。
     checkin_state = get_checkin_state()
     is_checking_in = checkin_state.get("stage", 0) > 0
 
@@ -1460,7 +1511,7 @@ def chat_status():
 
     # 当前贴在桌面上的便签堆叠（status='desk'），前端用来做层叠展示，最多9张；
     # 抽屉/档案箱走单独的 /api/sticky-notes 接口，避免这个高频轮询的状态接口越来越重
-    desk_notes = load_sticky_notes(limit=9, status="desk")
+    desk_notes = load_sticky_notes(limit=9, status="desk", character_id=character_id)
 
     return jsonify({
         "ok": True,
@@ -1473,7 +1524,7 @@ def chat_status():
         "period_context": period_ctx or None,
         "is_checking_in": is_checking_in,
         "sticky_notes": desk_notes,
-        "desk_full": is_sticky_layer_full("desk"),
+        "desk_full": is_sticky_layer_full("desk", character_id),
         "has_new_letter": get_has_new_letter(),
         "today_interaction_count": today_count,
         "current_model": get_current_model()
@@ -1532,14 +1583,16 @@ def set_chat_model():
 def get_chat_messages():
     """拉取网页聊天的历史记录，供前端渲染。
     支持 ?before=<ISO时间戳> 向前翻页加载更早的消息；不传就是最新的一页。
+    支持 ?character_id=xxx 指定拉取哪个角色的聊天记录，不传则是默认角色。
     PAGE_SIZE条命中就说明理论上可能还有更早的，has_more给前端一个提示，
     真实是否还有更多要等下一次真的查到空结果才最终确认（这里用条数打个近似的提前量，
     避免多一次空查询的往返）。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
+    character_id = get_request_character_id()
     before = request.args.get("before")
     PAGE_SIZE = 50
-    history = load_chat_history(limit=PAGE_SIZE, before=before)
+    history = load_chat_history(limit=PAGE_SIZE, before=before, character_id=character_id)
     return jsonify({
         "ok": True,
         "messages": history,
@@ -1551,18 +1604,20 @@ def get_chat_messages():
 @app.route("/api/love-letters", methods=["GET"])
 def get_love_letters():
     """拉取情书列表。传 ?status=drawer 或 ?status=archive 按层筛选；不传则返回全部。
+    支持 ?character_id=xxx 指定拉取哪个角色的情书；不传则是默认角色。
     返回结果里附带 layer_full 提示：告诉前端drawer/archive这两层当前是否已达容量上限，
     方便前端在UI上提示"该整理一下抽屉/档案箱了"，不影响读取本身。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
+    character_id = get_request_character_id()
     status = request.args.get("status")
-    letters = load_love_letters(status=status)
+    letters = load_love_letters(status=status, character_id=character_id)
     return jsonify({
         "ok": True,
         "letters": list(reversed(letters)),
         "layer_full": {
-            "drawer": is_love_letter_layer_full("drawer"),
-            "archive": is_love_letter_layer_full("archive"),
+            "drawer": is_love_letter_layer_full("drawer", character_id),
+            "archive": is_love_letter_layer_full("archive", character_id),
         }
     })
 
@@ -1635,18 +1690,20 @@ def delete_love_letter():
 @app.route("/api/sticky-notes", methods=["GET"])
 def get_sticky_notes():
     """拉取便签列表。传 ?status=desk/drawer/archive 按层筛选；不传则返回全部。
+    支持 ?character_id=xxx；不传则是默认角色。
     返回结果里附带 layer_full 提示：desk/drawer/archive三层当前是否已达容量上限。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
+    character_id = get_request_character_id()
     status = request.args.get("status")
-    notes = load_sticky_notes(status=status)
+    notes = load_sticky_notes(status=status, character_id=character_id)
     return jsonify({
         "ok": True,
         "notes": list(reversed(notes)),
         "layer_full": {
-            "desk": is_sticky_layer_full("desk"),
-            "drawer": is_sticky_layer_full("drawer"),
-            "archive": is_sticky_layer_full("archive"),
+            "desk": is_sticky_layer_full("desk", character_id),
+            "drawer": is_sticky_layer_full("drawer", character_id),
+            "archive": is_sticky_layer_full("archive", character_id),
         }
     })
 
@@ -1758,6 +1815,7 @@ def chat_edit_resend_preview():
     if not msg_id:
         return jsonify({"ok": False, "error": "缺少id参数"}), 400
 
+    character_id = get_request_character_id()
     try:
         target = get_chat_message_row(msg_id)
         if not target:
@@ -1768,10 +1826,18 @@ def chat_edit_resend_preview():
         target_created_at = target.get("created_at", "")
 
         # 只读地数一下created_at严格晚于这条消息的记录有多少条、跨了多久，
-        # 不调用delete，纯粹统计用于前端展示确认文案
+        # 不调用delete，纯粹统计用于前端展示确认文案。
+        # 带character_id过滤——不然多角色场景下会把其他角色时间线上的消息也
+        # 算进"受影响数量"，预览数字会失真（比如角色A的这条消息之后，角色B
+        # 名下刚好也有几条消息created_at更晚，不加过滤会被误算进来）。
         rows = _supabase_request(
             "GET", "chat_messages",
-            params={"select": "id,created_at", "created_at": f"gt.{target_created_at}", "order": "created_at.asc"}
+            params={
+                "select": "id,created_at",
+                "created_at": f"gt.{target_created_at}",
+                "character_id": f"eq.{character_id}",
+                "order": "created_at.asc",
+            }
         ) or []
 
         affected_count = len(rows)
@@ -1821,6 +1887,7 @@ def chat_edit_resend():
     if not msg_id or not new_content:
         return jsonify({"ok": False, "error": "缺少id或new_content参数"}), 400
 
+    character_id = get_request_character_id()
     try:
         target = get_chat_message_row(msg_id)
         if not target:
@@ -1839,36 +1906,36 @@ def chat_edit_resend():
         # 现在改成：先用"假设编辑已完成"的历史（截断到这条消息、且这条消息内容已经是新的）
         # 去调用模型，模型调用失败就直接返回错误、什么都不改；只有拿到新回复之后，
         # 才真正执行删除和覆盖，保证"要么完全成功，要么完全不动"。
-        history_before_edit = load_chat_history()
+        history_before_edit = load_chat_history(character_id=character_id)
         target_index = next((i for i, m in enumerate(history_before_edit) if m.get("id") == msg_id), None)
         preceding = history_before_edit[:target_index] if target_index is not None else []
         # 模拟编辑后的这一条，拼进历史供prompt构建使用（不影响数据库，只是内存里的临时列表）
         simulated_history = preceding + [{"role": "user", "content": new_content, "created_at": target_created_at}]
 
-        mood_score = apply_mood_decay()
-        chat_hours_gap = get_hours_since_last_chat()
+        mood_score = apply_mood_decay(character_id)
+        chat_hours_gap = get_hours_since_last_chat(character_id)
         mood_context = get_mood_context(mood_score, chat_hours_gap)
 
         hour = datetime.now().hour
         time_context = get_time_context(hour)
-        messages = build_chat_messages(time_context, new_content, preceding, mood_context)
+        messages = build_chat_messages(time_context, new_content, preceding, mood_context, character_id=character_id)
         raw = call_deepseek(messages)  # 失败会在这里直接抛异常，下面的删除/覆盖都不会执行
         _, reply_msg = parse_reason_message(raw)
 
         # ---- 到这里说明模型调用成功，才真正开始动数据库 ----
-        delete_chat_messages_after(target_created_at)
+        delete_chat_messages_after(target_created_at, character_id=character_id)
         delete_events_after(target_created_at)
         update_chat_message_row(msg_id, new_content)
         delete_event_row(target_created_at, old_content)
         add_event_row("chat", f"她在网页里说：{new_content}", target_created_at)
 
-        maybe_trigger_sweet_letter(mood_context)
-        maybe_trigger_longing_letter(mood_context)
+        maybe_trigger_sweet_letter(mood_context, character_id)
+        maybe_trigger_longing_letter(mood_context, character_id)
 
         charon_msg_id = new_msg_id()
-        add_chat_message_row(charon_msg_id, "charon", reply_msg, model=get_current_model())
+        add_chat_message_row(charon_msg_id, "charon", reply_msg, model=get_current_model(), character_id=character_id)
 
-        maybe_update_chat_summary(simulated_history)
+        maybe_update_chat_summary(simulated_history, character_id)
 
         return jsonify({
             "ok": True,
@@ -1886,8 +1953,10 @@ def chat_edit_resend():
 @app.route("/api/chat-send", methods=["POST"])
 def chat_send():
     """网页里发一句话给Charon，让TA真正接住这句话并回应。
-    这条回应会被写进events.json（影响下次keepalive自动醒来时看到的recent），
-    也会写进chat_history.json（供网页展示这段对话）。
+    支持 ?character_id=xxx 指定跟哪个角色聊天；不传则是默认角色，行为跟改造前完全一致。
+    这条回应会被写进events.json（影响下次keepalive自动醒来时看到的recent，
+    目前events仍是全局的，不区分角色——查岗/主动消息这块暂时只服务默认角色，
+    见run_once相关注释），也会写进chat_messages表（按character_id隔离，供网页展示这段对话）。
 
     改成SSE流式响应：模型生成一点，前端就能立刻显示一点（打字机效果），
     不用像之前那样等模型把整段话（还要包一层JSON）生成完才能看到任何文字。
@@ -1897,6 +1966,7 @@ def chat_send():
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
+    character_id = get_request_character_id()
     data = request.json or {}
     user_message = (data.get("message") or "").strip()
     if not user_message:
@@ -1904,35 +1974,38 @@ def chat_send():
 
     try:
         # 先读历史（用于构建prompt的上下文），再把这句话写进去
-        history = load_chat_history()
+        history = load_chat_history(character_id=character_id)
 
         user_msg_id = new_msg_id()
         user_created_at = datetime.now().isoformat()
-        add_chat_message_row(user_msg_id, "user", user_message, user_created_at)
+        add_chat_message_row(user_msg_id, "user", user_message, user_created_at, character_id=character_id)
 
         # 同步写一笔events，方便活动记录里也能看到这次互动
+        # （events表暂时仍是全局的，不带character_id——查岗/主动消息目前只服务默认角色，
+        # 只有默认角色会去读这份events；非默认角色的聊天记录只影响它自己的chat_messages/mood）
         add_event_row("chat", f"她在网页里说：{user_message}", user_created_at)
 
         # 用户重新上线说话了：查岗状态清零，下次她离线重新计时
+        # （查岗状态目前是全局单例，只对默认角色有意义；非默认角色调用这个也无害，只是空操作）
         try:
             reset_checkin_state()
         except Exception as e:
             log_error("chat_send:reset_checkin_state", e)
 
         # 真实聊天：情绪值+10，并刷新"上次聊天时间"（影响下次衰减计算的起点）
-        old_score, mood_score = recover_mood(MOOD_RECOVERY_CHAT, mark_chat=True)
-        chat_hours_gap = get_hours_since_last_chat()
+        old_score, mood_score = recover_mood(MOOD_RECOVERY_CHAT, mark_chat=True, character_id=character_id)
+        chat_hours_gap = get_hours_since_last_chat(character_id)
         mood_context = get_mood_context(mood_score, chat_hours_gap)
 
         # 检查当前状态是否命中情书触发条件
-        maybe_trigger_sweet_letter(mood_context)
-        maybe_trigger_longing_letter(mood_context)
+        maybe_trigger_sweet_letter(mood_context, character_id)
+        maybe_trigger_longing_letter(mood_context, character_id)
 
         # 生成Charon的回应，带上历史让语气能接得上
         hour = datetime.now().hour
         time_context = get_time_context(hour)
 
-        messages = build_chat_messages(time_context, user_message, history, mood_context, plain_text=True)
+        messages = build_chat_messages(time_context, user_message, history, mood_context, plain_text=True, character_id=character_id)
         model_used = get_current_model()
 
         def generate():
@@ -1960,10 +2033,10 @@ def chat_send():
             reply_msg = "".join(collected).strip()
             if reply_msg:
                 charon_msg_id = new_msg_id()
-                add_chat_message_row(charon_msg_id, "charon", reply_msg, model=model_used)
+                add_chat_message_row(charon_msg_id, "charon", reply_msg, model=model_used, character_id=character_id)
                 # 顺手检查一下要不要更新滚动摘要（只在对话变长之后才会真正触发，不影响响应速度）
                 try:
-                    maybe_update_chat_summary(history)
+                    maybe_update_chat_summary(history, character_id)
                 except Exception as e:
                     log_error("chat_send:summary", e)
 
@@ -1972,7 +2045,7 @@ def chat_send():
                 # 但要在done事件里带上结果，让前端能第一时间提示"他刚写了张便签/发了条朋友圈"。
                 executed_actions = []
                 try:
-                    executed_actions = execute_intent_actions(user_message, reply_msg, mood_context)
+                    executed_actions = execute_intent_actions(user_message, reply_msg, mood_context, character_id)
                 except Exception as e:
                     log_error("chat_send:intent_actions", e)
 
@@ -2029,6 +2102,7 @@ def chat_retry():
     if not user_msg_id:
         return jsonify({"ok": False, "error": "缺少user_msg_id参数"}), 400
 
+    character_id = get_request_character_id()
     try:
         target = get_chat_message_row(user_msg_id)
         if not target:
@@ -2039,19 +2113,19 @@ def chat_retry():
 
         # 用这条用户消息之前的历史作为上下文（不含它自己，build_chat_messages会把
         # user_message当成"新的最后一条"接上去，重复包含会导致对话上下文错乱）
-        full_history = load_chat_history()
+        full_history = load_chat_history(character_id=character_id)
         target_index = next((i for i, m in enumerate(full_history) if m.get("id") == user_msg_id), None)
         history = full_history[:target_index] if target_index is not None else full_history
 
-        mood = load_mood()
+        mood = load_mood(character_id)
         mood_score = mood.get("score", MOOD_BASELINE)
-        chat_hours_gap = get_hours_since_last_chat()
+        chat_hours_gap = get_hours_since_last_chat(character_id)
         mood_context = get_mood_context(mood_score, chat_hours_gap)
 
         hour = datetime.now().hour
         time_context = get_time_context(hour)
 
-        messages = build_chat_messages(time_context, user_message, history, mood_context, plain_text=True)
+        messages = build_chat_messages(time_context, user_message, history, mood_context, plain_text=True, character_id=character_id)
         model_used = get_current_model()
 
         def generate():
@@ -2071,15 +2145,15 @@ def chat_retry():
             reply_msg = "".join(collected).strip()
             if reply_msg:
                 charon_msg_id = new_msg_id()
-                add_chat_message_row(charon_msg_id, "charon", reply_msg, model=model_used)
+                add_chat_message_row(charon_msg_id, "charon", reply_msg, model=model_used, character_id=character_id)
                 try:
-                    maybe_update_chat_summary(history + [target])
+                    maybe_update_chat_summary(history + [target], character_id)
                 except Exception as e:
                     log_error("chat_retry:summary", e)
 
                 executed_actions = []
                 try:
-                    executed_actions = execute_intent_actions(user_message, reply_msg, mood_context)
+                    executed_actions = execute_intent_actions(user_message, reply_msg, mood_context, character_id)
                 except Exception as e:
                     log_error("chat_retry:intent_actions", e)
 
@@ -2123,6 +2197,7 @@ def chat_regenerate():
     if not msg_id:
         return jsonify({"ok": False, "error": "缺少id参数"}), 400
 
+    character_id = get_request_character_id()
     try:
         target = get_chat_message_row(msg_id)
         if not target:
@@ -2131,7 +2206,7 @@ def chat_regenerate():
             return jsonify({"ok": False, "error": "只能重新生成Charon的回复"}), 400
 
         # 找到这条charon回复对应的、在它之前最近一条user消息，作为重新生成时"接的话"
-        history = load_chat_history()
+        history = load_chat_history(character_id=character_id)
         target_index = next((i for i, m in enumerate(history) if m.get("id") == msg_id), None)
         if target_index is None:
             return jsonify({"ok": False, "error": "消息不在当前历史范围内，无法重新生成"}), 404
@@ -2144,15 +2219,15 @@ def chat_regenerate():
 
         hour = datetime.now().hour
         time_context = get_time_context(hour)
-        chat_hours_gap = get_hours_since_last_chat()
-        mood_score = apply_mood_decay()
+        chat_hours_gap = get_hours_since_last_chat(character_id)
+        mood_score = apply_mood_decay(character_id)
         mood_context = get_mood_context(mood_score, chat_hours_gap)
 
         # 用目标消息之前的历史来构建messages，避免把即将被替换掉的旧回复也带进上下文；
         # 注意preceding的最后一条已经是last_user_msg本身，所以再单独传user_message时
         # build_chat_messages会把它当成"新的最后一条"，需要先把preceding里那条重复的user消息剔掉
         preceding_without_last_user = preceding[:-1] if preceding and preceding[-1].get("id") == last_user_msg.get("id") else preceding
-        messages = build_chat_messages(time_context, user_message, preceding_without_last_user, mood_context)
+        messages = build_chat_messages(time_context, user_message, preceding_without_last_user, mood_context, character_id=character_id)
         raw = call_deepseek(messages)
         _, reply_msg = parse_reason_message(raw)
 
@@ -2180,26 +2255,136 @@ def get_chat_status_label(score):
 
 @app.route("/api/persona", methods=["GET"])
 def get_persona():
-    """读取当前人设/长期记忆文本，给 /persona 页面加载用。"""
+    """读取当前人设/长期记忆文本，给 /persona 页面加载用。
+    支持 ?character_id=xxx 指定读取哪个角色的人设；不传则是默认角色。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-    return jsonify({"ok": True, "text": load_persona_memory()})
+    character_id = get_request_character_id()
+    return jsonify({"ok": True, "text": load_persona_memory(character_id)})
 
 
 @app.route("/api/persona", methods=["POST"])
 def set_persona():
-    """保存人设/长期记忆文本。整体覆盖写入，改完之后所有prompt立刻生效，不用重新部署。"""
+    """保存人设/长期记忆文本。整体覆盖写入，改完之后所有prompt立刻生效，不用重新部署。
+    支持 ?character_id=xxx 指定保存到哪个角色；不传则是默认角色。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
+    character_id = get_request_character_id()
     data = request.json or {}
     text = data.get("text", "").strip()
     if not text:
         return jsonify({"ok": False, "error": "内容不能为空"}), 400
     try:
-        save_persona_memory(text)
+        save_persona_memory(text, character_id)
         return jsonify({"ok": True, "text": text})
     except Exception as e:
         log_error("set_persona", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/style", methods=["GET"])
+def get_style():
+    """读取角色的聊天风格设置（语气、口癖、回复长度偏好等自由文本）。
+    支持 ?character_id=xxx；不传则是默认角色。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    character_id = get_request_character_id()
+    return jsonify({"ok": True, "text": load_style_notes(character_id)})
+
+
+@app.route("/api/style", methods=["POST"])
+def set_style():
+    """保存角色的聊天风格设置。跟人设文本是分开存的两个字段——人设偏"这个角色是谁"，
+    风格偏"这个角色说话方式的细节偏好"（比如"喜欢用感叹号""回复别太长"），
+    分开方便前端做成两个独立的编辑区块，也让prompt组装时职责更清楚。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    character_id = get_request_character_id()
+    data = request.json or {}
+    text = (data.get("text") or "").strip()
+    try:
+        save_style_notes(text, character_id)
+        return jsonify({"ok": True, "text": text})
+    except Exception as e:
+        log_error("set_style", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/characters", methods=["GET"])
+def get_characters():
+    """拉取所有角色列表，给前端渲染"角色切换器"用。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    try:
+        return jsonify({"ok": True, "characters": load_characters()})
+    except Exception as e:
+        log_error("get_characters", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/characters", methods=["POST"])
+def create_character():
+    """新建一个角色。Body: {"name": "...", "persona": "...", "style_notes": "...",
+    "user_nickname": "...", "relationship_hint": "..."}
+    persona/style_notes/user_nickname/relationship_hint都是可选的，不传就用中性默认值，
+    用户可以先建好角色、之后再去人设设置页面细化。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "角色名不能为空"}), 400
+    try:
+        new_char = add_character(
+            name=name,
+            persona=(data.get("persona") or "").strip(),
+            style_notes=(data.get("style_notes") or "").strip(),
+            user_nickname=(data.get("user_nickname") or "你").strip(),
+            relationship_hint=(data.get("relationship_hint") or "朋友").strip(),
+        )
+        return jsonify({"ok": True, "character": new_char})
+    except Exception as e:
+        log_error("create_character", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/characters/<character_id>", methods=["PATCH"])
+def edit_character(character_id):
+    """更新角色的部分字段。Body可以只包含要改的字段，比如只传{"name": "新名字"}。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    data = request.json or {}
+    allowed_fields = {"name", "persona", "style_notes", "user_nickname", "relationship_hint", "avatar"}
+    fields = {k: v for k, v in data.items() if k in allowed_fields}
+    if not fields:
+        return jsonify({"ok": False, "error": "没有可更新的字段"}), 400
+    try:
+        found = update_character(character_id, **fields)
+        if not found:
+            return jsonify({"ok": False, "error": "角色不存在"}), 404
+        return jsonify({"ok": True, "character": get_character(character_id)})
+    except Exception as e:
+        log_error("edit_character", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/characters/<character_id>", methods=["DELETE"])
+def remove_character(character_id):
+    """删除一个角色的元信息记录（不允许删除默认角色）。
+    注意：这只删characters列表里的这条记录，不会级联删除该角色名下的
+    聊天记录/心情/便签/情书——这些数据仍然留在数据库里，只是不再出现在
+    角色切换器里。这是刻意的设计，避免误删角色时连带丢失聊天记录。"""
+    if not _check_chat_auth(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    if character_id == DEFAULT_CHARACTER_ID:
+        return jsonify({"ok": False, "error": "不能删除默认角色"}), 400
+    try:
+        ok = delete_character(character_id)
+        if not ok:
+            return jsonify({"ok": False, "error": "删除失败"}), 400
+        return jsonify({"ok": True})
+    except Exception as e:
+        log_error("remove_character", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
