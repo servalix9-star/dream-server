@@ -964,6 +964,13 @@
           <textarea id="char-edit-style" placeholder="比如：喜欢用感叹号、回复偏简短、习惯用某些口头禅……"
             style="width:100%; min-height:70px; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:8px; padding:10px 12px; font-size:13px; line-height:1.6; color:#4a3742; background:rgba(255,255,255,0.6); resize:vertical; outline:none;"></textarea>
         </div>
+        <div style="display:flex; align-items:flex-start; gap:8px; padding:10px 12px; background:rgba(255,94,132,0.06); border-radius:8px;">
+          <input id="char-edit-companion-features" type="checkbox" style="margin-top:3px; flex-shrink:0;">
+          <label for="char-edit-companion-features" style="font-size:12.5px; color:#8a6b74; line-height:1.6; cursor:pointer;">
+            开启便签 / 情书 / 朋友圈互动这套"关系养成"玩法<br>
+            <span style="color:#c3a1ad; font-size:11.5px;">开启后每次聊天会额外多一次模型判断（是否要写便签/情书），会增加一点调用开销；纯对话角色建议保持关闭</span>
+          </label>
+        </div>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
         <button id="character-editor-delete-btn" onclick="deleteCharacterEditor()"
@@ -2664,6 +2671,7 @@ function openCharacterEditor(characterId) {
     document.getElementById('char-edit-relationship').value = '';
     document.getElementById('char-edit-persona').value = '';
     document.getElementById('char-edit-style').value = '';
+    document.getElementById('char-edit-companion-features').checked = false;  // 新建角色默认不开启，跟后端默认值保持一致
   } else {
     const char = allCharacters.find(c => c.id === characterId) || {};
     document.getElementById('char-edit-name').value = char.name || '';
@@ -2671,6 +2679,7 @@ function openCharacterEditor(characterId) {
     document.getElementById('char-edit-relationship').value = char.relationship_hint || '';
     document.getElementById('char-edit-persona').value = char.persona || '';
     document.getElementById('char-edit-style').value = char.style_notes || '';
+    document.getElementById('char-edit-companion-features').checked = !!char.enable_companion_features;
     // persona/style这两个字段角色记录里可能没存实际内容（只是"沿用默认"的占位），
     // 真实生效的文本要单独去/api/persona、/api/style按character_id查一次，
     // 避免弹窗里显示的是空的、但实际prompt里用的是别的兜底文案，造成"设置了但看起来没变"的困惑
@@ -2709,14 +2718,15 @@ async function saveCharacterEditor() {
   const relationship = document.getElementById('char-edit-relationship').value.trim();
   const persona = document.getElementById('char-edit-persona').value.trim();
   const style = document.getElementById('char-edit-style').value.trim();
+  const enableCompanionFeatures = document.getElementById('char-edit-companion-features').checked;
 
   try {
     let targetCharacterId = editingCharacterId;
     if (!targetCharacterId) {
-      // 新建角色：一次性把name/nickname/relationship都传过去
+      // 新建角色：一次性把name/nickname/relationship/enable_companion_features都传过去
       const res = await fetch(apiUrl('/api/characters'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, user_nickname: nickname, relationship_hint: relationship })
+        body: JSON.stringify({ name, user_nickname: nickname, relationship_hint: relationship, enable_companion_features: enableCompanionFeatures })
       });
       const data = await res.json();
       if (!data.ok) { alert('创建失败：' + (data.error || '未知错误')); return; }
@@ -2725,7 +2735,7 @@ async function saveCharacterEditor() {
       // 编辑已有角色：更新元信息字段
       const res = await fetch(apiUrl(`/api/characters/${encodeURIComponent(targetCharacterId)}`), {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, user_nickname: nickname, relationship_hint: relationship })
+        body: JSON.stringify({ name, user_nickname: nickname, relationship_hint: relationship, enable_companion_features: enableCompanionFeatures })
       });
       const data = await res.json();
       if (!data.ok) { alert('保存失败：' + (data.error || '未知错误')); return; }
