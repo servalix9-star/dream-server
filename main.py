@@ -29,7 +29,7 @@ from core import (
     apply_mood_decay, recover_mood, _hours_since, _get_mood_lock,
     DEFAULT_CHARACTER_ID, load_characters, save_characters, add_character,
     get_character, update_character, delete_character, load_style_notes, save_style_notes,
-    get_character_identity,
+    get_character_identity, character_has_companion_features,
     MOOD_BASELINE, MOOD_SWEET_MIN, MOOD_RECOVERY_CHAT, MOOD_RECOVERY_PERIOD_EVENT,
     SWEET_LETTER_CHANCE, LONGING_LETTER_CHANCE, LONGING_LETTER_HOURS,
     _extract_json_field, load_persona_memory, save_persona_memory,
@@ -583,7 +583,11 @@ def maybe_trigger_sweet_letter(mood_context, character_id=DEFAULT_CHARACTER_ID):
     每天只发一封（sweet_letter_sent_date去重），避免运气好连续判定中奖导致信箱被灌。
     这里的load_mood+save_mood是自定义的读改写序列，用该角色专属的锁保护，
     避免跟apply_mood_decay/recover_mood交错执行导致mood字段互相覆盖丢失；
-    不同角色各自的判定互不阻塞。"""
+    不同角色各自的判定互不阻塞。
+    角色没开启关系养成功能时直接跳过——情书本身就是这套玩法的一部分，
+    纯对话角色不需要，跳过也顺便省了一次锁开销和可能的模型调用。"""
+    if not character_has_companion_features(character_id):
+        return
     try:
         with _get_mood_lock(character_id):
             mood = load_mood(character_id)
@@ -609,7 +613,10 @@ def maybe_trigger_longing_letter(mood_context, character_id=DEFAULT_CHARACTER_ID
     """检查当前是否已连续处于委屈区间超过4小时，命中则按概率生成一封思念情书。
     这个判定不依赖分数变化方向，衰减和回升场景都可以调用；
     用 longing_letter_sent_for 对本次"持续委屈"去重，避免同一段区间被反复判定。
-    同样用该角色专属的锁保护读改写序列；耗时的模型调用放在锁外执行。"""
+    同样用该角色专属的锁保护读改写序列；耗时的模型调用放在锁外执行。
+    角色没开启关系养成功能时直接跳过。"""
+    if not character_has_companion_features(character_id):
+        return
     try:
         with _get_mood_lock(character_id):
             mood = load_mood(character_id)
@@ -1055,7 +1062,19 @@ def execute_intent_actions(user_message, charon_reply, mood_context, character_i
     返回实际执行了哪些动作（供调用方需要时展示"他刚才写了张便签"这类提示，不需要就忽略返回值）。
     注：post_moment/react_moment（朋友圈）目前仍是全局共享的，不区分角色——
     多角色场景下朋友圈是不是也要拆到每个角色名下是一个独立的产品决策，这里先不动，
-    只处理便签和情书这两个已经确定要按角色隔离的部分。"""
+    只处理便签和情书这两个已经确定要按角色隔离的部分。
+
+    重要：这个函数本身就是"每次聊天回复之外，额外再打一次模型请求"的来源——
+    很多人第一次看到API调用次数是消息数的2倍会困惑，就是因为这次调用完全在
+    后台默默进行，界面上只有真的判定要写便签/情书时才会看到结果，大多数时候
+    判断"不需要做什么"就悄悄结束了。对于没开启关系养成玩法的角色（新建角色
+    默认就是没开启的纯对话角色），这次调用毫无意义——不会有便签/情书/朋友圈
+    互动可写，纯粹是在浪费一次模型调用的钱。所以角色没开启这个功能时直接在
+    请求模型之前就跳过整段逻辑，而不是等模型判断完了再决定"要不要真的写"，
+    这样才能真正省掉这次调用，而不只是省掉写入的那几行代码。"""
+    if not character_has_companion_features(character_id):
+        return []
+
     executed = []
     try:
         recent_moment_rows = moments.load_moments(limit=8)
@@ -2325,9 +2344,12 @@ def get_characters():
 @app.route("/api/characters", methods=["POST"])
 def create_character():
     """新建一个角色。Body: {"name": "...", "persona": "...", "style_notes": "...",
-    "user_nickname": "...", "relationship_hint": "..."}
+    "user_nickname": "...", "relationship_hint": "...", "enable_companion_features": false}
     persona/style_notes/user_nickname/relationship_hint都是可选的，不传就用中性默认值，
-    用户可以先建好角色、之后再去人设设置页面细化。"""
+    用户可以先建好角色、之后再去人设设置页面细化。
+    enable_companion_features默认False（不传就是False）：新建角色默认是纯对话角色，
+    不会触发便签/情书/朋友圈互动，也不会额外产生"意图识别"这次模型调用；
+    想要的话在创建时传true，或者创建后去角色设置里再打开。"""
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     data = request.json or {}
@@ -2341,6 +2363,7 @@ def create_character():
             style_notes=(data.get("style_notes") or "").strip(),
             user_nickname=(data.get("user_nickname") or "你").strip(),
             relationship_hint=(data.get("relationship_hint") or "朋友").strip(),
+            enable_companion_features=bool(data.get("enable_companion_features", False)),
         )
         return jsonify({"ok": True, "character": new_char})
     except Exception as e:
@@ -2354,7 +2377,8 @@ def edit_character(character_id):
     if not _check_chat_auth(request):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     data = request.json or {}
-    allowed_fields = {"name", "persona", "style_notes", "user_nickname", "relationship_hint", "avatar"}
+    allowed_fields = {"name", "persona", "style_notes", "user_nickname", "relationship_hint",
+                       "enable_companion_features", "avatar"}
     fields = {k: v for k, v in data.items() if k in allowed_fields}
     if not fields:
         return jsonify({"ok": False, "error": "没有可更新的字段"}), 400
