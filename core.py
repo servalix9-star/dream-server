@@ -570,6 +570,31 @@ LONGING_LETTER_CHANCE = 0.4  # 委屈态持续超过下面这个时长时
 LONGING_LETTER_HOURS = 4
 
 
+# ---- 多角色支持：基础常量与工具函数 ----
+# 这一段必须定义在load_mood/load_persona_memory等函数之前——Python的函数默认参数值
+# 是在"定义函数"这一刻就求值的，不是在"调用函数"时才求值。之前这段常量被放在文件
+# 靠后的位置（角色管理函数附近），而load_mood/apply_mood_decay等函数定义在文件靠前
+# 的位置就已经把DEFAULT_CHARACTER_ID写进了默认参数（比如 character_id=DEFAULT_CHARACTER_ID），
+# 导致Python执行到那几行def语句时，DEFAULT_CHARACTER_ID这个名字根本还不存在，
+# 直接在模块加载阶段抛NameError，整个服务连启动都启动不起来。
+#
+# app_config表是"key -> jsonb"的通用键值表，给mood/persona这类"每个角色各有一份"的配置
+# 做隔离时，不需要改表结构，只需要把character_id拼进key名里即可：
+#   角色A的心情存在 "mood:charA"，角色B的心情存在 "mood:charB"
+# DEFAULT_CHARACTER_ID对应升级前就存在的旧数据——旧key本身不带后缀（就是"mood"、
+# "persona_memory"），所以默认角色必须映射到"不加后缀"的原始key名，这样老用户升级后
+# 现有的心情值、人设记忆、聊天记录都不需要做数据搬迁，自动被视为"默认角色"的数据。
+DEFAULT_CHARACTER_ID = "_default"
+
+
+def _scoped_key(base_key, character_id):
+    """把角色维度拼进app_config的key名里。character_id为默认角色时不加后缀，
+    保证老数据（升级前只有一个角色时）自动被视为默认角色的数据，不用迁移。"""
+    if not character_id or character_id == DEFAULT_CHARACTER_ID:
+        return base_key
+    return f"{base_key}:{character_id}"
+
+
 # ---- mood并发保护 ----
 # app_config表的mood键是"整体覆盖式"读改写：读出整个JSON、改一部分字段、再整体写回去。
 # 但mood会被后台keepalive线程（每5分钟自检一次）和用户发消息的HTTP请求并发触碰，
@@ -763,26 +788,9 @@ DEFAULT_LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。
 你们的关系里有兄妹/父女式的游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
 
 
-# ---- 多角色支持 ----
-# app_config表是"key -> jsonb"的通用键值表，给mood/persona这类"每个角色各有一份"的配置
-# 做隔离时，不需要改表结构，只需要把character_id拼进key名里即可：
-#   角色A的心情存在 "mood:charA"，角色B的心情存在 "mood:charB"
-# DEFAULT_CHARACTER_ID对应升级前就存在的旧数据——旧key本身不带后缀（就是"mood"、
-# "persona_memory"），所以默认角色必须映射到"不加后缀"的原始key名，这样老用户升级后
-# 现有的心情值、人设记忆、聊天记录都不需要做数据搬迁，自动被视为"默认角色"的数据。
-DEFAULT_CHARACTER_ID = "_default"
-
-
-def _scoped_key(base_key, character_id):
-    """把角色维度拼进app_config的key名里。character_id为默认角色时不加后缀，
-    保证老数据（升级前只有一个角色时）自动被视为默认角色的数据，不用迁移。"""
-    if not character_id or character_id == DEFAULT_CHARACTER_ID:
-        return base_key
-    return f"{base_key}:{character_id}"
-
-
+# ---- 多角色支持（角色管理函数） ----
 def load_characters():
-    """读取所有已创建的角色列表：
+    """读取所有已创建的角色列表:
     [{id, name, persona, style_notes, user_nickname, relationship_hint, avatar, created_at}, ...]。
     存在app_config的"characters"key里（一份小型index，不是每个角色单独一行，
     因为角色数量少、改动不频繁，整体覆盖读写足够了）。
