@@ -574,16 +574,28 @@ LONGING_LETTER_HOURS = 4
 # app_config表的mood键是"整体覆盖式"读改写：读出整个JSON、改一部分字段、再整体写回去。
 # 但mood会被后台keepalive线程（每5分钟自检一次）和用户发消息的HTTP请求并发触碰，
 # Flask又开着threaded=True，两边真的会同时执行"读旧值->基于旧值算新值->写回"这个序列。
-# 如果不加锁，后写入的一方会把先写入的一方的更新整个覆盖掉（比如用户刚发消息回血到60分，
-# 同一时刻后台线程算的衰减是基于更早读到的50分算出44分，44分写进去后60分那次更新就丢了，
-# 且没有任何报错，只是安静地"消失"）。这里用一把进程内锁，把mood的读-改-写序列变成
-# 不可被其他线程打断的原子操作：谁拿到锁谁就能安全地读最新值、算新值、写回去，
-# 不会有另一个线程在中途插进来读到同一份旧值。
-_mood_lock = threading.Lock()
+# 如果不加锁，后写入的一方会把先写入的一方的更新整个覆盖掉。
+#
+# 多角色场景下，每个角色的mood是完全独立的数据（存在不同的key下），互相之间
+# 不存在竞争关系——角色A和角色B的mood更新可以真正并发执行，不需要互相等待。
+# 所以这里不用一把全局锁，改成"每个character_id一把锁"：_mood_locks是一个
+# character_id -> Lock 的字典，_get_mood_lock负责按需创建、复用每个角色的锁。
+# _mood_locks_guard只是保护"创建新锁"这个动作本身的原子性，不是业务锁。
+_mood_locks = {}
+_mood_locks_guard = threading.Lock()
 
 
-def load_mood():
-    return get_app_config("mood", {
+def _get_mood_lock(character_id):
+    """按character_id取（或首次创建）对应的锁。"""
+    if character_id not in _mood_locks:
+        with _mood_locks_guard:
+            if character_id not in _mood_locks:  # 双重检查，避免创建锁这个动作本身的竞态
+                _mood_locks[character_id] = threading.Lock()
+    return _mood_locks[character_id]
+
+
+def load_mood(character_id=DEFAULT_CHARACTER_ID):
+    return get_app_config(_scoped_key("mood", character_id), {
         "score": MOOD_BASELINE,
         "last_updated": None,
         "last_chat_at": None,       # 上次用户在网页发真实消息的时间，衰减计算用这个
@@ -592,8 +604,8 @@ def load_mood():
     })
 
 
-def save_mood(data):
-    set_app_config("mood", data)
+def save_mood(data, character_id=DEFAULT_CHARACTER_ID):
+    set_app_config(_scoped_key("mood", character_id), data)
 
 
 def get_mood_stage(score):
@@ -619,9 +631,9 @@ def _hours_since(iso_str):
         return None
 
 
-def get_hours_since_last_chat():
+def get_hours_since_last_chat(character_id=DEFAULT_CHARACTER_ID):
     """距离上次用户在网页里真正发消息过去了多少小时。没聊过则返回None。"""
-    mood = load_mood()
+    mood = load_mood(character_id)
     return _hours_since(mood.get("last_chat_at"))
 
 
@@ -655,14 +667,14 @@ def _update_vulnerable_tracking(mood, new_score):
         mood["vulnerable_since"] = None
 
 
-def apply_mood_decay():
+def apply_mood_decay(character_id=DEFAULT_CHARACTER_ID):
     """按距离上次用户聊天的时间，让情绪值自然衰减。在每次读取情绪值前调用一次。
     写回Supabase失败不阻断读请求——衰减这次没持久化，下次调用时重新算一遍就好。
-    整个"读旧值->算新值->写回"用_mood_lock保护，避免跟其他并发调用（比如recover_mood）
-    交错执行导致更新互相覆盖丢失。"""
-    with _mood_lock:
-        mood = load_mood()
-        hours_gap = get_hours_since_last_chat()
+    整个"读旧值->算新值->写回"用该角色专属的锁保护，避免跟其他并发调用
+    （比如recover_mood）交错执行导致更新互相覆盖丢失；不同角色互不阻塞。"""
+    with _get_mood_lock(character_id):
+        mood = load_mood(character_id)
+        hours_gap = get_hours_since_last_chat(character_id)
         decay = _decay_amount(hours_gap)
         # 自然衰减（纯粹因为时间流逝、没有聊天）不会低于 MOOD_DECAY_FLOOR，
         # 真正跌破这个地板只应该发生在有明确负面事件的场景下（如果以后加这类逻辑，
@@ -672,19 +684,19 @@ def apply_mood_decay():
         mood["last_updated"] = datetime.now().isoformat()
         _update_vulnerable_tracking(mood, new_score)
         try:
-            save_mood(mood)
+            save_mood(mood, character_id)
         except Exception as e:
             log_error("apply_mood_decay:save", e)
         return new_score
 
 
-def recover_mood(amount, mark_chat=False):
+def recover_mood(amount, mark_chat=False, character_id=DEFAULT_CHARACTER_ID):
     """有互动发生时调用，情绪值回升。
     mark_chat=True 表示这是一次真正的用户聊天，会刷新last_chat_at（影响下次衰减计算的起点）；
     经期事件等自动化event不传这个参数，只涨分不重置"上次聊天时间"。
-    跟apply_mood_decay共用同一把_mood_lock，两者不会交错执行。"""
-    with _mood_lock:
-        mood = load_mood()
+    跟apply_mood_decay共用该角色专属的锁，两者不会交错执行；不同角色互不阻塞。"""
+    with _get_mood_lock(character_id):
+        mood = load_mood(character_id)
         old_score = mood.get("score", MOOD_BASELINE)
         new_score = min(MOOD_MAX, old_score + amount)
         mood["score"] = new_score
@@ -692,7 +704,7 @@ def recover_mood(amount, mark_chat=False):
         if mark_chat:
             mood["last_chat_at"] = datetime.now().isoformat()
         _update_vulnerable_tracking(mood, new_score)
-        save_mood(mood)
+        save_mood(mood, character_id)
         return old_score, new_score
 
 
@@ -751,16 +763,171 @@ DEFAULT_LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。
 你们的关系里有兄妹/父女式的游戏张力，但底色是对等——不是谁仰望谁，是并肩看见。"""
 
 
-def load_persona_memory():
-    """读取当前人设/长期记忆文本。存在app_config表的persona_memory key里，
-    没配置过（第一次运行、数据库里还没这条）就用DEFAULT_LONG_TERM_MEMORY兜底。"""
-    data = get_app_config("persona_memory", {"text": DEFAULT_LONG_TERM_MEMORY})
-    return data.get("text", DEFAULT_LONG_TERM_MEMORY)
+# ---- 多角色支持 ----
+# app_config表是"key -> jsonb"的通用键值表，给mood/persona这类"每个角色各有一份"的配置
+# 做隔离时，不需要改表结构，只需要把character_id拼进key名里即可：
+#   角色A的心情存在 "mood:charA"，角色B的心情存在 "mood:charB"
+# DEFAULT_CHARACTER_ID对应升级前就存在的旧数据——旧key本身不带后缀（就是"mood"、
+# "persona_memory"），所以默认角色必须映射到"不加后缀"的原始key名，这样老用户升级后
+# 现有的心情值、人设记忆、聊天记录都不需要做数据搬迁，自动被视为"默认角色"的数据。
+DEFAULT_CHARACTER_ID = "_default"
 
 
-def save_persona_memory(text):
-    """保存人设/长期记忆文本，整体覆盖写入。"""
-    set_app_config("persona_memory", {"text": text})
+def _scoped_key(base_key, character_id):
+    """把角色维度拼进app_config的key名里。character_id为默认角色时不加后缀，
+    保证老数据（升级前只有一个角色时）自动被视为默认角色的数据，不用迁移。"""
+    if not character_id or character_id == DEFAULT_CHARACTER_ID:
+        return base_key
+    return f"{base_key}:{character_id}"
+
+
+def load_characters():
+    """读取所有已创建的角色列表：
+    [{id, name, persona, style_notes, user_nickname, relationship_hint, avatar, created_at}, ...]。
+    存在app_config的"characters"key里（一份小型index，不是每个角色单独一行，
+    因为角色数量少、改动不频繁，整体覆盖读写足够了）。
+    没配置过时，返回只含默认角色的列表——这条默认记录只是"展示用的元信息"，
+    默认角色的实际persona文本仍然来自DEFAULT_LONG_TERM_MEMORY（见load_persona_memory），
+    user_nickname/relationship_hint也各自有默认值（沿用原来硬编码的"昭昭（小野）"和
+    "恋人"设定），保证默认角色升级前后的语气完全不变。
+    这里的字段只在用户第一次去"人设设置"页面编辑默认角色时才会被真正使用。"""
+    data = get_app_config("characters", None)
+    if data and isinstance(data, dict) and data.get("list"):
+        return data["list"]
+    return [{
+        "id": DEFAULT_CHARACTER_ID,
+        "name": "Charon",
+        "persona": None,   # None表示"沿用DEFAULT_LONG_TERM_MEMORY"，还没被用户自定义过
+        "style_notes": None,
+        "user_nickname": "昭昭（小野）",  # 沿用原硬编码值，保证默认角色行为不变
+        "relationship_hint": "恋人",       # 沿用原硬编码值
+        "avatar": None,
+        "created_at": None,
+    }]
+
+
+def save_characters(character_list):
+    """整体覆盖保存角色列表。"""
+    set_app_config("characters", {"list": character_list})
+
+
+def add_character(name, persona="", style_notes="", user_nickname="你", relationship_hint="朋友"):
+    """新建一个角色，character_id用uuid生成，避免跟已有角色或DEFAULT_CHARACTER_ID撞名。
+    user_nickname/relationship_hint给了通用的中性默认值（"你"/"朋友"），
+    避免新角色不小心继承默认角色"昭昭"/"恋人"这类特定设定——新角色的关系
+    应该由用户在创建时或创建后自己明确设定，而不是隐性沿用默认角色的关系。
+    返回新角色的完整记录。"""
+    import uuid
+    new_id = uuid.uuid4().hex[:12]
+    characters = load_characters()
+    new_char = {
+        "id": new_id,
+        "name": name,
+        "persona": persona,
+        "style_notes": style_notes,
+        "user_nickname": user_nickname,
+        "relationship_hint": relationship_hint,
+        "avatar": None,
+        "created_at": datetime.now().isoformat(),
+    }
+    characters.append(new_char)
+    save_characters(characters)
+    return new_char
+
+
+def get_character(character_id):
+    """按id查角色记录，找不到返回None。"""
+    for c in load_characters():
+        if c.get("id") == character_id:
+            return c
+    return None
+
+
+def get_character_identity(character_id=DEFAULT_CHARACTER_ID):
+    """取一个角色的"称呼三件套"：(角色名, 对用户的称呼, 关系描述)，
+    供各个prompt模板拼装开场白用（比如"你是{name}，{nickname}的{relationship}"），
+    替代原来分散在各处的硬编码"Charon"/"昭昭（小野）"/"恋人"。
+    character字段缺失时分别兜底到中性默认值，避免某个角色记录字段不全时prompt里出现"None"。"""
+    char = get_character(character_id) or {}
+    name = char.get("name") or "Ta"
+    nickname = char.get("user_nickname") or "你"
+    relationship = char.get("relationship_hint") or "朋友"
+    return name, nickname, relationship
+
+
+def update_character(character_id, **fields):
+    """更新角色的部分字段（name/persona/style_notes/user_nickname/relationship_hint/avatar）。
+    character_id不存在则忽略。"""
+    characters = load_characters()
+    found = False
+    for c in characters:
+        if c.get("id") == character_id:
+            c.update(fields)
+            found = True
+            break
+    if found:
+        save_characters(characters)
+    return found
+
+
+def delete_character(character_id):
+    """删除一个角色的元信息记录。注意：这个函数只删characters列表里的这一条，
+    不会级联删除该角色名下的mood/persona_memory/chat_messages等数据——
+    保留这些数据是刻意的，避免误删角色时连带丢失聊天记录；真要彻底清空
+    需要调用方自行按character_id分别清理各表。不允许删除默认角色。"""
+    if character_id == DEFAULT_CHARACTER_ID:
+        return False
+    characters = [c for c in load_characters() if c.get("id") != character_id]
+    save_characters(characters)
+    return True
+
+
+def load_persona_memory(character_id=DEFAULT_CHARACTER_ID):
+    """读取当前人设/长期记忆文本，按character_id隔离。存在app_config表的
+    persona_memory[:character_id] key里，没配置过（第一次运行、数据库里还没这条）
+    就用DEFAULT_LONG_TERM_MEMORY兜底（仅默认角色；自定义角色没配置过persona时
+    用角色记录自己的persona字段兜底，如果那也是空的，用一句通用提示兜底）。"""
+    key = _scoped_key("persona_memory", character_id)
+    if character_id == DEFAULT_CHARACTER_ID:
+        data = get_app_config(key, {"text": DEFAULT_LONG_TERM_MEMORY})
+        return data.get("text", DEFAULT_LONG_TERM_MEMORY)
+    char = get_character(character_id)
+    fallback = (char.get("persona") if char else None) or "（这个角色还没有设定人设，请先在设置里填写）"
+    data = get_app_config(key, {"text": fallback})
+    return data.get("text", fallback)
+
+
+def save_persona_memory(text, character_id=DEFAULT_CHARACTER_ID):
+    """保存人设/长期记忆文本，整体覆盖写入，按character_id隔离存储。"""
+    set_app_config(_scoped_key("persona_memory", character_id), {"text": text})
+
+
+def load_style_notes(character_id=DEFAULT_CHARACTER_ID):
+    """读取角色的聊天风格设置（语气、口癖、回复长度偏好等自由文本）。
+    优先读角色记录里的style_notes字段——这个字段跟着角色本身走，不需要单独
+    再开一个app_config key，减少一次网络请求。"""
+    char = get_character(character_id)
+    return (char.get("style_notes") if char else None) or ""
+
+
+def save_style_notes(text, character_id=DEFAULT_CHARACTER_ID):
+    """保存角色的聊天风格设置。默认角色也当成一条普通角色记录来存
+    （load_characters对默认角色的兜底记录已经包含style_notes字段）。"""
+    if not get_character(character_id):
+        # 默认角色可能还没在characters列表里出现过，第一次写入时补一条，
+        # 字段跟load_characters()里默认角色的兜底记录保持完全一致
+        characters = load_characters()
+        if not any(c.get("id") == character_id for c in characters):
+            characters.append({
+                "id": character_id, "name": "Charon", "persona": None,
+                "style_notes": text,
+                "user_nickname": "昭昭（小野）", "relationship_hint": "恋人",
+                "avatar": None,
+                "created_at": datetime.now().isoformat(),
+            })
+            save_characters(characters)
+            return
+    update_character(character_id, style_notes=text)
 
 
 
