@@ -162,6 +162,23 @@
   .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #84cc9a; display: inline-block; box-shadow: 0 0 6px #84cc9a; }
   .status-dot.low { background: #c3a1ad; box-shadow: 0 0 6px #c3a1ad; }
   
+  /* ---- 角色切换器：header里一排小圆点，点击切换聊天对象 ---- */
+  #character-switcher {
+    position: relative; z-index: 1; display: flex; align-items: center; gap: 6px;
+    margin-left: 10px; flex-shrink: 0;
+  }
+  .character-switch-item {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: bold; color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.12); border: 1.5px solid rgba(255,255,255,0.25);
+    cursor: pointer; transition: all 0.2s ease; user-select: none;
+  }
+  .character-switch-item:hover { background: rgba(255,255,255,0.22); transform: translateY(-1px); }
+  .character-switch-item.active { background: rgba(255,255,255,0.9); color: #e599a9; border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.5); }
+  .character-switch-item.add-character-btn { border-style: dashed; font-size: 15px; opacity: 0.75; }
+  .character-switch-item.add-character-btn:hover { opacity: 1; }
+
   .header-signature-wrap { position: relative; z-index: 1; margin-left: auto; display: inline-flex; align-items: center; }
   .sig-star { position: absolute; pointer-events: none; user-select: none; color: #ffffff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.9); }
   .sig-star.s-1 { top: -4px; left: -10px; font-size: 8px; animation: star-pulse 2.5s infinite ease-in-out; }
@@ -699,7 +716,7 @@
     <a class="nav-icon" href="javascript:void(0)" onclick="openArchiveBox()" title="恋爱档案箱">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3.1-9-7.56c0-1.25.5-2.4 1.1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></svg>
     </a>
-    <a class="nav-icon" href="javascript:void(0)" onclick="openPersonaEditor()" title="人设编辑">
+    <a class="nav-icon" href="javascript:void(0)" onclick="openCharacterEditor(currentCharacterId)" title="人设编辑">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
     </a>
   </div>
@@ -720,6 +737,7 @@
           <span class="model-select-wrap"><span class="status-dot" id="model-status-dot"></span><select id="model-select" title="选择模型"></select></span>
         </div>
       </div>
+      <div id="character-switcher" title="切换聊天对象"></div>
       <div class="header-signature-wrap">
         <span class="sig-star s-1">✦</span>
         <span class="sig-star s-2">✦</span>
@@ -912,10 +930,60 @@
   </div>
 </div>
 
+<!-- 角色编辑弹窗：新建角色 / 编辑已有角色的人设、风格、称呼 -->
+<div id="character-editor-modal" style="display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center; background:rgba(74, 55, 66, 0.35); backdrop-filter:blur(4px);">
+  <div class="letter-container" style="max-width: 480px; max-height: 85vh; display:flex; flex-direction:column;">
+    <div class="letter-header">
+      <div class="letter-title" id="character-editor-title">编辑角色</div>
+      <button class="close-modal" onclick="closeCharacterEditor()">×</button>
+    </div>
+    <div class="letter-content-area" style="background-position: 0 0; overflow-y:auto; flex:1;">
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div>
+          <label style="font-size:12px; color:#b08d98; display:block; margin-bottom:5px;">角色名字</label>
+          <input id="char-edit-name" type="text" placeholder="比如：Charon"
+            style="width:100%; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:8px; padding:9px 12px; font-size:14px; color:#4a3742; background:rgba(255,255,255,0.6); outline:none;">
+        </div>
+        <div>
+          <label style="font-size:12px; color:#b08d98; display:block; margin-bottom:5px;">TA怎么称呼你</label>
+          <input id="char-edit-nickname" type="text" placeholder="比如：昭昭、小野、你"
+            style="width:100%; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:8px; padding:9px 12px; font-size:14px; color:#4a3742; background:rgba(255,255,255,0.6); outline:none;">
+        </div>
+        <div>
+          <label style="font-size:12px; color:#b08d98; display:block; margin-bottom:5px;">你们的关系</label>
+          <input id="char-edit-relationship" type="text" placeholder="比如：恋人、朋友、哥哥"
+            style="width:100%; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:8px; padding:9px 12px; font-size:14px; color:#4a3742; background:rgba(255,255,255,0.6); outline:none;">
+        </div>
+        <div>
+          <label style="font-size:12px; color:#b08d98; display:block; margin-bottom:5px;">人设 / 长期记忆</label>
+          <textarea id="char-edit-persona" placeholder="描述TA的性格、背景、说话方式……这段文字会带进TA每一次回复的生成里"
+            style="width:100%; min-height:120px; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:8px; padding:10px 12px; font-size:13px; line-height:1.6; color:#4a3742; background:rgba(255,255,255,0.6); resize:vertical; outline:none;"></textarea>
+        </div>
+        <div>
+          <label style="font-size:12px; color:#b08d98; display:block; margin-bottom:5px;">聊天风格（可选）</label>
+          <textarea id="char-edit-style" placeholder="比如：喜欢用感叹号、回复偏简短、习惯用某些口头禅……"
+            style="width:100%; min-height:70px; box-sizing:border-box; border:1px solid rgba(184,118,138,0.2); border-radius:8px; padding:10px 12px; font-size:13px; line-height:1.6; color:#4a3742; background:rgba(255,255,255,0.6); resize:vertical; outline:none;"></textarea>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+        <button id="character-editor-delete-btn" onclick="deleteCharacterEditor()"
+          style="background:none; color:#c3a1ad; border:1px solid rgba(184,118,138,0.25); border-radius:8px; padding:8px 16px; font-size:13px; cursor:pointer;">删除角色</button>
+        <button onclick="saveCharacterEditor()"
+          style="background:#ff5e84; color:#fff; border:none; border-radius:8px; padding:9px 24px; font-size:13px; font-weight:bold; cursor:pointer; letter-spacing:1px; margin-left:auto;">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const CODE = {{ code_param | tojson }};
 const AVATAR_CHARON = {{ avatar_charon | tojson }};
 const AVATAR_USER = {{ avatar_user | tojson }};
+const DEFAULT_CHARACTER_ID = '_default';
+// 当前选中聊天对象的角色id。刷新页面后从localStorage恢复上次选的角色，
+// 不存在/取不到时退回默认角色——保证老用户升级后第一次打开还是原来的Charon。
+let currentCharacterId = localStorage.getItem('charon_current_character_id') || DEFAULT_CHARACTER_ID;
+let allCharacters = [];  // 角色列表缓存，由loadCharacters()填充，供切换器/设置弹窗使用
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
@@ -951,8 +1019,16 @@ function addDoubleTapListener(element, callback) {
 }
 
 function apiUrl(path) {
-  const sep = path.includes('?') ? '&' : '?';
-  return CODE ? `${path}${sep}code=${encodeURIComponent(CODE)}` : path;
+  let url = path;
+  // 只有非默认角色才附加character_id，默认角色沿用"不传参数"的老路径，
+  // 保证这个函数对老部署（还没升级后端）完全无害——老后端根本不认识这个参数，
+  // 忽略掉就是了；对新后端，不传就是默认角色，语义上也完全一致。
+  if (currentCharacterId && currentCharacterId !== DEFAULT_CHARACTER_ID) {
+    const sep1 = url.includes('?') ? '&' : '?';
+    url = `${url}${sep1}character_id=${encodeURIComponent(currentCharacterId)}`;
+  }
+  const sep2 = url.includes('?') ? '&' : '?';
+  return CODE ? `${url}${sep2}code=${encodeURIComponent(CODE)}` : url;
 }
 
 function formatTime(isoStr) {
@@ -2496,6 +2572,216 @@ function switchMainView(view) {
   switchTab(view);
 }
 
+// ============================================================
+// 多角色支持
+// ============================================================
+// 设计原则：apiUrl()已经统一在所有请求上附加character_id，所以切换角色本质上
+// 就是"改变currentCharacterId变量的值，然后把当前可见的视图重新加载一遍"——
+// 不需要每个业务函数都关心角色是谁，它们本来就是照常调用apiUrl。
+
+async function loadCharacters() {
+  try {
+    const res = await fetch(apiUrl('/api/characters'));
+    const data = await res.json();
+    if (data.ok) {
+      allCharacters = data.characters || [];
+      renderCharacterSwitcher();
+      updateHeaderForCurrentCharacter();
+    }
+  } catch (e) {
+    console.warn('加载角色列表失败', e);
+  }
+}
+
+function getCurrentCharacter() {
+  return allCharacters.find(c => c.id === currentCharacterId) || allCharacters[0] || null;
+}
+
+function updateHeaderForCurrentCharacter() {
+  // 切换角色后，header上的名字/头像也要跟着换，不然明明在跟角色B聊天，
+  // header还显示着角色A的名字，会让人confuse自己是不是切错了
+  const char = getCurrentCharacter();
+  if (!char) return;
+  const brandEl = document.querySelector('#header .brand');
+  if (brandEl) brandEl.textContent = char.name || 'Charon';
+  const avatarEl = document.getElementById('header-avatar');
+  if (avatarEl && char.avatar) avatarEl.src = char.avatar;
+}
+
+async function switchCharacter(characterId) {
+  if (characterId === currentCharacterId) return;
+  currentCharacterId = characterId;
+  localStorage.setItem('charon_current_character_id', characterId);
+
+  updateHeaderForCurrentCharacter();
+  renderCharacterSwitcher();  // 更新切换器上的高亮状态
+
+  // 切角色相当于"进入一个新的聊天窗口"，把当前依赖角色的视图状态全部清空重新加载：
+  // 聊天记录、分页游标、状态面板（心情/便签）。朋友圈目前是全局共享的不用刷。
+  oldestLoadedAt = null;
+  hasMoreHistory = true;
+  await loadHistory();
+  await loadStatus();
+}
+
+function renderCharacterSwitcher() {
+  const wrap = document.getElementById('character-switcher');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  allCharacters.forEach(char => {
+    const item = document.createElement('div');
+    item.className = 'character-switch-item' + (char.id === currentCharacterId ? ' active' : '');
+    item.title = char.name;
+    item.textContent = (char.name || '?').slice(0, 1);
+    item.onclick = () => switchCharacter(char.id);
+    wrap.appendChild(item);
+  });
+  // "+"按钮永远排在最后，用来新建角色
+  const addBtn = document.createElement('div');
+  addBtn.className = 'character-switch-item add-character-btn';
+  addBtn.title = '新建角色';
+  addBtn.textContent = '+';
+  addBtn.onclick = () => openCharacterEditor(null);
+  wrap.appendChild(addBtn);
+}
+
+// ---- 角色设置弹窗：新建/编辑角色的人设、风格、称呼 ----
+// editingCharacterId为null表示"新建"，否则是"编辑已有角色"
+let editingCharacterId = null;
+
+function openCharacterEditor(characterId) {
+  editingCharacterId = characterId;
+  const modal = document.getElementById('character-editor-modal');
+  if (!modal) return;
+
+  const isNew = !characterId;
+  document.getElementById('character-editor-title').textContent = isNew ? '新建角色' : '编辑角色';
+  document.getElementById('character-editor-delete-btn').style.display = (isNew || characterId === DEFAULT_CHARACTER_ID) ? 'none' : 'inline-block';
+
+  if (isNew) {
+    document.getElementById('char-edit-name').value = '';
+    document.getElementById('char-edit-nickname').value = '';
+    document.getElementById('char-edit-relationship').value = '';
+    document.getElementById('char-edit-persona').value = '';
+    document.getElementById('char-edit-style').value = '';
+  } else {
+    const char = allCharacters.find(c => c.id === characterId) || {};
+    document.getElementById('char-edit-name').value = char.name || '';
+    document.getElementById('char-edit-nickname').value = char.user_nickname || '';
+    document.getElementById('char-edit-relationship').value = char.relationship_hint || '';
+    document.getElementById('char-edit-persona').value = char.persona || '';
+    document.getElementById('char-edit-style').value = char.style_notes || '';
+    // persona/style这两个字段角色记录里可能没存实际内容（只是"沿用默认"的占位），
+    // 真实生效的文本要单独去/api/persona、/api/style按character_id查一次，
+    // 避免弹窗里显示的是空的、但实际prompt里用的是别的兜底文案，造成"设置了但看起来没变"的困惑
+    loadPersonaAndStyleIntoEditor(characterId);
+  }
+
+  modal.style.display = 'flex';
+}
+
+async function loadPersonaAndStyleIntoEditor(characterId) {
+  const savedCharacterId = currentCharacterId;
+  currentCharacterId = characterId;  // 临时切换，让apiUrl()查询目标角色而不是当前正在聊的角色
+  try {
+    const [personaRes, styleRes] = await Promise.all([
+      fetch(apiUrl('/api/persona')).then(r => r.json()),
+      fetch(apiUrl('/api/style')).then(r => r.json()),
+    ]);
+    if (personaRes.ok) document.getElementById('char-edit-persona').value = personaRes.text || '';
+    if (styleRes.ok) document.getElementById('char-edit-style').value = styleRes.text || '';
+  } catch (e) {
+    console.warn('加载人设/风格失败', e);
+  } finally {
+    currentCharacterId = savedCharacterId;  // 恢复，不影响其他请求
+  }
+}
+
+function closeCharacterEditor() {
+  document.getElementById('character-editor-modal').style.display = 'none';
+  editingCharacterId = null;
+}
+
+async function saveCharacterEditor() {
+  const name = document.getElementById('char-edit-name').value.trim();
+  if (!name) { alert('角色名不能为空'); return; }
+  const nickname = document.getElementById('char-edit-nickname').value.trim();
+  const relationship = document.getElementById('char-edit-relationship').value.trim();
+  const persona = document.getElementById('char-edit-persona').value.trim();
+  const style = document.getElementById('char-edit-style').value.trim();
+
+  try {
+    let targetCharacterId = editingCharacterId;
+    if (!targetCharacterId) {
+      // 新建角色：一次性把name/nickname/relationship都传过去
+      const res = await fetch(apiUrl('/api/characters'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, user_nickname: nickname, relationship_hint: relationship })
+      });
+      const data = await res.json();
+      if (!data.ok) { alert('创建失败：' + (data.error || '未知错误')); return; }
+      targetCharacterId = data.character.id;
+    } else {
+      // 编辑已有角色：更新元信息字段
+      const res = await fetch(apiUrl(`/api/characters/${encodeURIComponent(targetCharacterId)}`), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, user_nickname: nickname, relationship_hint: relationship })
+      });
+      const data = await res.json();
+      if (!data.ok) { alert('保存失败：' + (data.error || '未知错误')); return; }
+    }
+
+    // persona/style走各自专门的接口保存（历史原因：这两个字段有独立的兜底逻辑，
+    // 直接POST到/api/persona、/api/style，而不是塞进上面的角色元信息更新里）
+    const savedCharacterId = currentCharacterId;
+    currentCharacterId = targetCharacterId;
+    try {
+      if (persona) {
+        await fetch(apiUrl('/api/persona'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: persona })
+        });
+      }
+      await fetch(apiUrl('/api/style'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: style })
+      });
+    } finally {
+      currentCharacterId = savedCharacterId;
+    }
+
+    closeCharacterEditor();
+    await loadCharacters();
+    if (!editingCharacterId || editingCharacterId === currentCharacterId) {
+      updateHeaderForCurrentCharacter();
+    }
+  } catch (e) {
+    alert('网络错误，保存失败');
+  }
+}
+
+async function deleteCharacterEditor() {
+  if (!editingCharacterId || editingCharacterId === DEFAULT_CHARACTER_ID) return;
+  if (!confirm('确定删除这个角色吗？角色的聊天记录/便签/情书不会被删除，只是不再显示在切换器里。')) return;
+  try {
+    const res = await fetch(apiUrl(`/api/characters/${encodeURIComponent(editingCharacterId)}`), { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.ok) { alert('删除失败：' + (data.error || '未知错误')); return; }
+    if (currentCharacterId === editingCharacterId) {
+      // 正在聊的角色被删了，退回默认角色
+      currentCharacterId = DEFAULT_CHARACTER_ID;
+      localStorage.setItem('charon_current_character_id', DEFAULT_CHARACTER_ID);
+    }
+    closeCharacterEditor();
+    await loadCharacters();
+    await loadHistory();
+    await loadStatus();
+  } catch (e) {
+    alert('网络错误，删除失败');
+  }
+}
+
+loadCharacters();
 loadHistory();
 loadStatus();
 loadModelSelector();
