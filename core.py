@@ -791,13 +791,16 @@ DEFAULT_LONG_TERM_MEMORY = """昭昭（小野），也叫昭昭/宝宝/小九。
 # ---- 多角色支持（角色管理函数） ----
 def load_characters():
     """读取所有已创建的角色列表:
-    [{id, name, persona, style_notes, user_nickname, relationship_hint, avatar, created_at}, ...]。
+    [{id, name, persona, style_notes, user_nickname, relationship_hint,
+      enable_companion_features, avatar, created_at}, ...]。
     存在app_config的"characters"key里（一份小型index，不是每个角色单独一行，
     因为角色数量少、改动不频繁，整体覆盖读写足够了）。
     没配置过时，返回只含默认角色的列表——这条默认记录只是"展示用的元信息"，
     默认角色的实际persona文本仍然来自DEFAULT_LONG_TERM_MEMORY（见load_persona_memory），
     user_nickname/relationship_hint也各自有默认值（沿用原来硬编码的"昭昭（小野）"和
     "恋人"设定），保证默认角色升级前后的语气完全不变。
+    enable_companion_features默认角色为True——原本的便签/情书/意图识别这套
+    "关系养成"玩法只对默认角色存在，升级后行为不能变。
     这里的字段只在用户第一次去"人设设置"页面编辑默认角色时才会被真正使用。"""
     data = get_app_config("characters", None)
     if data and isinstance(data, dict) and data.get("list"):
@@ -809,6 +812,7 @@ def load_characters():
         "style_notes": None,
         "user_nickname": "昭昭（小野）",  # 沿用原硬编码值，保证默认角色行为不变
         "relationship_hint": "恋人",       # 沿用原硬编码值
+        "enable_companion_features": True,  # 默认角色保留完整的便签/情书/意图识别功能
         "avatar": None,
         "created_at": None,
     }]
@@ -819,11 +823,17 @@ def save_characters(character_list):
     set_app_config("characters", {"list": character_list})
 
 
-def add_character(name, persona="", style_notes="", user_nickname="你", relationship_hint="朋友"):
+def add_character(name, persona="", style_notes="", user_nickname="你", relationship_hint="朋友",
+                   enable_companion_features=False):
     """新建一个角色，character_id用uuid生成，避免跟已有角色或DEFAULT_CHARACTER_ID撞名。
     user_nickname/relationship_hint给了通用的中性默认值（"你"/"朋友"），
     避免新角色不小心继承默认角色"昭昭"/"恋人"这类特定设定——新角色的关系
     应该由用户在创建时或创建后自己明确设定，而不是隐性沿用默认角色的关系。
+    enable_companion_features默认False：新建角色默认是"纯对话"角色，不会触发
+    便签/情书/朋友圈互动这套关系养成玩法，也就不会在每次聊天回复之外额外
+    再打一次"意图识别"模型调用——很多新角色（比如纯粹想用某个更贵模型聊天的场景）
+    根本用不上这些玩法，默认关掉能省下这部分调用开销；想要的话可以随时在
+    角色设置里打开这个开关，不需要改代码。
     返回新角色的完整记录。"""
     import uuid
     new_id = uuid.uuid4().hex[:12]
@@ -835,6 +845,7 @@ def add_character(name, persona="", style_notes="", user_nickname="你", relatio
         "style_notes": style_notes,
         "user_nickname": user_nickname,
         "relationship_hint": relationship_hint,
+        "enable_companion_features": enable_companion_features,
         "avatar": None,
         "created_at": datetime.now().isoformat(),
     }
@@ -861,6 +872,20 @@ def get_character_identity(character_id=DEFAULT_CHARACTER_ID):
     nickname = char.get("user_nickname") or "你"
     relationship = char.get("relationship_hint") or "朋友"
     return name, nickname, relationship
+
+
+def character_has_companion_features(character_id=DEFAULT_CHARACTER_ID):
+    """这个角色是否开启了便签/情书/朋友圈互动这套"关系养成"玩法。
+    默认角色即便字段缺失也兜底为True（保持升级前的行为），非默认角色缺失字段
+    时兜底为False（新角色默认从简，不产生用户没预期到的额外模型调用/费用）。
+    调用方（意图识别、情书触发判断等）应该在这个函数返回False时直接跳过整段逻辑，
+    而不只是"跳过写入"——跳过整段逻辑才能省掉那次多余的模型API调用。"""
+    char = get_character(character_id)
+    if char is None:
+        return character_id == DEFAULT_CHARACTER_ID
+    if "enable_companion_features" in char:
+        return bool(char["enable_companion_features"])
+    return character_id == DEFAULT_CHARACTER_ID
 
 
 def update_character(character_id, **fields):
@@ -930,6 +955,7 @@ def save_style_notes(text, character_id=DEFAULT_CHARACTER_ID):
                 "id": character_id, "name": "Charon", "persona": None,
                 "style_notes": text,
                 "user_nickname": "昭昭（小野）", "relationship_hint": "恋人",
+                "enable_companion_features": True,
                 "avatar": None,
                 "created_at": datetime.now().isoformat(),
             })
